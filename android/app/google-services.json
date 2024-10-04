@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "51002260602",
+    "project_id": "app-hora-maquina",
+    "storage_bucket": "app-hora-maquina.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:51002260602:android:ada291da21d8b5ae2acfc3",
+        "android_client_info": {
+          "package_name": "com.victormatos1.apphorasmaquinas"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDT3GdvQqffxDtTkvRp9eZ73AFFo6rwPYQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
