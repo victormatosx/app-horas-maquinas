@@ -18,7 +18,7 @@ export default StyleSheet.create({
   formButton: {
     backgroundColor: '#2a9d8f',
     paddingVertical: 20,
-    paddingHorizontal: 50, 
+    paddingHorizontal: 130, 
     borderRadius: 8,
     alignSelf: 'center',
     marginBottom: 50,
@@ -32,7 +32,7 @@ export default StyleSheet.create({
   logoutButton: {
     backgroundColor: '#d9534f',
     paddingVertical: 20,
-    paddingHorizontal: 50,
+    paddingHorizontal: 130,
     borderRadius: 8,
   },
   buttonText: {

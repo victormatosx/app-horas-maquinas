@@ -5,13 +5,12 @@ import styles from '../styles/StyleHome';
 const HomeScreen = ({ navigation }) => {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Bem-Vindo(a)!</Text>
       
       <TouchableOpacity 
         style={styles.formButton}
         onPress={() => navigation.navigate('Formulario')}
       >
-        <Text style={styles.buttonText}>Ir para o Formulário</Text>
+        <Text style={styles.buttonText}>Lançar Custos</Text>
       </TouchableOpacity>
 
       <View style={styles.logoutButtonContainer}>

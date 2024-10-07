@@ -23,6 +23,7 @@ export default function App() {
           headerTitleStyle: {
             fontWeight: 'bold',
           },
+          headerTitleAlign: 'center',  // Centraliza o título
         }}
       >
         <Stack.Screen 
@@ -39,7 +40,7 @@ export default function App() {
           name="Home" 
           component={HomeScreen} 
           options={{ 
-            title: 'HOME',
+            title: 'Bem Vindo(a)!',
             headerLeft: null,
             gestureEnabled: false,
           }}
@@ -47,7 +48,7 @@ export default function App() {
         <Stack.Screen 
           name="Formulario" 
           component={FormScreen} 
-          options={{ title: 'Voltar para Home' }}
+          options={{ title: 'Custos' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

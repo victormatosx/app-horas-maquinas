@@ -3,15 +3,9 @@ import { StyleSheet } from 'react-native';
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    paddingTop: 30,
     padding: 16,
     backgroundColor: '#f9f9f9',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 20,
-    color: '#2a9d8f',
   },
   label: {
     fontSize: 16,
@@ -19,38 +13,84 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   input: {
-    borderWidth: 1,
+    height: 40,
     borderColor: '#ccc',
-    padding: 10,
-    marginBottom: 12,
-    borderRadius: 8,
+    borderWidth: 1,
+    borderRadius: 5,
+    marginBottom: 10,
+    paddingHorizontal: 10,
     backgroundColor: '#fff',
     elevation: 1,
   },
   dropdownContainer: {
-    borderWidth: 1, // Mesma borda dos inputs
+    borderWidth: 1,
     borderColor: '#ccc',
     borderRadius: 8,
     marginBottom: 12,
     backgroundColor: '#fff',
-    paddingHorizontal: 10,
     justifyContent: 'center',
-    height: 50, // Altura igual aos inputs
+    height: 50,
     elevation: 1,
   },
+  dropdownTitle: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'left', // Alinha o texto à esquerda
+    paddingVertical: 12, // Ajusta o espaçamento interno vertical
+  },
   button: {
-    marginTop:10 ,
+    marginTop: 10,
     backgroundColor: '#2a9d8f',
-    padding: 12,
-    borderRadius: 8,
+    paddingVertical: 10,
+    borderRadius: 5,
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 50,
+    elevation: 2,
+  },
+  modalButton: {
+    marginTop: 10,
+    backgroundColor: '#2a9d8f',
+    paddingVertical: 10,
+    borderRadius: 5,
+    alignItems: 'center',
+    marginBottom: 15,
     elevation: 2,
   },
   buttonText: {
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    width: '90%',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  picker: {
+    height: 50,
+    width: '100%',
+    borderColor: '#ccc',
+    borderWidth: 1,
+    borderRadius: 5,
+    marginBottom: 10,
   },
 });
 

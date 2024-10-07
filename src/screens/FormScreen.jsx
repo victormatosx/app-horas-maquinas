@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Text, View, TextInput, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { Text, View, TextInput, ScrollView, TouchableOpacity, Alert, Modal } from 'react-native';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { Picker } from '@react-native-picker/picker';
 import styles from '../styles/StyleForm';
 import { database } from '../config/firebaseConfig';
-import { ref, push, get, set } from 'firebase/database';
+import { ref, get, set } from 'firebase/database';
 
 export default function Formulario() {
   const [formData, setFormData] = useState(initialFormData());
@@ -12,6 +12,12 @@ export default function Formulario() {
   const [isTimePickerVisible, setTimePickerVisible] = useState(false);
   const [activeTimeField, setActiveTimeField] = useState('');
   const [nextId, setNextId] = useState(1);
+  
+  const [custoInsumoModalVisible, setCustoInsumoModalVisible] = useState(false);
+  const [custoInsumoData, setCustoInsumoData] = useState(initialCustoInsumoData());
+
+  const [custoOperacoesModalVisible, setCustoOperacoesModalVisible] = useState(false);
+  const [custoOperacoesData, setCustoOperacoesData] = useState(initialCustoOperacoesData());
 
   useEffect(() => {
     const fetchNextId = async () => {
@@ -31,26 +37,32 @@ export default function Formulario() {
     return {
       ordemServico: '',
       data: '',
-      atividade: '',
-      fase: '',
-      maquinario: '',
-      nomeTrabalhador: '',
-      horaInicialTrabalhador: '',
-      horaFinalTrabalhador: '',
-      maquina: '',
-      implemento: '',
-      horaMaquinaInicial: '',
-      horaMaquinaFinal: '',
-      valorHoraMaquina: '',
       tipoPlantio: '',
       fazenda: '',
       pl: '',
-      area: '',
-      insumo: '',
-      insumoGasto: '',
-      dosagem: '',
       observacao: '',
       responsavel: '',
+    };
+  }
+
+  function initialCustoInsumoData() {
+    return {
+      insumo: '',
+      quantidade: '',
+      dosagem: '',
+      valor: '',
+      total: '',
+      observacao: ''
+    };
+  }
+
+  function initialCustoOperacoesData() {
+    return {
+      bem: '',
+      horaMaquinaInicial: '',
+      horaMaquinaFinal: '',
+      totalHoras: '',
+      bemImplemento: ''
     };
   }
 
@@ -68,6 +80,30 @@ export default function Formulario() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleCustoInsumoChange = (name, value) => {
+    setCustoInsumoData((prev) => ({ ...prev, [name]: value }));
+    if (name === 'quantidade' || name === 'valor') {
+      const quantidade = parseFloat(custoInsumoData.quantidade || 0);
+      const valor = parseFloat(custoInsumoData.valor || 0);
+      setCustoInsumoData((prev) => ({
+        ...prev,
+        total: (quantidade * valor).toFixed(2),
+      }));
+    }
+  };
+
+  const handleCustoOperacoesChange = (name, value) => {
+    setCustoOperacoesData((prev) => ({ ...prev, [name]: value }));
+    if (name === 'horaMaquinaInicial' || name === 'horaMaquinaFinal') {
+      const inicial = parseFloat(custoOperacoesData.horaMaquinaInicial || 0);
+      const final = parseFloat(custoOperacoesData.horaMaquinaFinal || 0);
+      setCustoOperacoesData((prev) => ({
+        ...prev,
+        totalHoras: (final - inicial).toFixed(2),
+      }));
+    }
+  };
+
   const handleSubmit = async () => {
     if (isFormValid()) {
       try {
@@ -75,7 +111,9 @@ export default function Formulario() {
         await set(newEntryRef, {
           id: nextId,
           ...formData,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          custoInsumo: custoInsumoData,
+          custoOperacoes: custoOperacoesData
         });
         const counterRef = ref(database, 'idCounter');
         await set(counterRef, nextId);
@@ -93,22 +131,25 @@ export default function Formulario() {
 
   const isFormValid = () => {
     const requiredFields = { ...formData };
-    delete requiredFields.observacao; // Remove o campo 'observacao' da validação
-  
+    delete requiredFields.observacao;
     return Object.values(requiredFields).every(Boolean);
   };
   
+  const resetForm = () => {
+    setFormData(initialFormData());
+    setCustoInsumoData(initialCustoInsumoData());
+    setCustoOperacoesData(initialCustoOperacoesData());
+  };
 
-  const resetForm = () => setFormData(initialFormData());
-
-  const renderInputField = (label, name) => (
+  const renderInputField = (label, name, value, onChange, keyboardType = 'default') => (
     <View>
       <Text style={styles.label}>{label}</Text>
       <TextInput
         style={styles.input}
-        value={formData[name]}
-        onChangeText={(text) => handleChange(name, text)}
+        value={value}
+        onChangeText={(text) => onChange(name, text)}
         placeholder={label}
+        keyboardType={keyboardType}
       />
     </View>
   );
@@ -122,28 +163,13 @@ export default function Formulario() {
     </View>
   );
 
-  const renderTimePickerField = (label, name) => (
-    <View>
-      <Text style={styles.label}>{label}</Text>
-      <TouchableOpacity 
-        style={styles.input} 
-        onPress={() => {
-          setActiveTimeField(name);
-          setTimePickerVisible(true);
-        }}
-      >
-        <Text>{formData[name] || 'Selecione o Horário'}</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  const renderDropdownField = (label, name, items) => (
+  const renderDropdownField = (label, name, items, value, onChange) => (
     <View>
       <Text style={styles.label}>{label}</Text>
       <View style={styles.dropdownContainer}>
         <Picker
-          selectedValue={formData[name]}
-          onValueChange={(value) => handleChange(name, value)}
+          selectedValue={value}
+          onValueChange={(value) => onChange(name, value)}
           style={styles.picker}
         >
           {items.map((item) => (
@@ -154,91 +180,103 @@ export default function Formulario() {
     </View>
   );
 
+  const renderCustoInsumoModal = () => (
+    <Modal visible={custoInsumoModalVisible} transparent={true} animationType="slide">
+      <View style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Custo Insumo</Text>
+          {renderDropdownField("Insumo", "insumo", [
+            { label: "Selecione o Insumo", value: "" },
+            { label: "Insumo 1", value: "insumo1" },
+            { label: "Insumo 2", value: "insumo2" },
+            { label: "Insumo 3", value: "insumo3" },
+          ], custoInsumoData.insumo, handleCustoInsumoChange)}
+          {renderInputField("Quantidade (000,00)", "quantidade", custoInsumoData.quantidade, handleCustoInsumoChange, 'numeric')}
+          {renderInputField("Dosagem (00,00)", "dosagem", custoInsumoData.dosagem, handleCustoInsumoChange, 'numeric')}
+          {renderInputField("Valor", "valor", custoInsumoData.valor, handleCustoInsumoChange, 'numeric')}
+          <Text style={styles.label}>Total: {custoInsumoData.total}</Text>
+          {renderInputField("Observação", "observacao", custoInsumoData.observacao, handleCustoInsumoChange)}
+          
+          <TouchableOpacity style={styles.button} onPress={() => setCustoInsumoModalVisible(false)}>
+            <Text style={styles.buttonText}>Salvar</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const renderCustoOperacoesModal = () => (
+    <Modal visible={custoOperacoesModalVisible} transparent={true} animationType="slide">
+      <View style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Custo de Operações Mecanizadas</Text>
+          {renderDropdownField("Bem", "bem", [
+            { label: "Selecione o Bem", value: "" },
+            { label: "Bem 1", value: "bem1" },
+            { label: "Bem 2", value: "bem2" },
+            { label: "Bem 3", value: "bem3" },
+          ], custoOperacoesData.bem, handleCustoOperacoesChange)}
+          {renderInputField("Hora Máquina Inicial", "horaMaquinaInicial", custoOperacoesData.horaMaquinaInicial, handleCustoOperacoesChange, 'numeric')}
+          {renderInputField("Hora Máquina Final", "horaMaquinaFinal", custoOperacoesData.horaMaquinaFinal, handleCustoOperacoesChange, 'numeric')}
+          <Text style={styles.label}>Total de Horas: {custoOperacoesData.totalHoras}</Text>
+          {renderDropdownField("Bem Implemento", "bemImplemento", [
+            { label: "Selecione o Bem Implemento", value: "" },
+            { label: "Implemento 1", value: "implemento1" },
+            { label: "Implemento 2", value: "implemento2" },
+            { label: "Implemento 3", value: "implemento3" },
+          ], custoOperacoesData.bemImplemento, handleCustoOperacoesChange)}
+          
+          <TouchableOpacity style={styles.button} onPress={() => setCustoOperacoesModalVisible(false)}>
+            <Text style={styles.buttonText}>Salvar</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>Apontamento Custos e Horas Máquinas</Text>
-
-      {renderInputField("Ordem de Serviço", "ordemServico")}
+      {renderInputField("Ordem de Serviço", "ordemServico", formData.ordemServico, handleChange)}
       {renderDatePickerField("Data", "data")}
-      {renderDropdownField("Atividade", "atividade", [
-        { label: "Selecione uma Atividade", value: "" },
-        { label: "Atividade 1", value: "atividade1" },
-        { label: "Atividade 2", value: "atividade2" },
-        { label: "Atividade 3", value: "atividade3" },
-      ])}
-      {renderDropdownField("Fase", "fase", [
-        { label: "Selecione uma Fase", value: "" },
-        { label: "Fase 1", value: "fase1" },
-        { label: "Fase 2", value: "fase2" },
-        { label: "Fase 3", value: "fase3" },
-      ])}
-      {renderDropdownField("Maquinário", "maquinario", [
-        { label: "Selecione um Maquinário", value: "" },
-        { label: "Maquinário 1", value: "maquinario1" },
-        { label: "Maquinário 2", value: "maquinario2" },
-        { label: "Maquinário 3", value: "maquinario3" },
-      ])}
-      {renderDropdownField("Nome do Trabalhador", "nomeTrabalhador", [
-        { label: "Selecione um Trabalhador", value: "" },
-        { label: "Trabalhador 1", value: "trabalhador1" },
-        { label: "Trabalhador 2", value: "trabalhador2" },
-        { label: "Trabalhador 3", value: "trabalhador3" },
-      ])}
-      {renderTimePickerField("Hora do Trabalhador Inicial", "horaInicialTrabalhador")}
-      {renderTimePickerField("Hora do Trabalhador Final", "horaFinalTrabalhador")}
-      {renderDropdownField("Máquina", "maquina", [
-        { label: "Selecione uma Máquina", value: "" },
-        { label: "Máquina 1", value: "maquina1" },
-        { label: "Máquina 2", value: "maquina2" },
-        { label: "Máquina 3", value: "maquina3" },
-      ])}
-      {renderDropdownField("Implemento", "implemento", [
-        { label: "Selecione um Implemento", value: "" },
-        { label: "Implemento 1", value: "implemento1" },
-        { label: "Implemento 2", value: "implemento2" },
-        { label: "Implemento 3", value: "implemento3" },
-      ])}
-      {renderTimePickerField("Hora Máquina Inicial", "horaMaquinaInicial")}
-      {renderTimePickerField("Hora Máquina Final", "horaMaquinaFinal")}
-      {renderInputField("Valor da Hora Máquina", "valorHoraMaquina")}
-      {renderDropdownField("Tipo do Plantio", "tipoPlantio", [
-        { label: "Selecione um Tipo do Plantio", value: "" },
-        { label: "Alho", value: "alho" },
-        { label: "Cebola", value: "cebola" },
-        { label: "Cenoura", value: "cenoura" },
-        { label: "Brachiara", value: "brachiara" },
-        { label: "Futura Braquiaria", value: "futuraBraquiaria" },
-        { label: "Terra Vazia", value: "terraVazia" },
-      ])}
+      {renderDropdownField("Tipo de Plantio", "tipoPlantio", [
+        { label: "Selecione um Tipo de Plantio", value: "" },
+        { label: "Plantio 1", value: "plantio1" },
+        { label: "Plantio 2", value: "plantio2" },
+        { label: "Plantio 3", value: "plantio3" },
+      ], formData.tipoPlantio, handleChange)}
       {renderDropdownField("Fazenda", "fazenda", [
-        { label: "Selecione uma Fazenda", value: "" },
+        { label: "Selecione a Fazenda", value: "" },
         { label: "Fazenda 1", value: "fazenda1" },
         { label: "Fazenda 2", value: "fazenda2" },
         { label: "Fazenda 3", value: "fazenda3" },
-      ])}
+      ], formData.fazenda, handleChange)}
       {renderDropdownField("PL", "pl", [
-        { label: "Selecione um PL", value: "" },
+        { label: "Selecione o PL", value: "" },
         { label: "PL 1", value: "pl1" },
         { label: "PL 2", value: "pl2" },
         { label: "PL 3", value: "pl3" },
-      ])}
-      {renderInputField("Área", "area")}
-      {renderDropdownField("Insumo", "insumo", [
-        { label: "Selecione um Insumo", value: "" },
-        { label: "Fertilizante", value: "fertilizante" },
-        { label: "Adubo", value: "adubo" },
-        { label: "Defensivo", value: "defensivo" },
-        { label: "Semente", value: "semente" },
-      ])}
-      {renderInputField("Insumo Gasto", "insumoGasto")}
-      {renderInputField("Dosagem", "dosagem")}
-      {renderInputField("Observação", "observacao")}
-      {renderDropdownField("Responsável Pelo Lançamento", "responsavel", [
-        { label: "Selecione um Responsável", value: "" },
+      ], formData.pl, handleChange)}
+
+      <TouchableOpacity style={styles.modalButton} onPress={() => setCustoInsumoModalVisible(true)}>
+        <Text style={styles.buttonText}>Adicionar Custo Insumo</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.modalButton} onPress={() => setCustoOperacoesModalVisible(true)}>
+        <Text style={styles.buttonText}>Adicionar Custo de Operações Mecanizadas</Text>
+      </TouchableOpacity>
+
+      {renderDropdownField("Responsável", "responsavel", [
+        { label: "Selecione o Responsável", value: "" },
         { label: "Responsável 1", value: "responsavel1" },
         { label: "Responsável 2", value: "responsavel2" },
         { label: "Responsável 3", value: "responsavel3" },
-      ])}
+      ], formData.responsavel, handleChange)}
+
+      {renderInputField("Observação", "observacao", formData.observacao, handleChange)}
+
+      <TouchableOpacity style={styles.button} onPress={handleSubmit}>
+        <Text style={styles.buttonText}>Enviar</Text>
+      </TouchableOpacity>
 
       <DateTimePickerModal
         isVisible={isDatePickerVisible}
@@ -254,9 +292,8 @@ export default function Formulario() {
         onCancel={() => setTimePickerVisible(false)}
       />
 
-      <TouchableOpacity style={styles.button} onPress={handleSubmit}>
-        <Text style={styles.buttonText}>Finalizar Apontamento</Text>
-      </TouchableOpacity>
+      {renderCustoInsumoModal()}
+      {renderCustoOperacoesModal()}
     </ScrollView>
   );
 }
