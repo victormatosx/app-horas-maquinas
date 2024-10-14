@@ -8,58 +8,59 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9f9f9',
   },
   label: {
-    fontSize: 16,
-    marginBottom: 8,
+    fontSize: 16, // Aumentado de 14 para 16
+    marginBottom: 4,
     color: '#333',
   },
   input: {
-    height: 40,
+    height: 36,
     borderColor: '#ccc',
     borderWidth: 1,
-    borderRadius: 5,
-    marginBottom: 10,
-    paddingHorizontal: 10,
+    borderRadius: 4,
+    marginBottom: 8,
+    paddingHorizontal: 8,
     backgroundColor: '#fff',
     elevation: 1,
   },
   dropdownContainer: {
     borderWidth: 1,
     borderColor: '#ccc',
-    borderRadius: 8,
-    marginBottom: 12,
+    borderRadius: 4,
+    marginBottom: 8,
     backgroundColor: '#fff',
     justifyContent: 'center',
-    height: 50,
+    height: 36,
     elevation: 1,
   },
   dropdownTitle: {
-    fontSize: 16,
+    fontSize: 20, // Aumentado de 14 para 16
     color: '#333',
-    textAlign: 'left', // Alinha o texto à esquerda
-    paddingVertical: 12, // Ajusta o espaçamento interno vertical
+    textAlign: 'left',
+    paddingHorizontal: 8,
+    lineHeight: 36,
   },
   button: {
-    marginTop: 10,
+    marginTop: 8,
     backgroundColor: '#2a9d8f',
-    paddingVertical: 10,
-    borderRadius: 5,
+    paddingVertical: 8,
+    borderRadius: 4,
     alignItems: 'center',
-    marginBottom: 50,
+    marginBottom: 16,
     elevation: 2,
   },
   modalButton: {
-    marginTop: 10,
+    marginTop: 8,
     backgroundColor: '#2a9d8f',
-    paddingVertical: 10,
-    borderRadius: 5,
+    paddingVertical: 8,
+    borderRadius: 4,
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: 12,
     elevation: 2,
   },
   buttonText: {
     color: '#fff',
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: 16, // Mantido em 14 para os botões
   },
   modalContainer: {
     flex: 1,
@@ -70,8 +71,8 @@ const styles = StyleSheet.create({
   modalContent: {
     width: '90%',
     backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 20,
+    borderRadius: 8,
+    padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
@@ -79,18 +80,64 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 15,
+    marginBottom: 12,
     textAlign: 'center',
   },
   picker: {
-    height: 50,
+    height: 36,
     width: '100%',
-    borderColor: '#ccc',
-    borderWidth: 1,
-    borderRadius: 5,
-    marginBottom: 10,
+  },
+  datePickerText: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 36,
+  },
+  summaryContainer: {
+    backgroundColor: '#f0f0f0',
+    borderRadius: 4,
+    padding: 8,
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  summaryTitle: {
+    fontSize: 20, // Aumentado de 16 para 18
+    fontWeight: 'bold',
+    marginBottom: 8,
+    color: '#2a9d8f',
+  },
+  summaryItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  summaryLabel: {
+    fontSize: 16, // Aumentado de 12 para 14
+    color: '#555',
+  },
+  summaryValue: {
+    fontSize: 16, // Aumentado de 12 para 14
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  summaryTotal: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#ccc',
+  },
+  summaryTotalLabel: {
+    fontSize: 18, // Aumentado de 14 para 16
+    fontWeight: 'bold',
+    color: '#2a9d8f',
+  },
+  summaryTotalValue: {
+    fontSize: 18, // Aumentado de 14 para 16
+    fontWeight: 'bold',
+    color: '#2a9d8f',
   },
 });
 
