@@ -187,9 +187,9 @@ export default function Component() {
       {renderDatePickerField("Data", "data")}
       {renderDropdownField("Direcionador", "direcionador", [
         { label: "Selecione um Direcionador", value: "" },
-        { label: "Saf24 Alh Pl 04 - Sekita", value: "exemplo1" },
-        { label: "Saf24 Alh Pl 07 - Shimada", value: "exemplo2" },
-        { label: "Saf24 Ceb Pl 01 - Alvara", value: "exemplo3" },
+        { label: "Saf24 Alh Pl 04 - Sekita", value: "Saf24 Alh Pl 04 - Sekita" },
+        { label: "Saf24 Alh Pl 07 - Shimada", value: "Saf24 Alh Pl 07 - Shimada" },
+        { label: "Saf24 Ceb Pl 01 - Alvara", value: "Saf24 Ceb Pl 01 - Alvara" },
       ], formData.direcionador, handleChange)}
       {renderInputField("Área Total", "area", formData.area, handleChange)}
       <TouchableOpacity style={styles.modalButton} onPress={() => setCustoInsumoModalVisible(true)}>
@@ -200,9 +200,9 @@ export default function Component() {
       </TouchableOpacity>
       {renderDropdownField("Responsável Pelo Lançamento", "responsavel", [
         { label: "Selecione o Responsável", value: "" },
-        { label: "Responsável 1", value: "responsavel1" },
-        { label: "Responsável 2", value: "responsavel2" },
-        { label: "Responsável 3", value: "responsavel3" },
+        { label: "João", value: "João" },
+        { label: "Pedro", value: "Pedro" },
+        { label: "Júnior", value: "Júnior" },
       ], formData.responsavel, handleChange)}
       {renderInputField("Observação", "observacao", formData.observacao, handleChange)}
       <TouchableOpacity style={styles.button} onPress={handleSubmit}>
