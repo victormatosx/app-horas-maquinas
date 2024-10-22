@@ -40,9 +40,7 @@ export default function App() {
           name="Home" 
           component={HomeScreen} 
           options={{ 
-            title: 'Bem Vindo(a)!',
-            headerLeft: null,
-            gestureEnabled: false,
+            headerShown: false,
           }}
         />
         <Stack.Screen 

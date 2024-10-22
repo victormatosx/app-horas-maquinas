@@ -4,6 +4,7 @@ import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { Picker } from '@react-native-picker/picker';
 import { database } from '../config/firebaseConfig';
 import { ref, get, set } from 'firebase/database';
+import { X } from 'lucide-react-native';
 import styles from '../styles/StyleForm';
 
 const initialFormData = {
@@ -31,14 +32,24 @@ const initialCustoOperacoesData = {
   bemImplemento: ''
 };
 
+const initialCustoMaoDeObraData = {
+  quantidade: '',
+  tipo: '',
+  unidade: '',
+  valor: '',
+  observacao: ''
+};
+
 export default function Component() {
   const [formData, setFormData] = useState(initialFormData);
   const [custoInsumoData, setCustoInsumoData] = useState(initialCustoInsumoData);
   const [custoOperacoesData, setCustoOperacoesData] = useState(initialCustoOperacoesData);
+  const [custoMaoDeObraData, setCustoMaoDeObraData] = useState(initialCustoMaoDeObraData);
   const [nextId, setNextId] = useState(1);
   const [isDatePickerVisible, setDatePickerVisible] = useState(false);
   const [custoInsumoModalVisible, setCustoInsumoModalVisible] = useState(false);
   const [custoOperacoesModalVisible, setCustoOperacoesModalVisible] = useState(false);
+  const [custoMaoDeObraModalVisible, setCustoMaoDeObraModalVisible] = useState(false);
 
   useEffect(() => {
     fetchNextId();
@@ -79,6 +90,7 @@ export default function Component() {
   const handleChange = (name, value) => setFormData((prev) => ({ ...prev, [name]: value }));
   const handleCustoInsumoChange = (name, value) => setCustoInsumoData((prev) => ({ ...prev, [name]: value }));
   const handleCustoOperacoesChange = (name, value) => setCustoOperacoesData((prev) => ({ ...prev, [name]: value }));
+  const handleCustoMaoDeObraChange = (name, value) => setCustoMaoDeObraData((prev) => ({ ...prev, [name]: value }));
 
   const handleSubmit = async () => {
     if (isFormValid()) {
@@ -89,7 +101,8 @@ export default function Component() {
           ...formData,
           timestamp: Date.now(),
           custoInsumo: custoInsumoData,
-          custoOperacoes: custoOperacoesData
+          custoOperacoes: custoOperacoesData,
+          custoMaoDeObra: custoMaoDeObraData
         });
         const counterRef = ref(database, 'idCounter');
         await set(counterRef, nextId);
@@ -110,10 +123,26 @@ export default function Component() {
     return requiredFields.every(field => formData[field] && formData[field].trim() !== '');
   };
 
+  const isCustoInsumoValid = () => {
+    const requiredFields = ['insumo', 'quantidade', 'valor'];
+    return requiredFields.every(field => custoInsumoData[field] && custoInsumoData[field].trim() !== '');
+  };
+
+  const isCustoOperacoesValid = () => {
+    const requiredFields = ['bem', 'horaMaquinaInicial', 'horaMaquinaFinal', 'bemImplemento'];
+    return requiredFields.every(field => custoOperacoesData[field] && custoOperacoesData[field].trim() !== '');
+  };
+
+  const isCustoMaoDeObraValid = () => {
+    const requiredFields = ['quantidade', 'tipo', 'unidade', 'valor'];
+    return requiredFields.every(field => custoMaoDeObraData[field] && custoMaoDeObraData[field].trim() !== '');
+  };
+
   const resetForm = () => {
     setFormData(initialFormData);
     setCustoInsumoData(initialCustoInsumoData);
     setCustoOperacoesData(initialCustoOperacoesData);
+    setCustoMaoDeObraData(initialCustoMaoDeObraData);
   };
 
   const renderInputField = (label, name, value, onChange, keyboardType = 'default') => (
@@ -171,11 +200,13 @@ export default function Component() {
     <Modal visible={visible} transparent={true} animationType="slide">
       <View style={styles.modalContainer}>
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>{title}</Text>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{title}</Text>
+            <TouchableOpacity onPress={() => setVisible(false)} style={styles.closeButton}>
+              <X size={24} color="#000" />
+            </TouchableOpacity>
+          </View>
           {content}
-          <TouchableOpacity style={styles.button} onPress={() => setVisible(false)}>
-            <Text style={styles.buttonText}>Salvar</Text>
-          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -198,6 +229,9 @@ export default function Component() {
       <TouchableOpacity style={styles.modalButton} onPress={() => setCustoOperacoesModalVisible(true)}>
         <Text style={styles.buttonText}>Lançar Operações Mecanizadas</Text>
       </TouchableOpacity>
+      <TouchableOpacity style={styles.modalButton} onPress={() => setCustoMaoDeObraModalVisible(true)}>
+        <Text style={styles.buttonText}>Lançar Mão de Obra</Text>
+      </TouchableOpacity>
       {renderDropdownField("Responsável Pelo Lançamento", "responsavel", [
         { label: "Selecione o Responsável", value: "" },
         { label: "João", value: "João" },
@@ -205,7 +239,7 @@ export default function Component() {
         { label: "Júnior", value: "Júnior" },
       ], formData.responsavel, handleChange)}
       {renderInputField("Observação", "observacao", formData.observacao, handleChange)}
-      <TouchableOpacity style={styles.button} onPress={handleSubmit}>
+      <TouchableOpacity style={styles.buttonEnviar} onPress={handleSubmit}>
         <Text style={styles.buttonText}>Enviar</Text>
       </TouchableOpacity>
       <DateTimePickerModal
@@ -234,6 +268,18 @@ export default function Component() {
             { key: "valor", label: "Valor Unitário", defaultValue: "0" },
             { key: "total", label: "Total", defaultValue: "0" },
           ])}
+          <TouchableOpacity 
+            style={[styles.button, !isCustoInsumoValid() && styles.disabledButton]} 
+            onPress={() => {
+              if (isCustoInsumoValid()) {
+                setCustoInsumoModalVisible(false);
+              } else {
+                Alert.alert('Atenção', 'Preencha todos os campos obrigatórios!');
+              }
+            }}
+          >
+            <Text style={styles.buttonText}>Salvar</Text>
+          </TouchableOpacity>
         </>
       )}
       {renderModal(
@@ -242,7 +288,7 @@ export default function Component() {
         "Lançamento Operações Mecanizadas",
         <>
           {renderDropdownField("Bem", "bem", [
-            { label: "Selecione o Bem", value: "" },
+            { label: "Selecione  o Bem", value: "" },
             { label: "Bem 1", value: "bem1" },
             { label: "Bem 2", value: "bem2" },
             { label: "Bem 3", value: "bem3" },
@@ -262,6 +308,58 @@ export default function Component() {
             { key: "bemImplemento", label: "Bem Implemento", defaultValue: "Não selecionado" },
             { key: "totalHoras", label: "Total de Horas", defaultValue: "0" },
           ])}
+          <TouchableOpacity 
+            style={[styles.button, !isCustoOperacoesValid() && styles.disabledButton]} 
+            onPress={() => {
+              if (isCustoOperacoesValid()) {
+                setCustoOperacoesModalVisible(false);
+              } else {
+                Alert.alert('Atenção', 'Preencha todos os campos obrigatórios!');
+              }
+            }}
+          >
+            <Text style={styles.buttonText}>Salvar</Text>
+          </TouchableOpacity>
+        </>
+      )}
+      {renderModal(
+        custoMaoDeObraModalVisible,
+        setCustoMaoDeObraModalVisible,
+        "Lançamento Mão de Obra",
+        <>
+          {renderInputField("Quantidade", "quantidade", custoMaoDeObraData.quantidade, handleCustoMaoDeObraChange, 'numeric')}
+          {renderDropdownField("Tipo", "tipo", [
+            { label: "Selecione o Tipo", value: "" },
+            { label: "Tipo 1", value: "tipo1" },
+            { label: "Tipo 2", value: "tipo2" },
+            { label: "Tipo 3", value: "tipo3" },
+          ], custoMaoDeObraData.tipo, handleCustoMaoDeObraChange)}
+          {renderDropdownField("Unidade", "unidade", [
+            { label: "Selecione a Unidade", value: "" },
+            { label: "Hora", value: "hora" },
+            { label: "Dia", value: "dia" },
+            { label: "Semana", value: "semana" },
+          ], custoMaoDeObraData.unidade, handleCustoMaoDeObraChange)}
+          {renderInputField("Valor", "valor", custoMaoDeObraData.valor, handleCustoMaoDeObraChange, 'numeric')}
+          {renderInputField("Observação", "observacao", custoMaoDeObraData.observacao, handleCustoMaoDeObraChange)}
+          {renderSummary("Resumo Lançamento Mão de Obra", custoMaoDeObraData, [
+            { key: "quantidade", label: "Quantidade", defaultValue: "0" },
+            { key: "tipo", label: "Tipo", defaultValue: "Não selecionado" },
+            { key: "unidade", label: "Unidade", defaultValue: "Não selecionado" },
+            { key: "valor", label: "Valor", defaultValue: "0" },
+          ])}
+          <TouchableOpacity 
+            style={[styles.button, !isCustoMaoDeObraValid() && styles.disabledButton]} 
+            onPress={() => {
+              if (isCustoMaoDeObraValid()) {
+                setCustoMaoDeObraModalVisible(false);
+              } else {
+                Alert.alert('Atenção', 'Preencha todos os campos obrigatórios!');
+              }
+            }}
+          >
+            <Text style={styles.buttonText}>Salvar</Text>
+          </TouchableOpacity>
         </>
       )}
     </ScrollView>
