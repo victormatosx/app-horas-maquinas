@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, FlatList, StyleSheet, SafeAreaView, StatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, StyleSheet, SafeAreaView, StatusBar, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { database } from '../config/firebaseConfig';
+import { database, auth } from '../config/firebaseConfig';
 import { ref, onValue, off } from 'firebase/database';
+import { signOut } from 'firebase/auth';
+
+const USER_TOKEN_KEY = '@user_token';
 
 export default function HomeScreen() {
   const [apontamentos, setApontamentos] = useState([]);
   const [responsaveis, setResponsaveis] = useState([]);
   const [filtroResponsavel, setFiltroResponsavel] = useState(null);
+  const [sortOrder, setSortOrder] = useState('desc'); // 'desc' for most recent, 'asc' for oldest
   const navigation = useNavigation();
 
   useEffect(() => {
@@ -21,9 +26,7 @@ export default function HomeScreen() {
           ...value,
         }));
         
-        apontamentosArray.sort((a, b) => new Date(b.data) - new Date(a.data));
-        
-        setApontamentos(apontamentosArray);
+        sortApontamentos(apontamentosArray);
         
         const uniqueResponsaveis = [...new Set(apontamentosArray.map(item => item.responsavel))];
         setResponsaveis(uniqueResponsaveis);
@@ -32,6 +35,21 @@ export default function HomeScreen() {
 
     return () => off(apontamentosRef, 'value', listener);
   }, []);
+
+  const sortApontamentos = (apontamentosArray) => {
+    const sortedApontamentos = [...apontamentosArray].sort((a, b) => {
+      const dateA = new Date(a.data.split('/').reverse().join('-'));
+      const dateB = new Date(b.data.split('/').reverse().join('-'));
+      return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+    });
+    setApontamentos(sortedApontamentos);
+  };
+
+  const toggleSortOrder = () => {
+    const newSortOrder = sortOrder === 'desc' ? 'asc' : 'desc';
+    setSortOrder(newSortOrder);
+    sortApontamentos(apontamentos);
+  };
 
   const filteredApontamentos = filtroResponsavel
     ? apontamentos.filter(item => item.responsavel === filtroResponsavel)
@@ -46,10 +64,21 @@ export default function HomeScreen() {
     </View>
   );
 
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      await AsyncStorage.removeItem(USER_TOKEN_KEY);
+      navigation.replace('Login');
+    } catch (error) {
+      console.error("Logout error:", error);
+      Alert.alert('Erro ao sair', 'Ocorreu um erro ao tentar sair. Por favor, tente novamente.');
+    }
+  };
+
   const renderFooter = () => (
     <TouchableOpacity
       style={styles.sairButton}
-      onPress={() => navigation.navigate('Login')}
+      onPress={handleLogout}
     >
       <Icon name="log-out-outline" size={24} color="white" />
       <Text style={styles.sairButtonText}>SAIR</Text>
@@ -91,6 +120,16 @@ export default function HomeScreen() {
             keyExtractor={(item) => item}
           />
         </View>
+
+        <TouchableOpacity
+          style={styles.sortButton}
+          onPress={toggleSortOrder}
+        >
+          <Icon name={sortOrder === 'desc' ? 'arrow-down' : 'arrow-up'} size={24} color="white" />
+          <Text style={styles.sortButtonText}>
+            {sortOrder === 'desc' ? 'Mais antigo' : 'Mais recente'}
+          </Text>
+        </TouchableOpacity>
 
         <FlatList
           data={filteredApontamentos}
@@ -156,6 +195,22 @@ const styles = StyleSheet.create({
   },
   filtroItemTextActive: {
     color: 'white',
+  },
+  sortButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2a9d8f',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+    elevation: 4,
+  },
+  sortButtonText: {
+    color: 'white',
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   apontamentosList: {
     paddingBottom: 16,

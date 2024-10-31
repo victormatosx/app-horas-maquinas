@@ -1,7 +1,6 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
-apply plugin: 'com.google.gms.google-services'
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
@@ -110,7 +109,7 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.apphorasmaquinas"
+    namespace 'com.victormatos1.apphorasmaquinas'
     defaultConfig {
         applicationId 'com.victormatos1.apphorasmaquinas'
         minSdkVersion rootProject.ext.minSdkVersion

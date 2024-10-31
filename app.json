@@ -24,9 +24,10 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "owner": "victormatos1",
     "extra": {
       "eas": {
-        "projectId": "e45924d5-59c4-4eca-88d8-12690ac5a28f"
+        "projectId": "5554f153-b2e2-4b74-8bf0-b7f1a056ec4a"
       }
     }
   }
