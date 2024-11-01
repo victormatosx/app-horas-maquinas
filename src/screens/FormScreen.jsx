@@ -276,7 +276,11 @@ export default function FormScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        contentContainerStyle={{ flexGrow: 1 }}
+      >
         {renderInputField("Ordem de Serviço", "ordemServico", formData.ordemServico, handleChange)}
         {renderDatePickerField("Data", "data")}
         {renderDropdownField("Direcionador", "direcionador", [
@@ -305,9 +309,9 @@ export default function FormScreen() {
         <TouchableOpacity 
           style={styles.modalButton} 
           onPress={() => setCustoMaoDeObraModalVisible(true)}
-          accessibilityLabel="Lançar Mão de Obra"
           
-          accessibilityHint="Toque para abrir o  formulário de lançamento de mão de obra"
+          accessibilityLabel="Lançar Mão de Obra"
+          accessibilityHint="Toque para abrir o formulário de lançamento de mão de obra"
         >
           <Text style={styles.buttonText}>Lançar Mão de Obra</Text>
         </TouchableOpacity>
