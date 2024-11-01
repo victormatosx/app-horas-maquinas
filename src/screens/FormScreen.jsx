@@ -98,11 +98,21 @@ export default function FormScreen() {
       if (snapshot.exists()) {
         setNextId(snapshot.val() + 1);
       } else {
-        await set(counterRef, 0);
+        // If the counter doesn't exist, initialize it
+        await set(counterRef, 1);
+        setNextId(1);
       }
     } catch (error) {
       console.error('Error fetching next ID:', error);
-      Alert.alert('Erro', 'Não foi possível obter o próximo ID. Por favor, tente novamente.');
+      // Handle the permission denied error
+      if (error.message.includes('Permission denied')) {
+        Alert.alert(
+          'Erro de Permissão',
+          'Você não tem permissão para acessar o contador de ID. Por favor, verifique suas credenciais e permissões no Firebase.'
+        );
+      } else {
+        Alert.alert('Erro', 'Não foi possível obter o próximo ID. Por favor, tente novamente.');
+      }
     }
   }, []);
 
@@ -296,6 +306,7 @@ export default function FormScreen() {
           style={styles.modalButton} 
           onPress={() => setCustoMaoDeObraModalVisible(true)}
           accessibilityLabel="Lançar Mão de Obra"
+          
           accessibilityHint="Toque para abrir o  formulário de lançamento de mão de obra"
         >
           <Text style={styles.buttonText}>Lançar Mão de Obra</Text>

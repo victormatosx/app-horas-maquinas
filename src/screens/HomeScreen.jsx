@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, FlatList, StyleSheet, SafeAreaView, StatusBar, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, StyleSheet, SafeAreaView, StatusBar, Alert, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -13,10 +13,12 @@ export default function HomeScreen() {
   const [apontamentos, setApontamentos] = useState([]);
   const [responsaveis, setResponsaveis] = useState([]);
   const [filtroResponsavel, setFiltroResponsavel] = useState(null);
-  const [sortOrder, setSortOrder] = useState('desc'); // 'desc' for most recent, 'asc' for oldest
+  const [sortOrder, setSortOrder] = useState('desc');
+  const [isLoading, setIsLoading] = useState(false);
   const navigation = useNavigation();
 
   useEffect(() => {
+    setIsLoading(true);
     const apontamentosRef = ref(database, 'apontamentos');
     const listener = onValue(apontamentosRef, (snapshot) => {
       const data = snapshot.val();
@@ -31,6 +33,7 @@ export default function HomeScreen() {
         const uniqueResponsaveis = [...new Set(apontamentosArray.map(item => item.responsavel))];
         setResponsaveis(uniqueResponsaveis);
       }
+      setIsLoading(false);
     });
 
     return () => off(apontamentosRef, 'value', listener);
@@ -121,15 +124,27 @@ export default function HomeScreen() {
           />
         </View>
 
-        <TouchableOpacity
-          style={styles.sortButton}
-          onPress={toggleSortOrder}
-        >
-          <Icon name={sortOrder === 'desc' ? 'arrow-down' : 'arrow-up'} size={24} color="white" />
-          <Text style={styles.sortButtonText}>
-            {sortOrder === 'desc' ? 'Mais antigo' : 'Mais recente'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.sortButtonContainer}>
+          <TouchableOpacity
+            style={styles.sortButton}
+            onPress={toggleSortOrder}
+            disabled={isLoading}
+          >
+            <Icon name={sortOrder === 'desc' ? 'arrow-down' : 'arrow-up'} size={24} color="white" />
+            <Text style={styles.sortButtonText}>
+              {sortOrder === 'desc' ? 'Mais antigo' : 'Mais recente'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {isLoading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator 
+              size="large" 
+              color="#2a9d8f" 
+            />
+          </View>
+        )}
 
         <FlatList
           data={filteredApontamentos}
@@ -137,6 +152,8 @@ export default function HomeScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.apontamentosList}
           ListFooterComponent={renderFooter}
+          showsVerticalScrollIndicator={false}
+          scrollEventThrottle={16}
         />
       </View>
     </SafeAreaView>
@@ -196,6 +213,9 @@ const styles = StyleSheet.create({
   filtroItemTextActive: {
     color: 'white',
   },
+  sortButtonContainer: {
+    marginBottom: 16,
+  },
   sortButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -203,7 +223,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#2a9d8f',
     padding: 12,
     borderRadius: 12,
-    marginBottom: 16,
     elevation: 4,
   },
   sortButtonText: {
@@ -211,6 +230,14 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 20,
+  },
+  loadingIndicator: {
+    marginVertical: 20,
   },
   apontamentosList: {
     paddingBottom: 16,
