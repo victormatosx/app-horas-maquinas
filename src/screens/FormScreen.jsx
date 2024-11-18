@@ -1,20 +1,20 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Text, View, TextInput, ScrollView, TouchableOpacity, Alert, Modal } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Text, View, TextInput, TouchableOpacity, Alert, Modal, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { Picker } from '@react-native-picker/picker';
 import { database } from '../config/firebaseConfig';
-import { ref, get, set } from 'firebase/database';
-import { X } from 'lucide-react-native';
+import { ref, push, set, onValue } from 'firebase/database';
+import { X, Trash2, Search } from 'lucide-react-native';
 import styles from '../styles/StyleForm';
 
 const initialFormData = {
   ordemServico: '',
   data: '',
   direcionador: '',
-  area: '',
   observacao: '',
   responsavel: '',
+  atividade: '',
 };
 
 const initialCustoInsumoData = {
@@ -41,31 +41,92 @@ const initialCustoMaoDeObraData = {
   observacao: ''
 };
 
-const direcionadorAreas = {
-  "Saf24 Alh Pl 04 - Sekita": "10.5",
-  "Saf24 Alh Pl 07 - Shimada": "15.2",
-  "Saf24 Ceb Pl 01 - Alvara": "8.7",
-};
-
-const insumosData = {
-  "insumo1": { nome: "Insumo 1", valor: "10.50" },
-  "insumo2": { nome: "Insumo 2", valor: "15.75" },
-  "insumo3": { nome: "Insumo 3", valor: "20.00" },
-};
-
 export default function FormScreen() {
   const [formData, setFormData] = useState(initialFormData);
   const [custoInsumoData, setCustoInsumoData] = useState(initialCustoInsumoData);
   const [custoOperacoesData, setCustoOperacoesData] = useState(initialCustoOperacoesData);
   const [custoMaoDeObraData, setCustoMaoDeObraData] = useState(initialCustoMaoDeObraData);
-  const [nextId, setNextId] = useState(1);
   const [isDatePickerVisible, setDatePickerVisible] = useState(false);
   const [custoInsumoModalVisible, setCustoInsumoModalVisible] = useState(false);
   const [custoOperacoesModalVisible, setCustoOperacoesModalVisible] = useState(false);
   const [custoMaoDeObraModalVisible, setCustoMaoDeObraModalVisible] = useState(false);
 
+  const [selectedInsumos, setSelectedInsumos] = useState([]);
+  const [selectedOperacoes, setSelectedOperacoes] = useState([]);
+  const [selectedBemImplementos, setSelectedBemImplementos] = useState([]);
+
+  const [insumosData, setInsumosData] = useState({});
+  const [direcionadores, setDirecionadores] = useState([]);
+  const [responsaveis, setResponsaveis] = useState([]);
+  const [bens, setBens] = useState([]);
+  const [bensImplementos, setBensImplementos] = useState([]);
+  const [unidades, setUnidades] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [atividade, setAtividade] = useState({});
+  const [filteredAtividades, setFilteredAtividades] = useState([]);
+  const [searchQueryAtividade, setSearchQueryAtividade] = useState('');
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filteredInsumos, setFilteredInsumos] = useState([]);
+  const [searchQueryBem, setSearchQueryBem] = useState('');
+  const [filteredBens, setFilteredBens] = useState([]);
+  const [searchQueryBemImplemento, setSearchQueryBemImplemento] = useState('');
+  const [filteredBensImplementos, setFilteredBensImplementos] = useState([]);
+
+  const isMounted = useRef(true);
+
   useEffect(() => {
-    fetchNextId();
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const fetchData = async (path, setterFunction) => {
+      try {
+        const dbRef = ref(database, path);
+        onValue(dbRef, (snapshot) => {
+          if (isMounted.current) {
+            const data = snapshot.val();
+            console.log(`Data fetched from ${path}:`, data);
+            setterFunction(data || {});
+          }
+        }, (error) => {
+          console.error(`Error fetching ${path}:`, error);
+          if (isMounted.current) {
+            setError(`Failed to load ${path}. Please try again.`);
+          }
+        });
+      } catch (error) {
+        console.error(`Error setting up listener for ${path}:`, error);
+        if (isMounted.current) {
+          setError(`Failed to set up listener for ${path}. Please try again.`);
+        }
+      }
+    };
+
+    Promise.all([
+      fetchData('insumos', setInsumosData),
+      fetchData('direcionadores', setDirecionadores),
+      fetchData('responsaveis', setResponsaveis),
+      fetchData('bens-implementos', (data) => {
+        setBens(data || {});
+        setBensImplementos(data || {});
+      }),
+      fetchData('unidades', setUnidades),
+      fetchData('atividade', setAtividade),
+    ]).then(() => {
+      if (isMounted.current) {
+        setIsLoading(false);
+      }
+    }).catch((error) => {
+      console.error('Error in Promise.all:', error);
+      if (isMounted.current) {
+        setError('Failed to load all data. Please try again.');
+        setIsLoading(false);
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -77,44 +138,41 @@ export default function FormScreen() {
   }, [custoOperacoesData.horaMaquinaInicial, custoOperacoesData.horaMaquinaFinal]);
 
   useEffect(() => {
-    if (formData.direcionador) {
-      setFormData(prev => ({ ...prev, area: direcionadorAreas[formData.direcionador] || '' }));
-    }
-  }, [formData.direcionador]);
-
-  useEffect(() => {
-    if (custoInsumoData.insumo) {
+    if (custoInsumoData.insumo && insumosData[custoInsumoData.insumo]) {
       const selectedInsumo = insumosData[custoInsumoData.insumo];
       if (selectedInsumo) {
-        setCustoInsumoData(prev => ({ ...prev, valor: selectedInsumo.valor }));
+        setCustoInsumoData(prev => ({ ...prev, valor: selectedInsumo.toString() }));
       }
     }
-  }, [custoInsumoData.insumo]);
+  }, [custoInsumoData.insumo, insumosData]);
 
-  const fetchNextId = useCallback(async () => {
-    try {
-      const counterRef = ref(database, 'idCounter');
-      const snapshot = await get(counterRef);
-      if (snapshot.exists()) {
-        setNextId(snapshot.val() + 1);
-      } else {
-        // If the counter doesn't exist, initialize it
-        await set(counterRef, 1);
-        setNextId(1);
-      }
-    } catch (error) {
-      console.error('Error fetching next ID:', error);
-      // Handle the permission denied error
-      if (error.message.includes('Permission denied')) {
-        Alert.alert(
-          'Erro de Permissão',
-          'Você não tem permissão para acessar o contador de ID. Por favor, verifique suas credenciais e permissões no Firebase.'
-        );
-      } else {
-        Alert.alert('Erro', 'Não foi possível obter o próximo ID. Por favor, tente novamente.');
-      }
-    }
-  }, []);
+  useEffect(() => {
+    const filtered = Object.keys(insumosData).filter(key =>
+      key.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    setFilteredInsumos(filtered);
+  }, [searchQuery, insumosData]);
+
+  useEffect(() => {
+    const filtered = Object.keys(bens).filter(key =>
+      bens[key].toLowerCase().includes(searchQueryBem.toLowerCase())
+    );
+    setFilteredBens(filtered);
+  }, [searchQueryBem, bens]);
+
+  useEffect(() => {
+    const filtered = Object.keys(bensImplementos).filter(key =>
+      bensImplementos[key].toLowerCase().includes(searchQueryBemImplemento.toLowerCase())
+    );
+    setFilteredBensImplementos(filtered);
+  }, [searchQueryBemImplemento, bensImplementos]);
+
+  useEffect(() => {
+    const filtered = Object.entries(atividade)
+      .filter(([key, value]) => value.toLowerCase().includes(searchQueryAtividade.toLowerCase()))
+      .map(([key, value]) => ({ label: value, value: key }));
+    setFilteredAtividades(filtered);
+  }, [searchQueryAtividade, atividade]);
 
   const updateCustoInsumoTotal = useCallback(() => {
     const quantidade = parseFloat(custoInsumoData.quantidade) || 0;
@@ -137,25 +195,30 @@ export default function FormScreen() {
   }, []);
 
   const handleChange = useCallback((name, value) => setFormData((prev) => ({ ...prev, [name]: value })), []);
-  const handleCustoInsumoChange = useCallback((name, value) => setCustoInsumoData((prev) => ({ ...prev, [name]: value })), []);
+  const handleCustoInsumoChange = useCallback((name, value) => {
+    setCustoInsumoData((prev) => ({ ...prev, [name]: value }));
+    if (name === 'insumo' && insumosData[value]) {
+      setCustoInsumoData((prev) => ({ ...prev, valor: insumosData[value].toString() }));
+    }
+  }, [insumosData]);
   const handleCustoOperacoesChange = useCallback((name, value) => setCustoOperacoesData((prev) => ({ ...prev, [name]: value })), []);
   const handleCustoMaoDeObraChange = useCallback((name, value) => setCustoMaoDeObraData((prev) => ({ ...prev, [name]: value })), []);
 
   const handleSubmit = useCallback(async () => {
     if (isFormValid()) {
       try {
-        const newEntryRef = ref(database, `apontamentos/${nextId}`);
-        await set(newEntryRef, {
-          id: nextId,
+        const newEntryRef = push(ref(database, 'apontamentos'));
+        const apontamentoData = {
           ...formData,
           timestamp: Date.now(),
-          custoInsumo: custoInsumoData,
-          custoOperacoes: custoOperacoesData,
+          custoInsumo: selectedInsumos,
+          custoOperacoes: selectedOperacoes.map(operacao => ({
+            ...operacao,
+            bemImplementos: selectedBemImplementos.filter(impl => impl.operacaoId === operacao.id)
+          })),
           custoMaoDeObra: custoMaoDeObraData
-        });
-        const counterRef = ref(database, 'idCounter');
-        await set(counterRef, nextId);
-        setNextId(nextId + 1);
+        };
+        await set(newEntryRef, apontamentoData);
         Alert.alert('Sucesso', 'Dados enviados com sucesso!');
         resetForm();
       } catch (error) {
@@ -165,10 +228,10 @@ export default function FormScreen() {
     } else {
       Alert.alert('Atenção', 'Preencha todos os campos obrigatórios!');
     }
-  }, [formData, custoInsumoData, custoOperacoesData, custoMaoDeObraData, nextId, isFormValid, resetForm]);
+  }, [formData, selectedInsumos, selectedOperacoes, selectedBemImplementos, custoMaoDeObraData, isFormValid, resetForm]);
 
   const isFormValid = useCallback(() => {
-    const requiredFields = ['ordemServico', 'data', 'direcionador', 'area', 'responsavel'];
+    const requiredFields = ['ordemServico', 'data', 'direcionador', 'responsavel', 'atividade'];
     return requiredFields.every(field => formData[field] && formData[field].trim() !== '');
   }, [formData]);
 
@@ -178,9 +241,8 @@ export default function FormScreen() {
   }, [custoInsumoData]);
 
   const isCustoOperacoesValid = useCallback(() => {
-    const requiredFields = ['bem', 'horaMaquinaInicial', 'horaMaquinaFinal', 'bemImplemento'];
-    return requiredFields.every(field => custoOperacoesData[field] && custoOperacoesData[field].trim() !== '');
-  }, [custoOperacoesData]);
+    return custoOperacoesData.bem && custoOperacoesData.bem.trim() !== '';
+  }, [custoOperacoesData.bem]);
 
   const isCustoMaoDeObraValid = useCallback(() => {
     const requiredFields = ['quantidade', 'tipo', 'unidade', 'valor'];
@@ -192,6 +254,9 @@ export default function FormScreen() {
     setCustoInsumoData(initialCustoInsumoData);
     setCustoOperacoesData(initialCustoOperacoesData);
     setCustoMaoDeObraData(initialCustoMaoDeObraData);
+    setSelectedInsumos([]);
+    setSelectedOperacoes([]);
+    setSelectedBemImplementos([]);
   }, []);
 
   const renderInputField = useCallback((label, name, value, onChange, keyboardType = 'default', editable = true) => (
@@ -233,6 +298,7 @@ export default function FormScreen() {
           style={styles.picker}
           accessibilityLabel={label}
         >
+          <Picker.Item label={`Selecione ${label}`} value="" />
           {items.map((item) => (
             <Picker.Item key={item.value} label={item.label} value={item.value} />
           ))}
@@ -258,38 +324,130 @@ export default function FormScreen() {
       <SafeAreaView style={styles.modalContainer}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{title}</Text>
+            <Text style={[styles.modalTitle, { flex: 1, textAlign: 'center' }]}>{title}</Text>
             <TouchableOpacity 
               onPress={() => setVisible(false)} 
-              style={styles.closeButton}
+              style={[styles.closeButton, { position: 'absolute', right: 0 }]}
               accessibilityLabel="Fechar modal"
               accessibilityHint="Toque para fechar o modal"
             >
               <X size={24} color="#000" />
             </TouchableOpacity>
           </View>
-          <ScrollView>{content}</ScrollView>
+          <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
+            {content}
+          </ScrollView>
         </View>
       </SafeAreaView>
     </Modal>
   ), []);
 
+  const addSelectedInsumo = useCallback(() => {
+    if (isCustoInsumoValid()) {
+      setSelectedInsumos(prev => [...prev, { ...custoInsumoData, id: Date.now() }]);
+      setCustoInsumoData(initialCustoInsumoData);
+    } else {
+      Alert.alert('Atenção', 'Preencha todos os campos obrigatórios!');
+    }
+  }, [custoInsumoData, isCustoInsumoValid]);
+
+  const removeSelectedInsumo = useCallback((id) => {
+    setSelectedInsumos(prev => prev.filter(item => item.id !== id));
+  }, []);
+
+  const addSelectedOperacao = useCallback(() => {
+    if (isCustoOperacoesValid()) {
+      const newOperacao = { ...custoOperacoesData, id: Date.now() };
+      setSelectedOperacoes(prev => [...prev, newOperacao]);
+      setCustoOperacoesData(initialCustoOperacoesData);
+    } else {
+      Alert.alert('Atenção', 'Preencha todos os campos obrigatórios!');
+    }
+  }, [custoOperacoesData, isCustoOperacoesValid]);
+
+  const removeSelectedOperacao = useCallback((id) => {
+    setSelectedOperacoes(prev => prev.filter(item => item.id !== id));
+    setSelectedBemImplementos(prev => prev.filter(item => item.operacaoId !== id));
+  }, []);
+
+  const addSelectedBemImplemento = useCallback(() => {
+    if (custoOperacoesData.bemImplemento) {
+      const lastOperacao = selectedOperacoes[selectedOperacoes.length - 1];
+      if (lastOperacao) {
+        setSelectedBemImplementos(prev => [...prev, { 
+          bemImplemento: custoOperacoesData.bemImplemento, 
+          id: Date.now(),
+          operacaoId: lastOperacao.id
+        }]);
+        setCustoOperacoesData(prev => ({ ...prev, bemImplemento: '' }));
+      } else {
+        Alert.alert('Atenção', 'Adicione uma operação antes de adicionar um bem implemento!');
+      }
+    } else {
+      Alert.alert('Atenção', 'Selecione um Bem Implemento!');
+    }
+  }, [custoOperacoesData.bemImplemento, selectedOperacoes]);
+
+  const removeSelectedBemImplemento = useCallback((id) => {
+    setSelectedBemImplementos(prev => prev.filter(item => item.id !== id));
+  }, []);
+
+  const renderSelectedItems = useCallback((items, removeFunction) => (
+    <View>
+      {items.map((item) => (
+        <View key={item.id} style={styles.selectedItem}>
+          <Text>{item.insumo || item.bem || item.bemImplemento}</Text>
+          <TouchableOpacity onPress={() => removeFunction(item.id)}>
+            <Trash2 size={20} color="#FF0000" />
+          </TouchableOpacity>
+        </View>
+      ))}
+    </View>
+  ), []);
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ActivityIndicator size="large" color="#0000ff" />
+        <Text>Carregando...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Text>{error}</Text>
+        <TouchableOpacity onPress={() => window.location.reload()}>
+          <Text>Tentar novamente</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        scrollEventThrottle={16}
-        contentContainerStyle={{ flexGrow: 1 }}
-      >
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
         {renderInputField("Ordem de Serviço", "ordemServico", formData.ordemServico, handleChange)}
         {renderDatePickerField("Data", "data")}
-        {renderDropdownField("Direcionador", "direcionador", [
-          { label: "Selecione um Direcionador", value: "" },
-          { label: "Saf24 Alh Pl 04 - Sekita", value: "Saf24 Alh Pl 04 - Sekita" },
-          { label: "Saf24 Alh Pl 07 - Shimada", value: "Saf24 Alh Pl 07 - Shimada" },
-          { label: "Saf24 Ceb Pl 01 - Alvara", value: "Saf24 Ceb Pl 01 - Alvara" },
-        ], formData.direcionador, handleChange)}
-        {renderInputField("Área Total", "area", formData.area, handleChange, 'numeric', false)}
+        <Text style={styles.label}>Atividade</Text>
+        <View style={styles.searchContainer}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Pesquisar atividade..."
+            value={searchQueryAtividade}
+            onChangeText={setSearchQueryAtividade}
+          />
+          <Search size={24} color="#000" style={styles.searchIcon} />
+        </View>
+        {renderDropdownField("", "atividade", 
+          filteredAtividades.length > 0 ? filteredAtividades : Object.entries(atividade).map(([key, value]) => ({ label: value, value: key })),
+          formData.atividade, 
+          handleChange
+        )}
+        {renderDropdownField("Direcionador", "direcionador", 
+          Object.entries(direcionadores).map(([key, value]) => ({ label: value, value: key })), 
+          formData.direcionador, handleChange)}
         <TouchableOpacity 
           style={styles.modalButton} 
           onPress={() => setCustoInsumoModalVisible(true)}
@@ -309,18 +467,14 @@ export default function FormScreen() {
         <TouchableOpacity 
           style={styles.modalButton} 
           onPress={() => setCustoMaoDeObraModalVisible(true)}
-          
           accessibilityLabel="Lançar Mão de Obra"
           accessibilityHint="Toque para abrir o formulário de lançamento de mão de obra"
         >
           <Text style={styles.buttonText}>Lançar Mão de Obra</Text>
         </TouchableOpacity>
-        {renderDropdownField("Responsável Pelo Lançamento", "responsavel", [
-          { label: "Selecione o Responsável", value: "" },
-          { label: "João", value: "João" },
-          { label: "Pedro", value: "Pedro" },
-          { label: "Júnior", value: "Júnior" },
-        ], formData.responsavel, handleChange)}
+        {renderDropdownField("Responsável Pelo Lançamento", "responsavel", 
+          Object.entries(responsaveis).map(([key, value]) => ({ label: value, value: key })), 
+          formData.responsavel, handleChange)}
         {renderInputField("Observação", "observacao", formData.observacao, handleChange)}
         <TouchableOpacity 
           style={styles.buttonEnviar} 
@@ -344,33 +498,39 @@ export default function FormScreen() {
         setCustoInsumoModalVisible,
         "Lançamento de Insumos",
         <>
-          {renderDropdownField("Insumo", "insumo", [
-            { label: "Selecione o Insumo", value: "" },
-            ...Object.entries(insumosData).map(([value, { nome }]) => ({ label: nome, value })),
-          ], custoInsumoData.insumo, handleCustoInsumoChange)}
+          <Text style={styles.label}>Insumos</Text>
+          <View style={styles.searchContainer}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Pesquisar insumos..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            <Search size={24} color="#000" style={styles.searchIcon} />
+          </View>
+          {renderDropdownField("", "insumo", 
+            filteredInsumos.map(key => ({ label: key, value: key })), 
+            custoInsumoData.insumo, handleCustoInsumoChange)}
           {renderInputField("Quantidade", "quantidade", custoInsumoData.quantidade, handleCustoInsumoChange, 'numeric')}
           {renderInputField("Valor Unitário", "valor", custoInsumoData.valor, handleCustoInsumoChange, 'numeric', false)}
           {renderInputField("Observação", "observacao", custoInsumoData.observacao, handleCustoInsumoChange)}
-          {renderSummary("Resumo Lançamento de Insumo", custoInsumoData, [
-            { key: "insumo", label: "Insumo", defaultValue: "Não selecionado" },
-            { key: "quantidade", label: "Quantidade", defaultValue: "0" },
-            { key: "valor", label: "Valor Unitário", defaultValue: "0" },
-            { key: "total", label: "Total", defaultValue: "0" },
-          ])}
           <TouchableOpacity 
             style={[styles.button, !isCustoInsumoValid() && styles.disabledButton]} 
-            onPress={() => {
-              if (isCustoInsumoValid()) {
-                setCustoInsumoModalVisible(false);
-              } else {
-                Alert.alert('Atenção', 'Preencha todos os campos obrigatórios!');
-              }
-            }}
-            accessibilityLabel="Salvar lançamento de insumo"
-            accessibilityHint="Toque para salvar o lançamento de insumo"
+            onPress={addSelectedInsumo}
+            accessibilityLabel="Adicionar insumo"
+            accessibilityHint="Toque para adicionar o insumo à lista"
             disabled={!isCustoInsumoValid()}
           >
-            <Text style={styles.buttonText}>Salvar</Text>
+            <Text style={styles.buttonText}>Adicionar Insumo</Text>
+          </TouchableOpacity>
+          {renderSelectedItems(selectedInsumos, removeSelectedInsumo)}
+          <TouchableOpacity 
+            style={styles.button}
+            onPress={() => setCustoInsumoModalVisible(false)}
+            accessibilityLabel="Salvar e sair do modal de insumos"
+            accessibilityHint="Toque para salvar e sair do modal de insumos"
+          >
+            <Text style={styles.buttonText}>Salvar e Sair</Text>
           </TouchableOpacity>
         </>
       )}
@@ -380,41 +540,61 @@ export default function FormScreen() {
         setCustoOperacoesModalVisible,
         "Lançamento Operações Mecanizadas",
         <>
-          {renderDropdownField("Bem", "bem", [
-            { label: "Selecione o Bem", value: "" },
-            { label: "Bem 1", value: "bem1" },
-            { label: "Bem 2", value: "bem2" },
-            { label: "Bem 3", value: "bem3" },
-          ], custoOperacoesData.bem, handleCustoOperacoesChange)}
+          <Text style={styles.label}>Bem</Text>
+          <View style={styles.searchContainer}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Pesquisar bem..."
+              value={searchQueryBem}
+              onChangeText={setSearchQueryBem}
+            />
+            <Search size={24} color="#000" style={styles.searchIcon} />
+          </View>
+          {renderDropdownField("", "bem", 
+            filteredBens.map(key => ({ label: bens[key], value: key })), 
+            custoOperacoesData.bem, handleCustoOperacoesChange)}
           {renderInputField("Hora Máquina Inicial", "horaMaquinaInicial", custoOperacoesData.horaMaquinaInicial, handleCustoOperacoesChange, 'numeric')}
           {renderInputField("Hora Máquina Final", "horaMaquinaFinal", custoOperacoesData.horaMaquinaFinal, handleCustoOperacoesChange, 'numeric')}
-          {renderDropdownField("Bem Implemento", "bemImplemento", [
-            { label: "Selecione o Bem Implemento", value: "" },
-            { label: "Implemento 1", value: "implemento1" },
-            { label: "Implemento 2", value: "implemento2" },
-            { label: "Implemento 3", value: "implemento3" },
-          ], custoOperacoesData.bemImplemento, handleCustoOperacoesChange)}
-          {renderSummary("Resumo Lançamento Operações Mecanizadas", custoOperacoesData, [
-            { key: "bem", label: "Bem", defaultValue: "Não selecionado" },
-            { key: "horaMaquinaInicial", label: "Hora Máquina Inicial", defaultValue: "0" },
-            { key: "horaMaquinaFinal", label: "Hora Máquina Final", defaultValue: "0" },
-            { key: "bemImplemento", label: "Bem Implemento", defaultValue: "Não selecionado" },
-            { key: "totalHoras", label: "Total de Horas", defaultValue: "0" },
-          ])}
           <TouchableOpacity 
             style={[styles.button, !isCustoOperacoesValid() && styles.disabledButton]} 
-            onPress={() => {
-              if (isCustoOperacoesValid()) {
-                setCustoOperacoesModalVisible(false);
-              } else {
-                Alert.alert('Atenção', 'Preencha todos os campos obrigatórios!');
-              }
-            }}
-            accessibilityLabel="Salvar lançamento de operações mecanizadas"
-            accessibilityHint="Toque para salvar o lançamento de operações mecanizadas"
+            onPress={addSelectedOperacao}
+            accessibilityLabel="Adicionar operação"
+            accessibilityHint="Toque para adicionar a operação à lista"
             disabled={!isCustoOperacoesValid()}
           >
-            <Text style={styles.buttonText}>Salvar</Text>
+            <Text style={styles.buttonText}>Adicionar Operação</Text>
+          </TouchableOpacity>
+          {renderSelectedItems(selectedOperacoes, removeSelectedOperacao)}
+          <Text style={styles.label}>Bem Implemento</Text>
+          <View style={styles.searchContainer}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Pesquisar bem implemento..."
+              value={searchQueryBemImplemento}
+              onChangeText={setSearchQueryBemImplemento}
+            />
+            <Search size={24} color="#000" style={styles.searchIcon} />
+          </View>
+          {renderDropdownField("", "bemImplemento", 
+            filteredBensImplementos.map(key => ({ label: bensImplementos[key], value: key })), 
+            custoOperacoesData.bemImplemento, handleCustoOperacoesChange)}
+          <TouchableOpacity 
+            style={[styles.button, !custoOperacoesData.bemImplemento && styles.disabledButton]} 
+            onPress={addSelectedBemImplemento}
+            accessibilityLabel="Adicionar bem implemento"
+            accessibilityHint="Toque para adicionar o bem implemento à lista"
+            disabled={!custoOperacoesData.bemImplemento}
+          >
+            <Text style={styles.buttonText}>Adicionar Bem Implemento</Text>
+          </TouchableOpacity>
+          {renderSelectedItems(selectedBemImplementos, removeSelectedBemImplemento)}
+          <TouchableOpacity 
+            style={styles.button}
+            onPress={() => setCustoOperacoesModalVisible(false)}
+            accessibilityLabel="Salvar e sair do modal de operações mecanizadas"
+            accessibilityHint="Toque para salvar e sair do modal de operações mecanizadas"
+          >
+            <Text style={styles.buttonText}>Salvar e Sair</Text>
           </TouchableOpacity>
         </>
       )}
@@ -429,12 +609,9 @@ export default function FormScreen() {
             { label: "Selecione o Tipo", value: "" },
             { label: "Terceirizada", value: "Terceirizada" },
           ], custoMaoDeObraData.tipo, handleCustoMaoDeObraChange)}
-          {renderDropdownField("Unidade", "unidade", [
-            { label: "Selecione a Unidade", value: "" },
-            { label: "Diárias", value: "Diárias" },
-            { label: "Caixas", value: "Caixas" },
-            { label: "Horas", value: "Horas" },
-          ], custoMaoDeObraData.unidade, handleCustoMaoDeObraChange)}
+          {renderDropdownField("Unidade", "unidade", 
+            Object.entries(unidades).map(([key, value]) => ({ label: value, value: key })), 
+            custoMaoDeObraData.unidade, handleCustoMaoDeObraChange)}
           {renderInputField("Valor", "valor", custoMaoDeObraData.valor, handleCustoMaoDeObraChange, 'numeric')}
           {renderInputField("Observação", "observacao", custoMaoDeObraData.observacao, handleCustoMaoDeObraChange)}
           {renderSummary("Resumo Lançamento Mão de Obra", custoMaoDeObraData, [
@@ -452,11 +629,11 @@ export default function FormScreen() {
                 Alert.alert('Atenção', 'Preencha todos os campos obrigatórios!');
               }
             }}
-            accessibilityLabel="Salvar lançamento de mão de obra"
-            accessibilityHint="Toque para salvar o lançamento de mão de obra"
+            accessibilityLabel="Salvar e sair do lançamento de mão de obra"
+            accessibilityHint="Toque para salvar e sair do lançamento de mão de obra"
             disabled={!isCustoMaoDeObraValid()}
           >
-            <Text style={styles.buttonText}>Salvar</Text>
+            <Text style={styles.buttonText}>Salvar e Sair</Text>
           </TouchableOpacity>
         </>
       )}

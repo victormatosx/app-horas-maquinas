@@ -1,4 +1,6 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Dimensions } from 'react-native';
+
+const { width, height } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   container: {
@@ -14,65 +16,66 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   input: {
-    height: 48, // Increased from 36 to 48
+    height: 48,
     borderColor: '#ccc',
-    borderWidth: 2, // Increased from 1 to 2
-    borderRadius: 8, // Increased from 4 to 8
-    marginBottom: 12, // Increased from 8 to 12
-    paddingHorizontal: 12, // Increased from 8 to 12
+    borderWidth: 2,
+    borderRadius: 8,
+    marginBottom: 12,
+    paddingHorizontal: 12,
     backgroundColor: '#fff',
-    elevation: 2, // Increased from 1 to 2
-    fontSize: 16, // Added to increase text size inside input
+    elevation: 2,
+    fontSize: 16,
   },
   dropdownContainer: {
-    borderWidth: 2, // Increased from 1 to 2
+    borderWidth: 2,
     borderColor: '#ccc',
-    borderRadius: 8, // Increased from 4 to 8
-    marginBottom: 12, // Increased from 8 to 12
+    borderRadius: 8,
+    marginBottom: 12,
     backgroundColor: '#fff',
     justifyContent: 'center',
-    height: 48, // Increased from 36 to 48
-    elevation: 2, // Increased from 1 to 2
+    height: 48,
+    elevation: 2,
+    marginTop: 2, // Adicionado margem superior negativa
+    marginBottom: 20,
   },
   dropdownTitle: {
     fontSize: 20,
     color: '#333',
     textAlign: 'left',
-    paddingHorizontal: 12, // Increased from 8 to 12
-    lineHeight: 48, // Increased from 36 to 48
+    paddingHorizontal: 12,
+    lineHeight: 48,
   },
   button: {
-    marginTop: 12, // Increased from 8 to 12
+    marginTop: 12,
     backgroundColor: '#2a9d8f',
-    paddingVertical: 12, // Increased from 8 to 12
-    borderRadius: 8, // Increased from 4 to 8
+    paddingVertical: 12,
+    borderRadius: 8,
     alignItems: 'center',
     marginBottom: 16,
-    elevation: 3, // Increased from 2 to 3
+    elevation: 3,
   },
   buttonEnviar: {
-    marginTop: 12, // Increased from 8 to 12
+    marginTop: 12,
     backgroundColor: '#2a9d8f',
-    paddingVertical: 12, // Increased from 8 to 12
-    borderRadius: 8, // Increased from 4 to 8
+    paddingVertical: 12,
+    borderRadius: 8,
     alignItems: 'center',
     marginBottom: 50,
-    elevation: 3, // Increased from 2 to 3
+    elevation: 3,
   },
-
   modalButton: {
-    marginTop: 12, // Increased from 8 to 12
+    marginTop: 12,
     backgroundColor: '#2a9d8f',
-    paddingVertical: 12, // Increased from 8 to 12
-    borderRadius: 8, // Increased from 4 to 8
+    paddingVertical: 12,
+    borderRadius: 8,
     alignItems: 'center',
-    marginBottom: 16, // Increased from 12 to 16
-    elevation: 3, // Increased from 2 to 3
+    marginBottom: 16,
+    elevation: 3,
   },
   buttonText: {
     color: '#fff',
     fontWeight: 'bold',
-    fontSize: 18, // Increased from 16 to 18
+    fontSize: 18,
   },
   modalContainer: {
     flex: 1,
@@ -81,10 +84,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalContent: {
-    width: '90%',
+    width: width * 0.9,
+    maxHeight: height * 0.8,
     backgroundColor: '#fff',
-    borderRadius: 12, // Increased from 8 to 12
-    padding: 20, // Increased from 16 to 20
+    borderRadius: 12,
+    padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
@@ -92,37 +96,37 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   modalTitle: {
-    fontSize: 20, // Increased from 18 to 20
+    fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 16, // Increased from 12 to 16
+    marginBottom: 16,
     textAlign: 'center',
   },
   picker: {
-    height: 48, // Increased from 36 to 48
+    height: 48,
     width: '100%',
   },
   datePickerText: {
-    fontSize: 16, // Increased from 14 to 16
+    fontSize: 16,
     color: '#333',
-    lineHeight: 48, // Increased from 36 to 48
+    lineHeight: 48,
   },
   summaryContainer: {
     backgroundColor: '#f0f0f0',
-    borderRadius: 8, // Increased from 4 to 8
-    padding: 12, // Increased from 8 to 12
-    marginTop: 16, // Increased from 12 to 16
-    marginBottom: 16, // Increased from 12 to 16
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 16,
+    marginBottom: 16,
   },
   summaryTitle: {
-    fontSize: 22, // Increased from 20 to 22
+    fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 12, // Increased from 8 to 12
+    marginBottom: 12,
     color: '#2a9d8f',
   },
   summaryItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8, // Increased from 4 to 8
+    marginBottom: 8,
   },
   summaryLabel: {
     fontSize: 16,
@@ -136,18 +140,18 @@ const styles = StyleSheet.create({
   summaryTotal: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 12, // Increased from 8 to 12
-    paddingTop: 12, // Increased from 8 to 12
-    borderTopWidth: 2, // Increased from 1 to 2
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 2,
     borderTopColor: '#ccc',
   },
   summaryTotalLabel: {
-    fontSize: 20, // Increased from 18 to 20
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#2a9d8f',
   },
   summaryTotalValue: {
-    fontSize: 20, // Increased from 18 to 20
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#2a9d8f',
   },
@@ -162,6 +166,35 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.5,
+  },
+  selectedItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+    padding: 10,
+    marginVertical: 5,
+    borderRadius: 8,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: -20, // Removida a margem inferior
+    borderWidth: 2,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    backgroundColor: '#fff',
+  },
+  searchInput: {
+    flex: 1,
+    height: 48,
+    paddingHorizontal: 12,
+    fontSize: 16,
+  },
+  searchIcon: {
+    padding: 12,
+    alignSelf: 'center',
+    marginRight: 8,
   },
 });
 
