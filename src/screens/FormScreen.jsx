@@ -54,6 +54,7 @@ export default function FormScreen() {
   const [selectedInsumos, setSelectedInsumos] = useState([]);
   const [selectedOperacoes, setSelectedOperacoes] = useState([]);
   const [selectedBemImplementos, setSelectedBemImplementos] = useState([]);
+  const [selectedFases, setSelectedFases] = useState([]);
 
   const [insumosData, setInsumosData] = useState({});
   const [direcionadores, setDirecionadores] = useState([]);
@@ -73,6 +74,10 @@ export default function FormScreen() {
   const [filteredBens, setFilteredBens] = useState([]);
   const [searchQueryBemImplemento, setSearchQueryBemImplemento] = useState('');
   const [filteredBensImplementos, setFilteredBensImplementos] = useState([]);
+
+  const [fases, setFases] = useState({});
+  const [filteredFases, setFilteredFases] = useState([]);
+  const [searchQueryFase, setSearchQueryFase] = useState('');
 
   const isMounted = useRef(true);
 
@@ -116,6 +121,7 @@ export default function FormScreen() {
       }),
       fetchData('unidades', setUnidades),
       fetchData('atividade', setAtividade),
+      fetchData('fases', setFases),
     ]).then(() => {
       if (isMounted.current) {
         setIsLoading(false);
@@ -174,6 +180,13 @@ export default function FormScreen() {
     setFilteredAtividades(filtered);
   }, [searchQueryAtividade, atividade]);
 
+  useEffect(() => {
+    const filtered = Object.entries(fases)
+      .filter(([key, value]) => value.toLowerCase().includes(searchQueryFase.toLowerCase()))
+      .map(([key, value]) => ({ label: value, value: key }));
+    setFilteredFases(filtered);
+  }, [searchQueryFase, fases]);
+
   const updateCustoInsumoTotal = useCallback(() => {
     const quantidade = parseFloat(custoInsumoData.quantidade) || 0;
     const valor = parseFloat(custoInsumoData.valor) || 0;
@@ -216,7 +229,8 @@ export default function FormScreen() {
             ...operacao,
             bemImplementos: selectedBemImplementos.filter(impl => impl.operacaoId === operacao.id)
           })),
-          custoMaoDeObra: custoMaoDeObraData
+          custoMaoDeObra: custoMaoDeObraData,
+          fases: selectedFases
         };
         await set(newEntryRef, apontamentoData);
         Alert.alert('Sucesso', 'Dados enviados com sucesso!');
@@ -228,12 +242,12 @@ export default function FormScreen() {
     } else {
       Alert.alert('Atenção', 'Preencha todos os campos obrigatórios!');
     }
-  }, [formData, selectedInsumos, selectedOperacoes, selectedBemImplementos, custoMaoDeObraData, isFormValid, resetForm]);
+  }, [formData, selectedInsumos, selectedOperacoes, selectedBemImplementos, custoMaoDeObraData, selectedFases, isFormValid, resetForm]);
 
   const isFormValid = useCallback(() => {
     const requiredFields = ['ordemServico', 'data', 'direcionador', 'responsavel', 'atividade'];
-    return requiredFields.every(field => formData[field] && formData[field].trim() !== '');
-  }, [formData]);
+    return requiredFields.every(field => formData[field] && formData[field].trim() !== '') && selectedFases.length > 0;
+  }, [formData, selectedFases]);
 
   const isCustoInsumoValid = useCallback(() => {
     const requiredFields = ['insumo', 'quantidade'];
@@ -257,6 +271,7 @@ export default function FormScreen() {
     setSelectedInsumos([]);
     setSelectedOperacoes([]);
     setSelectedBemImplementos([]);
+    setSelectedFases([]);
   }, []);
 
   const renderInputField = useCallback((label, name, value, onChange, keyboardType = 'default', editable = true) => (
@@ -392,11 +407,21 @@ export default function FormScreen() {
     setSelectedBemImplementos(prev => prev.filter(item => item.id !== id));
   }, []);
 
+  const addSelectedFase = useCallback((fase) => {
+    if (fase && !selectedFases.some(f => f.value === fase)) {
+      setSelectedFases(prev => [...prev, { value: fase, label: fases[fase], id: Date.now() }]);
+    }
+  }, [fases, selectedFases]);
+
+  const removeSelectedFase = useCallback((id) => {
+    setSelectedFases(prev => prev.filter(item => item.id !== id));
+  }, []);
+
   const renderSelectedItems = useCallback((items, removeFunction) => (
     <View>
       {items.map((item) => (
         <View key={item.id} style={styles.selectedItem}>
-          <Text>{item.insumo || item.bem || item.bemImplemento}</Text>
+          <Text>{item.insumo || item.bem || item.bemImplemento || item.label}</Text>
           <TouchableOpacity onPress={() => removeFunction(item.id)}>
             <Trash2 size={20} color="#FF0000" />
           </TouchableOpacity>
@@ -445,6 +470,22 @@ export default function FormScreen() {
           formData.atividade, 
           handleChange
         )}
+        <Text style={styles.label}>Fase</Text>
+        <View style={styles.searchContainer}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Pesquisar fase..."
+            value={searchQueryFase}
+            onChangeText={setSearchQueryFase}
+          />
+          <Search size={24} color="#000" style={styles.searchIcon} />
+        </View>
+        {renderDropdownField("", "fase", 
+          filteredFases.length > 0 ? filteredFases : Object.entries(fases).map(([key, value]) => ({ label: value, value: key })),
+          '', 
+          (name, value) => addSelectedFase(value)
+        )}
+        {renderSelectedItems(selectedFases, removeSelectedFase)}
         {renderDropdownField("Direcionador", "direcionador", 
           Object.entries(direcionadores).map(([key, value]) => ({ label: value, value: key })), 
           formData.direcionador, handleChange)}
