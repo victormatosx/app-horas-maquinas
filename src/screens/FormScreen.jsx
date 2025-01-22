@@ -1,434 +1,498 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Text, View, TextInput, TouchableOpacity, Alert, Modal, ScrollView, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import DateTimePickerModal from 'react-native-modal-datetime-picker';
-import { Picker } from '@react-native-picker/picker';
-import { database } from '../config/firebaseConfig';
-import { ref, push, set, onValue } from 'firebase/database';
-import { X, Trash2, Search } from 'lucide-react-native';
-import styles from '../styles/StyleForm';
+import React, { useState, useEffect, useCallback, useRef } from "react"
+import { Text, View, TextInput, TouchableOpacity, Alert, Modal, ScrollView, ActivityIndicator } from "react-native"
+import { SafeAreaView } from "react-native-safe-area-context"
+import DateTimePickerModal from "react-native-modal-datetime-picker"
+import { Picker } from "@react-native-picker/picker"
+import { database, auth } from "../config/firebaseConfig"
+import { ref, push, set, onValue } from "firebase/database"
+import { X, Trash2, Search } from "lucide-react-native"
+import AsyncStorage from "@react-native-async-storage/async-storage"
+import styles from "../styles/StyleForm"
+
+const USER_TOKEN_KEY = "@user_token"
+const USER_PROPERTY_KEY = "@user_property"
 
 const initialFormData = {
-  ordemServico: '',
-  data: '',
-  direcionador: '',
-  observacao: '',
-  responsavel: '',
-  atividade: '',
-};
+  ordemServico: "",
+  data: "",
+  direcionador: "",
+  observacao: "",
+  responsavel: "",
+  atividade: "",
+}
 
 const initialCustoInsumoData = {
-  insumo: '',
-  quantidade: '',
-  valor: '',
-  total: '',
-  observacao: ''
-};
+  insumo: "",
+  quantidade: "",
+  valor: "",
+  total: "",
+  observacao: "",
+}
 
 const initialCustoOperacoesData = {
-  bem: '',
-  horaMaquinaInicial: '',
-  horaMaquinaFinal: '',
-  totalHoras: '',
-  bemImplemento: ''
-};
+  bem: "",
+  horaMaquinaInicial: "",
+  horaMaquinaFinal: "",
+  totalHoras: "",
+  bemImplemento: "",
+}
 
 const initialCustoMaoDeObraData = {
-  quantidade: '',
-  tipo: '',
-  unidade: '',
-  valor: '',
-  observacao: ''
-};
+  quantidade: "",
+  tipo: "",
+  unidade: "",
+  valor: "",
+  observacao: "",
+}
 
 export default function FormScreen() {
-  const [formData, setFormData] = useState(initialFormData);
-  const [custoInsumoData, setCustoInsumoData] = useState(initialCustoInsumoData);
-  const [custoOperacoesData, setCustoOperacoesData] = useState(initialCustoOperacoesData);
-  const [custoMaoDeObraData, setCustoMaoDeObraData] = useState(initialCustoMaoDeObraData);
-  const [isDatePickerVisible, setDatePickerVisible] = useState(false);
-  const [custoInsumoModalVisible, setCustoInsumoModalVisible] = useState(false);
-  const [custoOperacoesModalVisible, setCustoOperacoesModalVisible] = useState(false);
-  const [custoMaoDeObraModalVisible, setCustoMaoDeObraModalVisible] = useState(false);
+  const [formData, setFormData] = useState(initialFormData)
+  const [custoInsumoData, setCustoInsumoData] = useState(initialCustoInsumoData)
+  const [custoOperacoesData, setCustoOperacoesData] = useState(initialCustoOperacoesData)
+  const [custoMaoDeObraData, setCustoMaoDeObraData] = useState(initialCustoMaoDeObraData)
+  const [isDatePickerVisible, setDatePickerVisible] = useState(false)
+  const [custoInsumoModalVisible, setCustoInsumoModalVisible] = useState(false)
+  const [custoOperacoesModalVisible, setCustoOperacoesModalVisible] = useState(false)
+  const [custoMaoDeObraModalVisible, setCustoMaoDeObraModalVisible] = useState(false)
 
-  const [selectedInsumos, setSelectedInsumos] = useState([]);
-  const [selectedOperacoes, setSelectedOperacoes] = useState([]);
-  const [selectedBemImplementos, setSelectedBemImplementos] = useState([]);
-  const [selectedFases, setSelectedFases] = useState([]);
+  const [selectedInsumos, setSelectedInsumos] = useState([])
+  const [selectedOperacoes, setSelectedOperacoes] = useState([])
+  const [selectedBemImplementos, setSelectedBemImplementos] = useState([])
+  const [selectedFases, setSelectedFases] = useState([])
 
-  const [insumosData, setInsumosData] = useState({});
-  const [direcionadores, setDirecionadores] = useState([]);
-  const [responsaveis, setResponsaveis] = useState([]);
-  const [bens, setBens] = useState([]);
-  const [bensImplementos, setBensImplementos] = useState([]);
-  const [unidades, setUnidades] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [atividade, setAtividade] = useState({});
-  const [filteredAtividades, setFilteredAtividades] = useState([]);
-  const [searchQueryAtividade, setSearchQueryAtividade] = useState('');
+  const [insumosData, setInsumosData] = useState({})
+  const [direcionadores, setDirecionadores] = useState([])
+  const [responsaveis, setResponsaveis] = useState([])
+  const [bens, setBens] = useState([])
+  const [bensImplementos, setBensImplementos] = useState([])
+  const [unidades, setUnidades] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [atividade, setAtividade] = useState({})
+  const [filteredAtividades, setFilteredAtividades] = useState([])
+  const [searchQueryAtividade, setSearchQueryAtividade] = useState("")
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filteredInsumos, setFilteredInsumos] = useState([]);
-  const [searchQueryBem, setSearchQueryBem] = useState('');
-  const [filteredBens, setFilteredBens] = useState([]);
-  const [searchQueryBemImplemento, setSearchQueryBemImplemento] = useState('');
-  const [filteredBensImplementos, setFilteredBensImplementos] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("")
+  const [filteredInsumos, setFilteredInsumos] = useState([])
+  const [searchQueryBem, setSearchQueryBem] = useState("")
+  const [filteredBens, setFilteredBens] = useState([])
+  const [searchQueryBemImplemento, setSearchQueryBemImplemento] = useState("")
+  const [filteredBensImplementos, setFilteredBensImplementos] = useState([])
 
-  const [fases, setFases] = useState({});
-  const [filteredFases, setFilteredFases] = useState([]);
-  const [searchQueryFase, setSearchQueryFase] = useState('');
+  const [fases, setFases] = useState({})
+  const [filteredFases, setFilteredFases] = useState([])
+  const [searchQueryFase, setSearchQueryFase] = useState("")
 
-  const isMounted = useRef(true);
+  const [userId, setUserId] = useState("")
+  const [userProperty, setUserProperty] = useState("")
+
+  const isMounted = useRef(true)
 
   useEffect(() => {
     return () => {
-      isMounted.current = false;
-    };
-  }, []);
+      isMounted.current = false
+    }
+  }, [])
 
   useEffect(() => {
     const fetchData = async (path, setterFunction) => {
       try {
-        const dbRef = ref(database, path);
-        onValue(dbRef, (snapshot) => {
-          if (isMounted.current) {
-            const data = snapshot.val();
-            console.log(`Data fetched from ${path}:`, data);
-            setterFunction(data || {});
-          }
-        }, (error) => {
-          console.error(`Error fetching ${path}:`, error);
-          if (isMounted.current) {
-            setError(`Failed to load ${path}. Please try again.`);
-          }
-        });
+        const dbRef = ref(database, path)
+        onValue(
+          dbRef,
+          (snapshot) => {
+            if (isMounted.current) {
+              const data = snapshot.val()
+              setterFunction(data || {})
+            }
+          },
+          (error) => {
+            console.error(`Error fetching ${path}:`, error)
+            if (isMounted.current) {
+              setError(`Failed to load ${path}. Please try again.`)
+            }
+          },
+        )
       } catch (error) {
-        console.error(`Error setting up listener for ${path}:`, error);
+        console.error(`Error setting up listener for ${path}:`, error)
         if (isMounted.current) {
-          setError(`Failed to set up listener for ${path}. Please try again.`);
+          setError(`Failed to set up listener for ${path}. Please try again.`)
         }
       }
-    };
+    }
 
     Promise.all([
-      fetchData('insumos', setInsumosData),
-      fetchData('direcionadores', setDirecionadores),
-      fetchData('responsaveis', setResponsaveis),
-      fetchData('bens-implementos', (data) => {
-        setBens(data || {});
-        setBensImplementos(data || {});
+      fetchData("insumos", setInsumosData),
+      fetchData("direcionadores", setDirecionadores),
+      fetchData("responsaveis", setResponsaveis),
+      fetchData("bens-implementos", (data) => {
+        setBens(data || {})
+        setBensImplementos(data || {})
       }),
-      fetchData('unidades', setUnidades),
-      fetchData('atividade', setAtividade),
-      fetchData('fases', setFases),
-    ]).then(() => {
-      if (isMounted.current) {
-        setIsLoading(false);
-      }
-    }).catch((error) => {
-      console.error('Error in Promise.all:', error);
-      if (isMounted.current) {
-        setError('Failed to load all data. Please try again.');
-        setIsLoading(false);
-      }
-    });
-  }, []);
+      fetchData("unidades", setUnidades),
+      fetchData("atividade", setAtividade),
+      fetchData("fases", setFases),
+    ])
+      .then(() => {
+        if (isMounted.current) {
+          setIsLoading(false)
+        }
+      })
+      .catch((error) => {
+        console.error("Error in Promise.all:", error)
+        if (isMounted.current) {
+          setError("Failed to load all data. Please try again.")
+          setIsLoading(false)
+        }
+      })
+  }, [])
 
   useEffect(() => {
-    updateCustoInsumoTotal();
-  }, [custoInsumoData.quantidade, custoInsumoData.valor]);
+    updateCustoInsumoTotal()
+  }, [custoInsumoData.quantidade, custoInsumoData.valor])
 
   useEffect(() => {
-    updateCustoOperacoesTotalHoras();
-  }, [custoOperacoesData.horaMaquinaInicial, custoOperacoesData.horaMaquinaFinal]);
+    updateCustoOperacoesTotalHoras()
+  }, [custoOperacoesData.horaMaquinaInicial, custoOperacoesData.horaMaquinaFinal])
 
   useEffect(() => {
     if (custoInsumoData.insumo && insumosData[custoInsumoData.insumo]) {
-      const selectedInsumo = insumosData[custoInsumoData.insumo];
+      const selectedInsumo = insumosData[custoInsumoData.insumo]
       if (selectedInsumo) {
-        setCustoInsumoData(prev => ({ ...prev, valor: selectedInsumo.toString() }));
+        setCustoInsumoData((prev) => ({ ...prev, valor: selectedInsumo.toString() }))
       }
     }
-  }, [custoInsumoData.insumo, insumosData]);
+  }, [custoInsumoData.insumo, insumosData])
 
   useEffect(() => {
-    const filtered = Object.keys(insumosData).filter(key =>
-      key.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-    setFilteredInsumos(filtered);
-  }, [searchQuery, insumosData]);
+    const filtered = Object.keys(insumosData).filter((key) => key.toLowerCase().includes(searchQuery.toLowerCase()))
+    setFilteredInsumos(filtered)
+  }, [searchQuery, insumosData])
 
   useEffect(() => {
-    const filtered = Object.keys(bens).filter(key =>
-      bens[key].toLowerCase().includes(searchQueryBem.toLowerCase())
-    );
-    setFilteredBens(filtered);
-  }, [searchQueryBem, bens]);
+    const filtered = Object.keys(bens).filter((key) => bens[key].toLowerCase().includes(searchQueryBem.toLowerCase()))
+    setFilteredBens(filtered)
+  }, [searchQueryBem, bens])
 
   useEffect(() => {
-    const filtered = Object.keys(bensImplementos).filter(key =>
-      bensImplementos[key].toLowerCase().includes(searchQueryBemImplemento.toLowerCase())
-    );
-    setFilteredBensImplementos(filtered);
-  }, [searchQueryBemImplemento, bensImplementos]);
+    const filtered = Object.keys(bensImplementos).filter((key) =>
+      bensImplementos[key].toLowerCase().includes(searchQueryBemImplemento.toLowerCase()),
+    )
+    setFilteredBensImplementos(filtered)
+  }, [searchQueryBemImplemento, bensImplementos])
 
   useEffect(() => {
     const filtered = Object.entries(atividade)
       .filter(([key, value]) => value.toLowerCase().includes(searchQueryAtividade.toLowerCase()))
-      .map(([key, value]) => ({ label: value, value: key }));
-    setFilteredAtividades(filtered);
-  }, [searchQueryAtividade, atividade]);
+      .map(([key, value]) => ({ label: value, value: key }))
+    setFilteredAtividades(filtered)
+  }, [searchQueryAtividade, atividade])
 
   useEffect(() => {
     const filtered = Object.entries(fases)
       .filter(([key, value]) => value.toLowerCase().includes(searchQueryFase.toLowerCase()))
-      .map(([key, value]) => ({ label: value, value: key }));
-    setFilteredFases(filtered);
-  }, [searchQueryFase, fases]);
+      .map(([key, value]) => ({ label: value, value: key }))
+    setFilteredFases(filtered)
+  }, [searchQueryFase, fases])
+
+  useEffect(() => {
+    const loadUserData = async () => {
+      const id = await AsyncStorage.getItem(USER_TOKEN_KEY)
+      const property = await AsyncStorage.getItem(USER_PROPERTY_KEY)
+      setUserId(id)
+      setUserProperty(property)
+    }
+    loadUserData()
+  }, [])
 
   const updateCustoInsumoTotal = useCallback(() => {
-    const quantidade = parseFloat(custoInsumoData.quantidade) || 0;
-    const valor = parseFloat(custoInsumoData.valor) || 0;
-    const total = (quantidade * valor).toFixed(2);
-    setCustoInsumoData(prev => ({ ...prev, total }));
-  }, [custoInsumoData.quantidade, custoInsumoData.valor]);
+    const quantidade = Number.parseFloat(custoInsumoData.quantidade) || 0
+    const valor = Number.parseFloat(custoInsumoData.valor) || 0
+    const total = (quantidade * valor).toFixed(2)
+    setCustoInsumoData((prev) => ({ ...prev, total }))
+  }, [custoInsumoData.quantidade, custoInsumoData.valor])
 
   const updateCustoOperacoesTotalHoras = useCallback(() => {
-    const inicial = parseFloat(custoOperacoesData.horaMaquinaInicial) || 0;
-    const final = parseFloat(custoOperacoesData.horaMaquinaFinal) || 0;
-    const totalHoras = (final - inicial).toFixed(2);
-    setCustoOperacoesData(prev => ({ ...prev, totalHoras }));
-  }, [custoOperacoesData.horaMaquinaInicial, custoOperacoesData.horaMaquinaFinal]);
+    const inicial = Number.parseFloat(custoOperacoesData.horaMaquinaInicial) || 0
+    const final = Number.parseFloat(custoOperacoesData.horaMaquinaFinal) || 0
+    const totalHoras = (final - inicial).toFixed(2)
+    setCustoOperacoesData((prev) => ({ ...prev, totalHoras }))
+  }, [custoOperacoesData.horaMaquinaInicial, custoOperacoesData.horaMaquinaFinal])
 
   const handleDateConfirm = useCallback((date) => {
-    const formattedDate = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
-    setFormData((prev) => ({ ...prev, data: formattedDate }));
-    setDatePickerVisible(false);
-  }, []);
+    const formattedDate = `${date.getDate().toString().padStart(2, "0")}/${(date.getMonth() + 1).toString().padStart(2, "0")}/${date.getFullYear()}`
+    setFormData((prev) => ({ ...prev, data: formattedDate }))
+    setDatePickerVisible(false)
+  }, [])
 
-  const handleChange = useCallback((name, value) => setFormData((prev) => ({ ...prev, [name]: value })), []);
-  const handleCustoInsumoChange = useCallback((name, value) => {
-    setCustoInsumoData((prev) => ({ ...prev, [name]: value }));
-    if (name === 'insumo' && insumosData[value]) {
-      setCustoInsumoData((prev) => ({ ...prev, valor: insumosData[value].toString() }));
-    }
-  }, [insumosData]);
-  const handleCustoOperacoesChange = useCallback((name, value) => setCustoOperacoesData((prev) => ({ ...prev, [name]: value })), []);
-  const handleCustoMaoDeObraChange = useCallback((name, value) => setCustoMaoDeObraData((prev) => ({ ...prev, [name]: value })), []);
+  const handleChange = useCallback((name, value) => setFormData((prev) => ({ ...prev, [name]: value })), [])
+  const handleCustoInsumoChange = useCallback(
+    (name, value) => {
+      setCustoInsumoData((prev) => ({ ...prev, [name]: value }))
+      if (name === "insumo" && insumosData[value]) {
+        setCustoInsumoData((prev) => ({ ...prev, valor: insumosData[value].toString() }))
+      }
+    },
+    [insumosData],
+  )
+  const handleCustoOperacoesChange = useCallback(
+    (name, value) => setCustoOperacoesData((prev) => ({ ...prev, [name]: value })),
+    [],
+  )
+  const handleCustoMaoDeObraChange = useCallback(
+    (name, value) => setCustoMaoDeObraData((prev) => ({ ...prev, [name]: value })),
+    [],
+  )
 
   const handleSubmit = useCallback(async () => {
     if (isFormValid()) {
       try {
-        const newEntryRef = push(ref(database, 'apontamentos'));
+        const newEntryRef = push(ref(database, "apontamentos"))
         const apontamentoData = {
           ...formData,
           timestamp: Date.now(),
           custoInsumo: selectedInsumos,
-          custoOperacoes: selectedOperacoes.map(operacao => ({
+          custoOperacoes: selectedOperacoes.map((operacao) => ({
             ...operacao,
-            bemImplementos: selectedBemImplementos.filter(impl => impl.operacaoId === operacao.id)
+            bemImplementos: selectedBemImplementos.filter((impl) => impl.operacaoId === operacao.id),
           })),
           custoMaoDeObra: custoMaoDeObraData,
-          fases: selectedFases
-        };
-        await set(newEntryRef, apontamentoData);
-        Alert.alert('Sucesso', 'Dados enviados com sucesso!');
-        resetForm();
+          fases: selectedFases,
+          userId: userId,
+          property: userProperty,
+        }
+        await set(newEntryRef, apontamentoData)
+        Alert.alert("Sucesso", "Dados enviados com sucesso!")
+        resetForm()
       } catch (error) {
-        console.error('Error submitting form:', error);
-        Alert.alert('Erro', 'Ocorreu um erro ao enviar os dados. Tente novamente.');
+        console.error("Error submitting form:", error)
+        Alert.alert("Erro", "Ocorreu um erro ao enviar os dados. Tente novamente.")
       }
     } else {
-      Alert.alert('Atenção', 'Preencha todos os campos obrigatórios!');
+      Alert.alert("Atenção", "Preencha todos os campos obrigatórios!")
     }
-  }, [formData, selectedInsumos, selectedOperacoes, selectedBemImplementos, custoMaoDeObraData, selectedFases, isFormValid, resetForm]);
+  }, [
+    formData,
+    selectedInsumos,
+    selectedOperacoes,
+    selectedBemImplementos,
+    custoMaoDeObraData,
+    selectedFases,
+    isFormValid,
+    resetForm,
+    userId,
+    userProperty,
+  ])
 
   const isFormValid = useCallback(() => {
-    const requiredFields = ['ordemServico', 'data', 'direcionador', 'responsavel', 'atividade'];
-    return requiredFields.every(field => formData[field] && formData[field].trim() !== '') && selectedFases.length > 0;
-  }, [formData, selectedFases]);
+    const requiredFields = ["ordemServico", "data", "direcionador", "responsavel", "atividade"]
+    return requiredFields.every((field) => formData[field] && formData[field].trim() !== "") && selectedFases.length > 0
+  }, [formData, selectedFases])
 
   const isCustoInsumoValid = useCallback(() => {
-    const requiredFields = ['insumo', 'quantidade'];
-    return requiredFields.every(field => custoInsumoData[field] && custoInsumoData[field].trim() !== '');
-  }, [custoInsumoData]);
+    const requiredFields = ["insumo", "quantidade"]
+    return requiredFields.every((field) => custoInsumoData[field] && custoInsumoData[field].trim() !== "")
+  }, [custoInsumoData])
 
   const isCustoOperacoesValid = useCallback(() => {
-    return custoOperacoesData.bem && custoOperacoesData.bem.trim() !== '';
-  }, [custoOperacoesData.bem]);
+    return custoOperacoesData.bem && custoOperacoesData.bem.trim() !== ""
+  }, [custoOperacoesData.bem])
 
   const isCustoMaoDeObraValid = useCallback(() => {
-    const requiredFields = ['quantidade', 'tipo', 'unidade', 'valor'];
-    return requiredFields.every(field => custoMaoDeObraData[field] && custoMaoDeObraData[field].trim() !== '');
-  }, [custoMaoDeObraData]);
+    const requiredFields = ["quantidade", "tipo", "unidade", "valor"]
+    return requiredFields.every((field) => custoMaoDeObraData[field] && custoMaoDeObraData[field].trim() !== "")
+  }, [custoMaoDeObraData])
 
   const resetForm = useCallback(() => {
-    setFormData(initialFormData);
-    setCustoInsumoData(initialCustoInsumoData);
-    setCustoOperacoesData(initialCustoOperacoesData);
-    setCustoMaoDeObraData(initialCustoMaoDeObraData);
-    setSelectedInsumos([]);
-    setSelectedOperacoes([]);
-    setSelectedBemImplementos([]);
-    setSelectedFases([]);
-  }, []);
+    setFormData(initialFormData)
+    setCustoInsumoData(initialCustoInsumoData)
+    setCustoOperacoesData(initialCustoOperacoesData)
+    setCustoMaoDeObraData(initialCustoMaoDeObraData)
+    setSelectedInsumos([])
+    setSelectedOperacoes([])
+    setSelectedBemImplementos([])
+    setSelectedFases([])
+  }, [])
 
-  const renderInputField = useCallback((label, name, value, onChange, keyboardType = 'default', editable = true) => (
-    <View>
-      <Text style={styles.label}>{label}</Text>
-      <TextInput
-        style={[styles.input, !editable && styles.disabledInput]}
-        value={value}
-        onChangeText={(text) => onChange(name, text)}
-        placeholder={label}
-        keyboardType={keyboardType}
-        editable={editable}
-        accessibilityLabel={label}
-      />
-    </View>
-  ), []);
-
-  const renderDatePickerField = useCallback((label, name) => (
-    <View>
-      <Text style={styles.label}>{label}</Text>
-      <TouchableOpacity 
-        style={styles.input} 
-        onPress={() => setDatePickerVisible(true)}
-        accessibilityLabel={`Selecionar ${label}`}
-        accessibilityHint="Toque para abrir o seletor de data"
-      >
-        <Text style={styles.datePickerText}>{formData[name] || 'Selecione a Data'}</Text>
-      </TouchableOpacity>
-    </View>
-  ), [formData]);
-
-  const renderDropdownField = useCallback((label, name, items, value, onChange) => (
-    <View>
-      <Text style={styles.label}>{label}</Text>
-      <View style={styles.dropdownContainer}>
-        <Picker
-          selectedValue={value}
-          onValueChange={(value) => onChange(name, value)}
-          style={styles.picker}
+  const renderInputField = useCallback(
+    (label, name, value, onChange, keyboardType = "default", editable = true) => (
+      <View>
+        <Text style={styles.label}>{label}</Text>
+        <TextInput
+          style={[styles.input, !editable && styles.disabledInput]}
+          value={value}
+          onChangeText={(text) => onChange(name, text)}
+          placeholder={label}
+          keyboardType={keyboardType}
+          editable={editable}
           accessibilityLabel={label}
-        >
-          <Picker.Item label={`Selecione ${label}`} value="" />
-          {items.map((item) => (
-            <Picker.Item key={item.value} label={item.label} value={item.value} />
-          ))}
-        </Picker>
+        />
       </View>
-    </View>
-  ), []);
+    ),
+    [],
+  )
 
-  const renderSummary = useCallback((title, data, fields) => (
-    <View style={styles.summaryContainer}>
-      <Text style={styles.summaryTitle}>{title}</Text>
-      {fields.map(field => (
-        <View key={field.key} style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>{field.label}:</Text>
-          <Text style={styles.summaryValue}>{data[field.key] || field.defaultValue}</Text>
+  const renderDatePickerField = useCallback(
+    (label, name) => (
+      <View>
+        <Text style={styles.label}>{label}</Text>
+        <TouchableOpacity
+          style={styles.input}
+          onPress={() => setDatePickerVisible(true)}
+          accessibilityLabel={`Selecionar ${label}`}
+          accessibilityHint="Toque para abrir o seletor de data"
+        >
+          <Text style={styles.datePickerText}>{formData[name] || "Selecione a Data"}</Text>
+        </TouchableOpacity>
+      </View>
+    ),
+    [formData],
+  )
+
+  const renderDropdownField = useCallback(
+    (label, name, items, value, onChange) => (
+      <View>
+        <Text style={styles.label}>{label}</Text>
+        <View style={styles.dropdownContainer}>
+          <Picker
+            selectedValue={value}
+            onValueChange={(value) => onChange(name, value)}
+            style={styles.picker}
+            accessibilityLabel={label}
+          >
+            <Picker.Item label={`Selecione ${label}`} value="" />
+            {items.map((item) => (
+              <Picker.Item key={item.value} label={item.label} value={item.value} />
+            ))}
+          </Picker>
         </View>
-      ))}
-    </View>
-  ), []);
+      </View>
+    ),
+    [],
+  )
 
-  const renderModal = useCallback((visible, setVisible, title, content) => (
-    <Modal visible={visible} transparent={true} animationType="slide">
-      <SafeAreaView style={styles.modalContainer}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { flex: 1, textAlign: 'center' }]}>{title}</Text>
-            <TouchableOpacity 
-              onPress={() => setVisible(false)} 
-              style={[styles.closeButton, { position: 'absolute', right: 0 }]}
-              accessibilityLabel="Fechar modal"
-              accessibilityHint="Toque para fechar o modal"
-            >
-              <X size={24} color="#000" />
-            </TouchableOpacity>
+  const renderSummary = useCallback(
+    (title, data, fields) => (
+      <View style={styles.summaryContainer}>
+        <Text style={styles.summaryTitle}>{title}</Text>
+        {fields.map((field) => (
+          <View key={field.key} style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>{field.label}:</Text>
+            <Text style={styles.summaryValue}>{data[field.key] || field.defaultValue}</Text>
           </View>
-          <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
-            {content}
-          </ScrollView>
-        </View>
-      </SafeAreaView>
-    </Modal>
-  ), []);
+        ))}
+      </View>
+    ),
+    [],
+  )
+
+  const renderModal = useCallback(
+    (visible, setVisible, title, content) => (
+      <Modal visible={visible} transparent={true} animationType="slide">
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { flex: 1, textAlign: "center" }]}>{title}</Text>
+              <TouchableOpacity
+                onPress={() => setVisible(false)}
+                style={[styles.closeButton, { position: "absolute", right: 0 }]}
+                accessibilityLabel="Fechar modal"
+                accessibilityHint="Toque para fechar o modal"
+              >
+                <X size={24} color="#000" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
+              {content}
+            </ScrollView>
+          </View>
+        </SafeAreaView>
+      </Modal>
+    ),
+    [],
+  )
 
   const addSelectedInsumo = useCallback(() => {
     if (isCustoInsumoValid()) {
-      setSelectedInsumos(prev => [...prev, { ...custoInsumoData, id: Date.now() }]);
-      setCustoInsumoData(initialCustoInsumoData);
+      setSelectedInsumos((prev) => [...prev, { ...custoInsumoData, id: Date.now() }])
+      setCustoInsumoData(initialCustoInsumoData)
     } else {
-      Alert.alert('Atenção', 'Preencha todos os campos obrigatórios!');
+      Alert.alert("Atenção", "Preencha todos os campos obrigatórios!")
     }
-  }, [custoInsumoData, isCustoInsumoValid]);
+  }, [custoInsumoData, isCustoInsumoValid])
 
   const removeSelectedInsumo = useCallback((id) => {
-    setSelectedInsumos(prev => prev.filter(item => item.id !== id));
-  }, []);
+    setSelectedInsumos((prev) => prev.filter((item) => item.id !== id))
+  }, [])
 
   const addSelectedOperacao = useCallback(() => {
     if (isCustoOperacoesValid()) {
-      const newOperacao = { ...custoOperacoesData, id: Date.now() };
-      setSelectedOperacoes(prev => [...prev, newOperacao]);
-      setCustoOperacoesData(initialCustoOperacoesData);
+      const newOperacao = { ...custoOperacoesData, id: Date.now() }
+      setSelectedOperacoes((prev) => [...prev, newOperacao])
+      setCustoOperacoesData(initialCustoOperacoesData)
     } else {
-      Alert.alert('Atenção', 'Preencha todos os campos obrigatórios!');
+      Alert.alert("Atenção", "Preencha todos os campos obrigatórios!")
     }
-  }, [custoOperacoesData, isCustoOperacoesValid]);
+  }, [custoOperacoesData, isCustoOperacoesValid])
 
   const removeSelectedOperacao = useCallback((id) => {
-    setSelectedOperacoes(prev => prev.filter(item => item.id !== id));
-    setSelectedBemImplementos(prev => prev.filter(item => item.operacaoId !== id));
-  }, []);
+    setSelectedOperacoes((prev) => prev.filter((item) => item.id !== id))
+    setSelectedBemImplementos((prev) => prev.filter((item) => item.operacaoId !== id))
+  }, [])
 
   const addSelectedBemImplemento = useCallback(() => {
     if (custoOperacoesData.bemImplemento) {
-      const lastOperacao = selectedOperacoes[selectedOperacoes.length - 1];
+      const lastOperacao = selectedOperacoes[selectedOperacoes.length - 1]
       if (lastOperacao) {
-        setSelectedBemImplementos(prev => [...prev, { 
-          bemImplemento: custoOperacoesData.bemImplemento, 
-          id: Date.now(),
-          operacaoId: lastOperacao.id
-        }]);
-        setCustoOperacoesData(prev => ({ ...prev, bemImplemento: '' }));
+        setSelectedBemImplementos((prev) => [
+          ...prev,
+          {
+            bemImplemento: custoOperacoesData.bemImplemento,
+            id: Date.now(),
+            operacaoId: lastOperacao.id,
+          },
+        ])
+        setCustoOperacoesData((prev) => ({ ...prev, bemImplemento: "" }))
       } else {
-        Alert.alert('Atenção', 'Adicione uma operação antes de adicionar um bem implemento!');
+        Alert.alert("Atenção", "Adicione uma operação antes de adicionar um bem implemento!")
       }
     } else {
-      Alert.alert('Atenção', 'Selecione um Bem Implemento!');
+      Alert.alert("Atenção", "Selecione um Bem Implemento!")
     }
-  }, [custoOperacoesData.bemImplemento, selectedOperacoes]);
+  }, [custoOperacoesData.bemImplemento, selectedOperacoes])
 
   const removeSelectedBemImplemento = useCallback((id) => {
-    setSelectedBemImplementos(prev => prev.filter(item => item.id !== id));
-  }, []);
+    setSelectedBemImplementos((prev) => prev.filter((item) => item.id !== id))
+  }, [])
 
-  const addSelectedFase = useCallback((fase) => {
-    if (fase && !selectedFases.some(f => f.value === fase)) {
-      setSelectedFases(prev => [...prev, { value: fase, label: fases[fase], id: Date.now() }]);
-    }
-  }, [fases, selectedFases]);
+  const addSelectedFase = useCallback(
+    (fase) => {
+      if (fase && !selectedFases.some((f) => f.value === fase)) {
+        setSelectedFases((prev) => [...prev, { value: fase, label: fases[fase], id: Date.now() }])
+      }
+    },
+    [fases, selectedFases],
+  )
 
   const removeSelectedFase = useCallback((id) => {
-    setSelectedFases(prev => prev.filter(item => item.id !== id));
-  }, []);
+    setSelectedFases((prev) => prev.filter((item) => item.id !== id))
+  }, [])
 
-  const renderSelectedItems = useCallback((items, removeFunction) => (
-    <View>
-      {items.map((item) => (
-        <View key={item.id} style={styles.selectedItem}>
-          <Text>{item.insumo || item.bem || item.bemImplemento || item.label}</Text>
-          <TouchableOpacity onPress={() => removeFunction(item.id)}>
-            <Trash2 size={20} color="#FF0000" />
-          </TouchableOpacity>
-        </View>
-      ))}
-    </View>
-  ), []);
+  const renderSelectedItems = useCallback(
+    (items, removeFunction) => (
+      <View>
+        {items.map((item) => (
+          <View key={item.id} style={styles.selectedItem}>
+            <Text>{item.insumo || item.bem || item.bemImplemento || item.label}</Text>
+            <TouchableOpacity onPress={() => removeFunction(item.id)}>
+              <Trash2 size={20} color="#FF0000" />
+            </TouchableOpacity>
+          </View>
+        ))}
+      </View>
+    ),
+    [],
+  )
 
   if (isLoading) {
     return (
@@ -436,7 +500,7 @@ export default function FormScreen() {
         <ActivityIndicator size="large" color="#0000ff" />
         <Text>Carregando...</Text>
       </SafeAreaView>
-    );
+    )
   }
 
   if (error) {
@@ -447,7 +511,7 @@ export default function FormScreen() {
           <Text>Tentar novamente</Text>
         </TouchableOpacity>
       </SafeAreaView>
-    );
+    )
   }
 
   return (
@@ -465,10 +529,14 @@ export default function FormScreen() {
           />
           <Search size={24} color="#000" style={styles.searchIcon} />
         </View>
-        {renderDropdownField("", "atividade", 
-          filteredAtividades.length > 0 ? filteredAtividades : Object.entries(atividade).map(([key, value]) => ({ label: value, value: key })),
-          formData.atividade, 
-          handleChange
+        {renderDropdownField(
+          "",
+          "atividade",
+          filteredAtividades.length > 0
+            ? filteredAtividades
+            : Object.entries(atividade).map(([key, value]) => ({ label: value, value: key })),
+          formData.atividade,
+          handleChange,
         )}
         <Text style={styles.label}>Fase</Text>
         <View style={styles.searchContainer}>
@@ -480,45 +548,57 @@ export default function FormScreen() {
           />
           <Search size={24} color="#000" style={styles.searchIcon} />
         </View>
-        {renderDropdownField("", "fase", 
-          filteredFases.length > 0 ? filteredFases : Object.entries(fases).map(([key, value]) => ({ label: value, value: key })),
-          '', 
-          (name, value) => addSelectedFase(value)
+        {renderDropdownField(
+          "",
+          "fase",
+          filteredFases.length > 0
+            ? filteredFases
+            : Object.entries(fases).map(([key, value]) => ({ label: value, value: key })),
+          "",
+          (name, value) => addSelectedFase(value),
         )}
         {renderSelectedItems(selectedFases, removeSelectedFase)}
-        {renderDropdownField("Direcionador", "direcionador", 
-          Object.entries(direcionadores).map(([key, value]) => ({ label: value, value: key })), 
-          formData.direcionador, handleChange)}
-        <TouchableOpacity 
-          style={styles.modalButton} 
+        {renderDropdownField(
+          "Direcionador",
+          "direcionador",
+          Object.entries(direcionadores).map(([key, value]) => ({ label: value, value: key })),
+          formData.direcionador,
+          handleChange,
+        )}
+        <TouchableOpacity
+          style={styles.modalButton}
           onPress={() => setCustoInsumoModalVisible(true)}
           accessibilityLabel="Lançar Insumos"
           accessibilityHint="Toque para abrir o formulário de lançamento de insumos"
         >
           <Text style={styles.buttonText}>Lançar Insumos</Text>
         </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.modalButton} 
+        <TouchableOpacity
+          style={styles.modalButton}
           onPress={() => setCustoOperacoesModalVisible(true)}
           accessibilityLabel="Lançar Operações Mecanizadas"
           accessibilityHint="Toque para abrir o formulário de lançamento de operações mecanizadas"
         >
           <Text style={styles.buttonText}>Lançar Operações Mecanizadas</Text>
         </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.modalButton} 
+        <TouchableOpacity
+          style={styles.modalButton}
           onPress={() => setCustoMaoDeObraModalVisible(true)}
           accessibilityLabel="Lançar Mão de Obra"
           accessibilityHint="Toque para abrir o formulário de lançamento de mão de obra"
         >
           <Text style={styles.buttonText}>Lançar Mão de Obra</Text>
         </TouchableOpacity>
-        {renderDropdownField("Responsável Pelo Lançamento", "responsavel", 
-          Object.entries(responsaveis).map(([key, value]) => ({ label: value, value: key })), 
-          formData.responsavel, handleChange)}
+        {renderDropdownField(
+          "Responsável Pelo Lançamento",
+          "responsavel",
+          Object.entries(responsaveis).map(([key, value]) => ({ label: value, value: key })),
+          formData.responsavel,
+          handleChange,
+        )}
         {renderInputField("Observação", "observacao", formData.observacao, handleChange)}
-        <TouchableOpacity 
-          style={styles.buttonEnviar} 
+        <TouchableOpacity
+          style={styles.buttonEnviar}
           onPress={handleSubmit}
           accessibilityLabel="Enviar formulário"
           accessibilityHint="Toque para enviar o formulário preenchido"
@@ -549,14 +629,25 @@ export default function FormScreen() {
             />
             <Search size={24} color="#000" style={styles.searchIcon} />
           </View>
-          {renderDropdownField("", "insumo", 
-            filteredInsumos.map(key => ({ label: key, value: key })), 
-            custoInsumoData.insumo, handleCustoInsumoChange)}
-          {renderInputField("Quantidade", "quantidade", custoInsumoData.quantidade, handleCustoInsumoChange, 'numeric')}
-          {renderInputField("Valor Unitário", "valor", custoInsumoData.valor, handleCustoInsumoChange, 'numeric', false)}
+          {renderDropdownField(
+            "",
+            "insumo",
+            filteredInsumos.map((key) => ({ label: key, value: key })),
+            custoInsumoData.insumo,
+            handleCustoInsumoChange,
+          )}
+          {renderInputField("Quantidade", "quantidade", custoInsumoData.quantidade, handleCustoInsumoChange, "numeric")}
+          {renderInputField(
+            "Valor Unitário",
+            "valor",
+            custoInsumoData.valor,
+            handleCustoInsumoChange,
+            "numeric",
+            false,
+          )}
           {renderInputField("Observação", "observacao", custoInsumoData.observacao, handleCustoInsumoChange)}
-          <TouchableOpacity 
-            style={[styles.button, !isCustoInsumoValid() && styles.disabledButton]} 
+          <TouchableOpacity
+            style={[styles.button, !isCustoInsumoValid() && styles.disabledButton]}
             onPress={addSelectedInsumo}
             accessibilityLabel="Adicionar insumo"
             accessibilityHint="Toque para adicionar o insumo à lista"
@@ -565,7 +656,7 @@ export default function FormScreen() {
             <Text style={styles.buttonText}>Adicionar Insumo</Text>
           </TouchableOpacity>
           {renderSelectedItems(selectedInsumos, removeSelectedInsumo)}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.button}
             onPress={() => setCustoInsumoModalVisible(false)}
             accessibilityLabel="Salvar e sair do modal de insumos"
@@ -573,7 +664,7 @@ export default function FormScreen() {
           >
             <Text style={styles.buttonText}>Salvar e Sair</Text>
           </TouchableOpacity>
-        </>
+        </>,
       )}
 
       {renderModal(
@@ -591,13 +682,29 @@ export default function FormScreen() {
             />
             <Search size={24} color="#000" style={styles.searchIcon} />
           </View>
-          {renderDropdownField("", "bem", 
-            filteredBens.map(key => ({ label: bens[key], value: key })), 
-            custoOperacoesData.bem, handleCustoOperacoesChange)}
-          {renderInputField("Hora Máquina Inicial", "horaMaquinaInicial", custoOperacoesData.horaMaquinaInicial, handleCustoOperacoesChange, 'numeric')}
-          {renderInputField("Hora Máquina Final", "horaMaquinaFinal", custoOperacoesData.horaMaquinaFinal, handleCustoOperacoesChange, 'numeric')}
-          <TouchableOpacity 
-            style={[styles.button, !isCustoOperacoesValid() && styles.disabledButton]} 
+          {renderDropdownField(
+            "",
+            "bem",
+            filteredBens.map((key) => ({ label: bens[key], value: key })),
+            custoOperacoesData.bem,
+            handleCustoOperacoesChange,
+          )}
+          {renderInputField(
+            "Hora Máquina Inicial",
+            "horaMaquinaInicial",
+            custoOperacoesData.horaMaquinaInicial,
+            handleCustoOperacoesChange,
+            "numeric",
+          )}
+          {renderInputField(
+            "Hora Máquina Final",
+            "horaMaquinaFinal",
+            custoOperacoesData.horaMaquinaFinal,
+            handleCustoOperacoesChange,
+            "numeric",
+          )}
+          <TouchableOpacity
+            style={[styles.button, !isCustoOperacoesValid() && styles.disabledButton]}
             onPress={addSelectedOperacao}
             accessibilityLabel="Adicionar operação"
             accessibilityHint="Toque para adicionar a operação à lista"
@@ -616,11 +723,15 @@ export default function FormScreen() {
             />
             <Search size={24} color="#000" style={styles.searchIcon} />
           </View>
-          {renderDropdownField("", "bemImplemento", 
-            filteredBensImplementos.map(key => ({ label: bensImplementos[key], value: key })), 
-            custoOperacoesData.bemImplemento, handleCustoOperacoesChange)}
-          <TouchableOpacity 
-            style={[styles.button, !custoOperacoesData.bemImplemento && styles.disabledButton]} 
+          {renderDropdownField(
+            "",
+            "bemImplemento",
+            filteredBensImplementos.map((key) => ({ label: bensImplementos[key], value: key })),
+            custoOperacoesData.bemImplemento,
+            handleCustoOperacoesChange,
+          )}
+          <TouchableOpacity
+            style={[styles.button, !custoOperacoesData.bemImplemento && styles.disabledButton]}
             onPress={addSelectedBemImplemento}
             accessibilityLabel="Adicionar bem implemento"
             accessibilityHint="Toque para adicionar o bem implemento à lista"
@@ -629,7 +740,7 @@ export default function FormScreen() {
             <Text style={styles.buttonText}>Adicionar Bem Implemento</Text>
           </TouchableOpacity>
           {renderSelectedItems(selectedBemImplementos, removeSelectedBemImplemento)}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.button}
             onPress={() => setCustoOperacoesModalVisible(false)}
             accessibilityLabel="Salvar e sair do modal de operações mecanizadas"
@@ -637,7 +748,7 @@ export default function FormScreen() {
           >
             <Text style={styles.buttonText}>Salvar e Sair</Text>
           </TouchableOpacity>
-        </>
+        </>,
       )}
 
       {renderModal(
@@ -645,15 +756,31 @@ export default function FormScreen() {
         setCustoMaoDeObraModalVisible,
         "Lançamento Mão de Obra",
         <>
-          {renderInputField("Quantidade", "quantidade", custoMaoDeObraData.quantidade, handleCustoMaoDeObraChange, 'numeric')}
-          {renderDropdownField("Tipo", "tipo", [
-            { label: "Selecione o Tipo", value: "" },
-            { label: "Terceirizada", value: "Terceirizada" },
-          ], custoMaoDeObraData.tipo, handleCustoMaoDeObraChange)}
-          {renderDropdownField("Unidade", "unidade", 
-            Object.entries(unidades).map(([key, value]) => ({ label: value, value: key })), 
-            custoMaoDeObraData.unidade, handleCustoMaoDeObraChange)}
-          {renderInputField("Valor", "valor", custoMaoDeObraData.valor, handleCustoMaoDeObraChange, 'numeric')}
+          {renderInputField(
+            "Quantidade",
+            "quantidade",
+            custoMaoDeObraData.quantidade,
+            handleCustoMaoDeObraChange,
+            "numeric",
+          )}
+          {renderDropdownField(
+            "Tipo",
+            "tipo",
+            [
+              { label: "Selecione o Tipo", value: "" },
+              { label: "Terceirizada", value: "Terceirizada" },
+            ],
+            custoMaoDeObraData.tipo,
+            handleCustoMaoDeObraChange,
+          )}
+          {renderDropdownField(
+            "Unidade",
+            "unidade",
+            Object.entries(unidades).map(([key, value]) => ({ label: value, value: key })),
+            custoMaoDeObraData.unidade,
+            handleCustoMaoDeObraChange,
+          )}
+          {renderInputField("Valor", "valor", custoMaoDeObraData.valor, handleCustoMaoDeObraChange, "numeric")}
           {renderInputField("Observação", "observacao", custoMaoDeObraData.observacao, handleCustoMaoDeObraChange)}
           {renderSummary("Resumo Lançamento Mão de Obra", custoMaoDeObraData, [
             { key: "quantidade", label: "Quantidade", defaultValue: "0" },
@@ -661,13 +788,13 @@ export default function FormScreen() {
             { key: "unidade", label: "Unidade", defaultValue: "Não selecionado" },
             { key: "valor", label: "Valor", defaultValue: "0" },
           ])}
-          <TouchableOpacity 
-            style={[styles.button, !isCustoMaoDeObraValid() && styles.disabledButton]} 
+          <TouchableOpacity
+            style={[styles.button, !isCustoMaoDeObraValid() && styles.disabledButton]}
             onPress={() => {
               if (isCustoMaoDeObraValid()) {
-                setCustoMaoDeObraModalVisible(false);
+                setCustoMaoDeObraModalVisible(false)
               } else {
-                Alert.alert('Atenção', 'Preencha todos os campos obrigatórios!');
+                Alert.alert("Atenção", "Preencha todos os campos obrigatórios!")
               }
             }}
             accessibilityLabel="Salvar e sair do lançamento de mão de obra"
@@ -676,8 +803,9 @@ export default function FormScreen() {
           >
             <Text style={styles.buttonText}>Salvar e Sair</Text>
           </TouchableOpacity>
-        </>
+        </>,
       )}
     </SafeAreaView>
-  );
+  )
 }
+

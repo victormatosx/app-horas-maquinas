@@ -1,62 +1,90 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, FlatList, StyleSheet, SafeAreaView, StatusBar, Alert, ActivityIndicator } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import Icon from 'react-native-vector-icons/Ionicons';
-import { database, auth } from '../config/firebaseConfig';
-import { ref, onValue, off } from 'firebase/database';
-import { signOut } from 'firebase/auth';
+import React, { useState, useEffect } from "react"
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  FlatList,
+  StyleSheet,
+  SafeAreaView,
+  StatusBar,
+  Alert,
+  ActivityIndicator,
+} from "react-native"
+import { useNavigation } from "@react-navigation/native"
+import AsyncStorage from "@react-native-async-storage/async-storage"
+import Icon from "react-native-vector-icons/Ionicons"
+import { database, auth } from "../config/firebaseConfig"
+import { ref, onValue, off, query, orderByChild, equalTo } from "firebase/database"
+import { signOut } from "firebase/auth"
 
-const USER_TOKEN_KEY = '@user_token';
+const USER_TOKEN_KEY = "@user_token"
+const USER_ROLE_KEY = "@user_role"
+const USER_PROPERTY_KEY = "@user_property"
 
 export default function HomeScreen() {
-  const [apontamentos, setApontamentos] = useState([]);
-  const [responsaveis, setResponsaveis] = useState([]);
-  const [filtroResponsavel, setFiltroResponsavel] = useState(null);
-  const [sortOrder, setSortOrder] = useState('desc');
-  const [isLoading, setIsLoading] = useState(false);
-  const navigation = useNavigation();
+  const [apontamentos, setApontamentos] = useState([])
+  const [responsaveis, setResponsaveis] = useState([])
+  const [filtroResponsavel, setFiltroResponsavel] = useState(null)
+  const [sortOrder, setSortOrder] = useState("desc")
+  const [isLoading, setIsLoading] = useState(false)
+  const [userRole, setUserRole] = useState("")
+  const [userProperty, setUserProperty] = useState("")
+  const navigation = useNavigation()
 
   useEffect(() => {
-    setIsLoading(true);
-    const apontamentosRef = ref(database, 'apontamentos');
-    const listener = onValue(apontamentosRef, (snapshot) => {
-      const data = snapshot.val();
+    const loadUserData = async () => {
+      const role = await AsyncStorage.getItem(USER_ROLE_KEY)
+      const property = await AsyncStorage.getItem(USER_PROPERTY_KEY)
+      setUserRole(role)
+      setUserProperty(property)
+    }
+    loadUserData()
+  }, [])
+
+  useEffect(() => {
+    if (!userProperty) return
+
+    setIsLoading(true)
+    const apontamentosRef = ref(database, "apontamentos")
+    const apontamentosQuery = query(apontamentosRef, orderByChild("property"), equalTo(userProperty))
+
+    const listener = onValue(apontamentosQuery, (snapshot) => {
+      const data = snapshot.val()
       if (data) {
         const apontamentosArray = Object.entries(data).map(([key, value]) => ({
           id: key,
           ...value,
-        }));
-        
-        sortApontamentos(apontamentosArray);
-        
-        const uniqueResponsaveis = [...new Set(apontamentosArray.map(item => item.responsavel))];
-        setResponsaveis(uniqueResponsaveis);
-      }
-      setIsLoading(false);
-    });
+        }))
 
-    return () => off(apontamentosRef, 'value', listener);
-  }, []);
+        sortApontamentos(apontamentosArray)
+
+        const uniqueResponsaveis = [...new Set(apontamentosArray.map((item) => item.responsavel))]
+        setResponsaveis(uniqueResponsaveis)
+      }
+      setIsLoading(false)
+    })
+
+    return () => off(apontamentosRef, "value", listener)
+  }, [userProperty])
 
   const sortApontamentos = (apontamentosArray) => {
     const sortedApontamentos = [...apontamentosArray].sort((a, b) => {
-      const dateA = new Date(a.data.split('/').reverse().join('-'));
-      const dateB = new Date(b.data.split('/').reverse().join('-'));
-      return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
-    });
-    setApontamentos(sortedApontamentos);
-  };
+      const dateA = new Date(a.data.split("/").reverse().join("-"))
+      const dateB = new Date(b.data.split("/").reverse().join("-"))
+      return sortOrder === "desc" ? dateB - dateA : dateA - dateB
+    })
+    setApontamentos(sortedApontamentos)
+  }
 
   const toggleSortOrder = () => {
-    const newSortOrder = sortOrder === 'desc' ? 'asc' : 'desc';
-    setSortOrder(newSortOrder);
-    sortApontamentos(apontamentos);
-  };
+    const newSortOrder = sortOrder === "desc" ? "asc" : "desc"
+    setSortOrder(newSortOrder)
+    sortApontamentos(apontamentos)
+  }
 
   const filteredApontamentos = filtroResponsavel
-    ? apontamentos.filter(item => item.responsavel === filtroResponsavel)
-    : apontamentos;
+    ? apontamentos.filter((item) => item.responsavel === filtroResponsavel)
+    : apontamentos
 
   const renderApontamento = ({ item }) => (
     <View style={styles.apontamentoItem}>
@@ -65,37 +93,37 @@ export default function HomeScreen() {
       <Text style={styles.direcionador}>{item.direcionador}</Text>
       <Text style={styles.ordemServico}>OS: {item.ordemServico}</Text>
     </View>
-  );
+  )
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
-      await AsyncStorage.removeItem(USER_TOKEN_KEY);
-      navigation.replace('Login');
+      await signOut(auth)
+      await AsyncStorage.removeItem(USER_TOKEN_KEY)
+      navigation.replace("Login")
     } catch (error) {
-      console.error("Logout error:", error);
-      Alert.alert('Erro ao sair', 'Ocorreu um erro ao tentar sair. Por favor, tente novamente.');
+      console.error("Logout error:", error)
+      Alert.alert("Erro ao sair", "Ocorreu um erro ao tentar sair. Por favor, tente novamente.")
     }
-  };
+  }
 
   const renderFooter = () => (
-    <TouchableOpacity
-      style={styles.sairButton}
-      onPress={handleLogout}
-    >
+    <TouchableOpacity style={styles.sairButton} onPress={handleLogout}>
       <Icon name="log-out-outline" size={24} color="white" />
       <Text style={styles.sairButtonText}>SAIR</Text>
     </TouchableOpacity>
-  );
+  )
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#4A90E2" />
       <View style={styles.container}>
-        <TouchableOpacity
-          style={styles.novoButton}
-          onPress={() => navigation.navigate('Formulario')}
-        >
+        {userRole === "admin" && (
+          <TouchableOpacity style={styles.adminButton} onPress={() => navigation.navigate("AdminPanel")}>
+            <Icon name="settings-outline" size={28} color="white" />
+            <Text style={styles.adminButtonText}>Admin Panel</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity style={styles.novoButton} onPress={() => navigation.navigate("Formulario")}>
           <Icon name="add-circle-outline" size={28} color="white" />
           <Text style={styles.novoButtonText}>NOVO APONTAMENTO</Text>
         </TouchableOpacity>
@@ -108,16 +136,12 @@ export default function HomeScreen() {
             showsHorizontalScrollIndicator={false}
             renderItem={({ item }) => (
               <TouchableOpacity
-                style={[
-                  styles.filtroItem,
-                  filtroResponsavel === item && styles.filtroItemActive
-                ]}
+                style={[styles.filtroItem, filtroResponsavel === item && styles.filtroItemActive]}
                 onPress={() => setFiltroResponsavel(filtroResponsavel === item ? null : item)}
               >
-                <Text style={[
-                  styles.filtroItemText,
-                  filtroResponsavel === item && styles.filtroItemTextActive
-                ]}>{item}</Text>
+                <Text style={[styles.filtroItemText, filtroResponsavel === item && styles.filtroItemTextActive]}>
+                  {item}
+                </Text>
               </TouchableOpacity>
             )}
             keyExtractor={(item) => item}
@@ -125,24 +149,15 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.sortButtonContainer}>
-          <TouchableOpacity
-            style={styles.sortButton}
-            onPress={toggleSortOrder}
-            disabled={isLoading}
-          >
-            <Icon name={sortOrder === 'desc' ? 'arrow-down' : 'arrow-up'} size={24} color="white" />
-            <Text style={styles.sortButtonText}>
-              {sortOrder === 'desc' ? 'Mais antigo' : 'Mais recente'}
-            </Text>
+          <TouchableOpacity style={styles.sortButton} onPress={toggleSortOrder} disabled={isLoading}>
+            <Icon name={sortOrder === "desc" ? "arrow-down" : "arrow-up"} size={24} color="white" />
+            <Text style={styles.sortButtonText}>{sortOrder === "desc" ? "Mais antigo" : "Mais recente"}</Text>
           </TouchableOpacity>
         </View>
 
         {isLoading && (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator 
-              size="large" 
-              color="#2a9d8f" 
-            />
+            <ActivityIndicator size="large" color="#2a9d8f" />
           </View>
         )}
 
@@ -157,83 +172,99 @@ export default function HomeScreen() {
         />
       </View>
     </SafeAreaView>
-  );
+  )
 }
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#2a9d8f',
+    backgroundColor: "#2a9d8f",
   },
   container: {
     flex: 1,
     padding: 16,
-    backgroundColor: '#F0F4F8',
+    backgroundColor: "#F0F4F8",
   },
   novoButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#2a9d8f',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#2a9d8f",
     padding: 16,
     borderRadius: 12,
     marginBottom: 24,
     elevation: 4,
   },
   novoButtonText: {
-    color: 'white',
+    color: "white",
     marginLeft: 12,
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
+  },
+  adminButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#2a9d8f",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 24,
+    elevation: 4,
+  },
+  adminButtonText: {
+    color: "white",
+    marginLeft: 12,
+    fontSize: 18,
+    fontWeight: "bold",
   },
   filtroContainer: {
     marginBottom: 24,
   },
   filtroLabel: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 12,
-    color: '#2C3E50',
+    color: "#2C3E50",
   },
   filtroItem: {
-    backgroundColor: '#F0F4F8',
+    backgroundColor: "#F0F4F8",
     padding: 10,
     borderRadius: 20,
     marginRight: 12,
     borderWidth: 2,
-    borderColor: '#2a9d8f',
+    borderColor: "#2a9d8f",
   },
   filtroItemActive: {
-    backgroundColor: '#2a9d8f',
+    backgroundColor: "#2a9d8f",
   },
   filtroItemText: {
-    color: '#2a9d8f',
-    fontWeight: '600',
+    color: "#2a9d8f",
+    fontWeight: "600",
   },
   filtroItemTextActive: {
-    color: 'white',
+    color: "white",
   },
   sortButtonContainer: {
     marginBottom: 16,
   },
   sortButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#2a9d8f',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#2a9d8f",
     padding: 12,
     borderRadius: 12,
     elevation: 4,
   },
   sortButtonText: {
-    color: 'white',
+    color: "white",
     marginLeft: 8,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   loadingContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginVertical: 20,
   },
   loadingIndicator: {
@@ -243,52 +274,53 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   apontamentoItem: {
-    backgroundColor: 'white',
+    backgroundColor: "white",
     padding: 20,
     borderRadius: 12,
     marginBottom: 16,
     elevation: 3,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
   data: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2C3E50',
+    fontWeight: "bold",
+    color: "#2C3E50",
     marginBottom: 8,
   },
   responsavel: {
     fontSize: 16,
-    color: '#2a9d8f',
-    fontWeight: '600',
+    color: "#2a9d8f",
+    fontWeight: "600",
     marginBottom: 4,
   },
   direcionador: {
     fontSize: 16,
-    color: '#34495E',
+    color: "#34495E",
     marginBottom: 4,
   },
   ordemServico: {
     fontSize: 16,
-    color: '#7F8C8D',
-    fontWeight: '500',
+    color: "#7F8C8D",
+    fontWeight: "500",
   },
   sairButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#E74C3C',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#E74C3C",
     padding: 16,
     borderRadius: 12,
     marginTop: 24,
     elevation: 4,
   },
   sairButtonText: {
-    color: 'white',
+    color: "white",
     marginLeft: 12,
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
-});
+})
+
