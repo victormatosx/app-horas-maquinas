@@ -17,7 +17,6 @@ const initialFormData = {
   data: "",
   direcionador: "",
   observacao: "",
-  responsavel: "",
   atividade: "",
 }
 
@@ -62,7 +61,6 @@ export default function FormScreen() {
 
   const [insumosData, setInsumosData] = useState({})
   const [direcionadores, setDirecionadores] = useState([])
-  const [responsaveis, setResponsaveis] = useState([])
   const [bens, setBens] = useState([])
   const [bensImplementos, setBensImplementos] = useState([])
   const [unidades, setUnidades] = useState([])
@@ -124,7 +122,6 @@ export default function FormScreen() {
     Promise.all([
       fetchData("insumos", setInsumosData),
       fetchData("direcionadores", setDirecionadores),
-      fetchData("responsaveis", setResponsaveis),
       fetchData("bens-implementos", (data) => {
         setBens(data || {})
         setBensImplementos(data || {})
@@ -291,7 +288,7 @@ export default function FormScreen() {
   ])
 
   const isFormValid = useCallback(() => {
-    const requiredFields = ["ordemServico", "data", "direcionador", "responsavel", "atividade"]
+    const requiredFields = ["ordemServico", "data", "direcionador", "atividade"]
     return requiredFields.every((field) => formData[field] && formData[field].trim() !== "") && selectedFases.length > 0
   }, [formData, selectedFases])
 
@@ -595,13 +592,6 @@ export default function FormScreen() {
         >
           <Text style={styles.buttonText}>Lançar Mão de Obra</Text>
         </TouchableOpacity>
-        {renderDropdownField(
-          "Responsável Pelo Lançamento",
-          "responsavel",
-          Object.entries(responsaveis).map(([key, value]) => ({ label: value, value: key })),
-          formData.responsavel,
-          handleChange,
-        )}
         {renderInputField("Observação", "observacao", formData.observacao, handleChange)}
         <TouchableOpacity
           style={styles.buttonEnviar}

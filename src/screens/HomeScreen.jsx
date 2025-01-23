@@ -45,7 +45,7 @@ export default function HomeScreen() {
     if (!userPropriedade) return
 
     setIsLoading(true)
-    const apontamentosRef = ref(database, "apontamentos")
+    const apontamentosRef = ref(database, `propriedades/${userPropriedade}/apontamentos`)
     const apontamentosQuery = query(apontamentosRef, orderByChild("propriedade"), equalTo(userPropriedade))
 
     const listener = onValue(apontamentosQuery, (snapshot) => {
