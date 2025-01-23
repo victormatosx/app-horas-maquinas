@@ -5,13 +5,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage"
 import LoginForm from "../components/LoginForm"
 import { auth, database } from "../config/firebaseConfig"
 import { signInWithEmailAndPassword, onAuthStateChanged } from "firebase/auth"
-import { ref, get, set } from "firebase/database"
+import { ref, get } from "firebase/database"
 import { LinearGradient } from "expo-linear-gradient"
 import styles from "../styles/StyleLogin"
 
 const USER_TOKEN_KEY = "@user_token"
 const USER_ROLE_KEY = "@user_role"
-const USER_PROPERTY_KEY = "@user_property"
+const USER_PROPRIEDADE_KEY = "@user_propriedade"
 
 export default function LoginScreen() {
   const navigation = useNavigation()
@@ -22,8 +22,8 @@ export default function LoginScreen() {
       try {
         const userToken = await AsyncStorage.getItem(USER_TOKEN_KEY)
         const userRole = await AsyncStorage.getItem(USER_ROLE_KEY)
-        const userProperty = await AsyncStorage.getItem(USER_PROPERTY_KEY)
-        if (userToken && userRole && userProperty) {
+        const userPropriedade = await AsyncStorage.getItem(USER_PROPRIEDADE_KEY)
+        if (userToken && userRole && userPropriedade) {
           navigation.replace("Home")
         }
       } catch (error) {
@@ -36,28 +36,34 @@ export default function LoginScreen() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
-          const userRef = ref(database, `propriedades/${user.uid}`)
-          const snapshot = await get(userRef)
-          if (snapshot.exists()) {
-            const userData = snapshot.val()
-            await AsyncStorage.setItem(USER_TOKEN_KEY, user.uid)
-            await AsyncStorage.setItem(USER_ROLE_KEY, userData.role)
-            await AsyncStorage.setItem(USER_PROPERTY_KEY, userData.property)
-            navigation.replace("Home")
-          } else {
-            // Create a new user record if it doesn't exist
-            const newUserData = {
-              role: "user", // Default role
-              property: "default", // Default property
+          // First, check if the user exists in the users node
+          const userRef = ref(database, `users/${user.uid}`)
+          const userSnapshot = await get(userRef)
+
+          if (userSnapshot.exists()) {
+            const userData = userSnapshot.val()
+            const propriedadeEscolhida = userData.propriedade_escolhida
+
+            // Now fetch the user's data from the correct propriedade
+            const propriedadeRef = ref(database, `propriedades/${propriedadeEscolhida}/users/${user.uid}`)
+            const propriedadeSnapshot = await get(propriedadeRef)
+
+            if (propriedadeSnapshot.exists()) {
+              const propriedadeUserData = propriedadeSnapshot.val()
+              await AsyncStorage.setItem(USER_TOKEN_KEY, user.uid)
+              await AsyncStorage.setItem(USER_ROLE_KEY, propriedadeUserData.role)
+              await AsyncStorage.setItem(USER_PROPRIEDADE_KEY, propriedadeEscolhida)
+              navigation.replace("Home")
+            } else {
+              console.error("User data not found in the specified propriedade")
+              Alert.alert("Error", "User data not found. Please contact support.")
             }
-            await set(userRef, newUserData)
-            await AsyncStorage.setItem(USER_TOKEN_KEY, user.uid)
-            await AsyncStorage.setItem(USER_ROLE_KEY, newUserData.role)
-            await AsyncStorage.setItem(USER_PROPERTY_KEY, newUserData.property)
-            navigation.replace("Home")
+          } else {
+            console.error("User not found in users node")
+            Alert.alert("Error", "User account not found. Please register or contact support.")
           }
         } catch (error) {
-          console.error("Error fetching/creating user data:", error)
+          console.error("Error fetching user data:", error)
           Alert.alert("Error", "An error occurred while processing your data. Please try again.")
         }
       }

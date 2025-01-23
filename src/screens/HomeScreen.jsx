@@ -19,7 +19,7 @@ import { signOut } from "firebase/auth"
 
 const USER_TOKEN_KEY = "@user_token"
 const USER_ROLE_KEY = "@user_role"
-const USER_PROPERTY_KEY = "@user_property"
+const USER_PROPRIEDADE_KEY = "@user_propriedade"
 
 export default function HomeScreen() {
   const [apontamentos, setApontamentos] = useState([])
@@ -28,25 +28,25 @@ export default function HomeScreen() {
   const [sortOrder, setSortOrder] = useState("desc")
   const [isLoading, setIsLoading] = useState(false)
   const [userRole, setUserRole] = useState("")
-  const [userProperty, setUserProperty] = useState("")
+  const [userPropriedade, setUserPropriedade] = useState("")
   const navigation = useNavigation()
 
   useEffect(() => {
     const loadUserData = async () => {
       const role = await AsyncStorage.getItem(USER_ROLE_KEY)
-      const property = await AsyncStorage.getItem(USER_PROPERTY_KEY)
+      const propriedade = await AsyncStorage.getItem(USER_PROPRIEDADE_KEY)
       setUserRole(role)
-      setUserProperty(property)
+      setUserPropriedade(propriedade)
     }
     loadUserData()
   }, [])
 
   useEffect(() => {
-    if (!userProperty) return
+    if (!userPropriedade) return
 
     setIsLoading(true)
     const apontamentosRef = ref(database, "apontamentos")
-    const apontamentosQuery = query(apontamentosRef, orderByChild("property"), equalTo(userProperty))
+    const apontamentosQuery = query(apontamentosRef, orderByChild("propriedade"), equalTo(userPropriedade))
 
     const listener = onValue(apontamentosQuery, (snapshot) => {
       const data = snapshot.val()
@@ -65,7 +65,7 @@ export default function HomeScreen() {
     })
 
     return () => off(apontamentosRef, "value", listener)
-  }, [userProperty])
+  }, [userPropriedade])
 
   const sortApontamentos = (apontamentosArray) => {
     const sortedApontamentos = [...apontamentosArray].sort((a, b) => {

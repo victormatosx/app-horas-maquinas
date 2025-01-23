@@ -10,7 +10,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage"
 import styles from "../styles/StyleForm"
 
 const USER_TOKEN_KEY = "@user_token"
-const USER_PROPERTY_KEY = "@user_property"
+const USER_PROPRIEDADE_KEY = "@user_propriedade"
 
 const initialFormData = {
   ordemServico: "",
@@ -84,7 +84,7 @@ export default function FormScreen() {
   const [searchQueryFase, setSearchQueryFase] = useState("")
 
   const [userId, setUserId] = useState("")
-  const [userProperty, setUserProperty] = useState("")
+  const [userPropriedade, setUserPropriedade] = useState("")
 
   const isMounted = useRef(true)
 
@@ -198,9 +198,9 @@ export default function FormScreen() {
   useEffect(() => {
     const loadUserData = async () => {
       const id = await AsyncStorage.getItem(USER_TOKEN_KEY)
-      const property = await AsyncStorage.getItem(USER_PROPERTY_KEY)
+      const propriedade = await AsyncStorage.getItem(USER_PROPRIEDADE_KEY)
       setUserId(id)
-      setUserProperty(property)
+      setUserPropriedade(propriedade)
     }
     loadUserData()
   }, [])
@@ -247,7 +247,6 @@ export default function FormScreen() {
   const handleSubmit = useCallback(async () => {
     if (isFormValid()) {
       try {
-        const newEntryRef = push(ref(database, "apontamentos"))
         const apontamentoData = {
           ...formData,
           timestamp: Date.now(),
@@ -259,9 +258,16 @@ export default function FormScreen() {
           custoMaoDeObra: custoMaoDeObraData,
           fases: selectedFases,
           userId: userId,
-          property: userProperty,
+          propriedade: userPropriedade,
         }
+
+        // Create a reference to the apontamentos under the user's property
+        const apontamentosRef = ref(database, `propriedades/${userPropriedade}/apontamentos`)
+
+        // Push the new entry directly under the apontamentos reference
+        const newEntryRef = push(apontamentosRef)
         await set(newEntryRef, apontamentoData)
+
         Alert.alert("Sucesso", "Dados enviados com sucesso!")
         resetForm()
       } catch (error) {
@@ -281,7 +287,7 @@ export default function FormScreen() {
     isFormValid,
     resetForm,
     userId,
-    userProperty,
+    userPropriedade,
   ])
 
   const isFormValid = useCallback(() => {

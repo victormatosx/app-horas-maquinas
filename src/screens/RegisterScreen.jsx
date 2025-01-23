@@ -4,29 +4,46 @@ import { useNavigation } from "@react-navigation/native"
 import RegisterForm from "../components/RegisterForm"
 import { auth, database } from "../config/firebaseConfig"
 import { createUserWithEmailAndPassword } from "firebase/auth"
-import { ref, set } from "firebase/database"
+import { ref, set, remove } from "firebase/database"
 import { LinearGradient } from "expo-linear-gradient"
 import styles from "../styles/StyleRegister"
 
 export default function RegisterScreen() {
   const navigation = useNavigation()
 
-  const handleRegister = async (email, password, name, role, property) => {
+  const handleRegister = async (email, password, name, role, propriedade) => {
     try {
+      console.log("Dados recebidos:", { email, password, name, role, propriedade })
+
       const userCredential = await createUserWithEmailAndPassword(auth, email, password)
       const user = userCredential.user
 
-      // Save user data only within the specific property's users node
-      await set(ref(database, `propriedades/${property}/users/${user.uid}`), {
+      // Estrutura de dados modificada
+      const userData = {
         nome: name,
         email: email,
         role: role,
-      })
+        propriedade: propriedade, // Adicionando a propriedade selecionada
+      }
+
+      console.log("Dados a serem salvos:", userData)
+
+      // Salvar os dados do usuário na estrutura modificada
+      await set(ref(database, `propriedades/${propriedade}/users/${user.uid}`), userData)
+
+      // Salvar a propriedade escolhida separadamente para facilitar consultas futuras
+      await set(ref(database, `users/${user.uid}/propriedade_escolhida`), propriedade)
+
+      console.log("Dados salvos com sucesso")
+
+      // Remover qualquer nó desnecessário no nível raiz
+      await remove(ref(database, `${user.uid}`))
 
       Alert.alert("Conta Criada!", "Sua conta foi criada com sucesso!", [
-        { text: "OK", onPress: () => navigation.replace("Home") },
+        { text: "OK", onPress: () => navigation.navigate("Home") },
       ])
     } catch (error) {
+      console.error("Erro ao registrar:", error)
       if (error.code === "auth/email-already-in-use") {
         Alert.alert("E-mail já cadastrado", "Este e-mail já foi cadastrado. Por favor, use outro e-mail ou faça login.")
       } else {

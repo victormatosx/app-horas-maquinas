@@ -3,11 +3,26 @@ import { View, Text, TouchableOpacity, FlatList, StyleSheet, SafeAreaView, Alert
 import { database } from "../config/firebaseConfig"
 import { ref, onValue, remove } from "firebase/database"
 import Icon from "react-native-vector-icons/Ionicons"
+import AsyncStorage from "@react-native-async-storage/async-storage"
+import { useNavigation } from "@react-navigation/native"
 
-export default function AdminPanelScreen({ navigation }) {
+const USER_ROLE_KEY = "@user_role"
+
+export default function AdminPanelScreen() {
   const [users, setUsers] = useState([])
+  const navigation = useNavigation()
 
   useEffect(() => {
+    const checkAdminAccess = async () => {
+      const userRole = await AsyncStorage.getItem(USER_ROLE_KEY)
+      if (userRole !== "admin") {
+        Alert.alert("Acesso Negado", "Você não tem permissão para acessar esta área.")
+        navigation.goBack()
+        return
+      }
+    }
+    checkAdminAccess()
+
     const usersRef = ref(database, "users")
     const unsubscribe = onValue(usersRef, (snapshot) => {
       const data = snapshot.val()
@@ -21,7 +36,7 @@ export default function AdminPanelScreen({ navigation }) {
     })
 
     return () => unsubscribe()
-  }, [])
+  }, [navigation])
 
   const handleDeleteUser = (userId) => {
     Alert.alert("Confirmar exclusão", "Tem certeza que deseja excluir este usuário?", [
