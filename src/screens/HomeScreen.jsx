@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useMemo } from "react"
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native"
+import { Picker } from "@react-native-picker/picker"
 import { useNavigation } from "@react-navigation/native"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import Icon from "react-native-vector-icons/Ionicons"
@@ -24,48 +25,83 @@ const USER_PROPRIEDADE_KEY = "@user_propriedade"
 export default function HomeScreen() {
   const [apontamentos, setApontamentos] = useState([])
   const [responsaveis, setResponsaveis] = useState([])
-  const [filtroResponsavel, setFiltroResponsavel] = useState(null)
+  //const [filtroResponsavel, setFiltroResponsavel] = useState(null)
   const [sortOrder, setSortOrder] = useState("desc")
   const [isLoading, setIsLoading] = useState(false)
   const [userRole, setUserRole] = useState("")
   const [userPropriedade, setUserPropriedade] = useState("")
+  const [propertyUsers, setPropertyUsers] = useState([])
+  const [filtroUsuario, setFiltroUsuario] = useState(null)
+  const [userId, setUserId] = useState(null) // Added state for userId
+
   const navigation = useNavigation()
 
   useEffect(() => {
     const loadUserData = async () => {
       const role = await AsyncStorage.getItem(USER_ROLE_KEY)
       const propriedade = await AsyncStorage.getItem(USER_PROPRIEDADE_KEY)
+      const id = await AsyncStorage.getItem(USER_TOKEN_KEY) // Get userId from AsyncStorage
       setUserRole(role)
       setUserPropriedade(propriedade)
+      setUserId(id) // Set userId state
     }
     loadUserData()
   }, [])
 
   useEffect(() => {
-    if (!userPropriedade) return
+    if (!userPropriedade || !userRole || !userId) return
 
     setIsLoading(true)
     const apontamentosRef = ref(database, `propriedades/${userPropriedade}/apontamentos`)
-    const apontamentosQuery = query(apontamentosRef, orderByChild("propriedade"), equalTo(userPropriedade))
 
-    const listener = onValue(apontamentosQuery, (snapshot) => {
-      const data = snapshot.val()
-      if (data) {
-        const apontamentosArray = Object.entries(data).map(([key, value]) => ({
-          id: key,
-          ...value,
-        }))
+    let apontamentosQuery
+    if (userRole === "user") {
+      apontamentosQuery = query(apontamentosRef, orderByChild("userId"), equalTo(userId))
+    } else if (userRole === "manager") {
+      apontamentosQuery = apontamentosRef
+    }
 
-        sortApontamentos(apontamentosArray)
+    if (userRole === "user" || userRole === "manager") {
+      const listener = onValue(apontamentosQuery, (snapshot) => {
+        const data = snapshot.val()
+        if (data) {
+          const apontamentosArray = Object.entries(data).map(([key, value]) => ({
+            id: key,
+            ...value,
+          }))
 
-        const uniqueResponsaveis = [...new Set(apontamentosArray.map((item) => item.responsavel))]
-        setResponsaveis(uniqueResponsaveis)
-      }
+          sortApontamentos(apontamentosArray)
+
+          const uniqueResponsaveis = [...new Set(apontamentosArray.map((item) => item.responsavel))]
+          setResponsaveis(uniqueResponsaveis)
+        } else {
+          setApontamentos([])
+          setResponsaveis([])
+        }
+        setIsLoading(false)
+      })
+
+      return () => off(apontamentosRef, "value", listener)
+    } else {
       setIsLoading(false)
-    })
+    }
+  }, [userPropriedade, userRole, userId])
 
-    return () => off(apontamentosRef, "value", listener)
-  }, [userPropriedade])
+  useEffect(() => {
+    if (userRole === "manager" && userPropriedade) {
+      const usersRef = ref(database, `propriedades/${userPropriedade}/users`)
+      onValue(usersRef, (snapshot) => {
+        const data = snapshot.val()
+        if (data) {
+          const usersArray = Object.entries(data).map(([key, value]) => ({
+            id: key,
+            ...value,
+          }))
+          setPropertyUsers(usersArray)
+        }
+      })
+    }
+  }, [userRole, userPropriedade])
 
   const sortApontamentos = (apontamentosArray) => {
     const sortedApontamentos = [...apontamentosArray].sort((a, b) => {
@@ -82,12 +118,19 @@ export default function HomeScreen() {
     sortApontamentos(apontamentos)
   }
 
-  const filteredApontamentos = filtroResponsavel
-    ? apontamentos.filter((item) => item.responsavel === filtroResponsavel)
-    : apontamentos
+  const filteredApontamentos = useMemo(() => {
+    let filtered = apontamentos
+    //if (filtroResponsavel) {
+    //  filtered = filtered.filter((item) => item.responsavel === filtroResponsavel)
+    //}
+    if (userRole === "manager" && filtroUsuario) {
+      filtered = filtered.filter((item) => item.userId === filtroUsuario)
+    }
+    return filtered
+  }, [apontamentos, userRole, filtroUsuario])
 
   const renderApontamento = ({ item }) => (
-    <View style={styles.apontamentoItem}>
+    <View style={styles.apontamentoItem} key={item.id}>
       <Text style={styles.data}>{item.data}</Text>
       <Text style={styles.responsavel}>{item.responsavel}</Text>
       <Text style={styles.direcionador}>{item.direcionador}</Text>
@@ -106,71 +149,76 @@ export default function HomeScreen() {
     }
   }
 
-  const renderFooter = () => (
-    <TouchableOpacity style={styles.sairButton} onPress={handleLogout}>
-      <Icon name="log-out-outline" size={24} color="white" />
-      <Text style={styles.sairButtonText}>SAIR</Text>
-    </TouchableOpacity>
-  )
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#4A90E2" />
       <View style={styles.container}>
-        {userRole === "admin" && (
-          <TouchableOpacity style={styles.adminButton} onPress={() => navigation.navigate("AdminPanel")}>
-            <Icon name="settings-outline" size={28} color="white" />
-            <Text style={styles.adminButtonText}>Admin Panel</Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity style={styles.novoButton} onPress={() => navigation.navigate("Formulario")}>
-          <Icon name="add-circle-outline" size={28} color="white" />
-          <Text style={styles.novoButtonText}>NOVO APONTAMENTO</Text>
-        </TouchableOpacity>
+        {userRole === "admin" ? (
+          <>
+            <TouchableOpacity style={styles.adminButton} onPress={() => navigation.navigate("AdminPanel")}>
+              <Icon name="settings-outline" size={28} color="white" />
+              <Text style={styles.adminButtonText}>Admin Panel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.novoButton} onPress={() => navigation.navigate("Formulario")}>
+              <Icon name="add-circle-outline" size={28} color="white" />
+              <Text style={styles.novoButtonText}>NOVO APONTAMENTO</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <TouchableOpacity style={styles.novoButton} onPress={() => navigation.navigate("Formulario")}>
+              <Icon name="add-circle-outline" size={28} color="white" />
+              <Text style={styles.novoButtonText}>NOVO APONTAMENTO</Text>
+            </TouchableOpacity>
 
-        <View style={styles.filtroContainer}>
-          <Text style={styles.filtroLabel}>Filtrar por responsável:</Text>
-          <FlatList
-            data={responsaveis}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[styles.filtroItem, filtroResponsavel === item && styles.filtroItemActive]}
-                onPress={() => setFiltroResponsavel(filtroResponsavel === item ? null : item)}
-              >
-                <Text style={[styles.filtroItemText, filtroResponsavel === item && styles.filtroItemTextActive]}>
-                  {item}
-                </Text>
-              </TouchableOpacity>
+            {/*Removed Filtro por Responsavel Section*/}
+
+            {userRole === "manager" && (
+              <View style={styles.filtroContainer}>
+                <Text style={styles.filtroLabel}>Filtrar por usuário:</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={filtroUsuario}
+                    onValueChange={(itemValue) => setFiltroUsuario(itemValue)}
+                    style={styles.picker}
+                  >
+                    <Picker.Item label="Todos os usuários" value={null} />
+                    {propertyUsers.map((user) => (
+                      <Picker.Item key={user.id} label={user.nome} value={user.id} />
+                    ))}
+                  </Picker>
+                </View>
+              </View>
             )}
-            keyExtractor={(item) => item}
-          />
-        </View>
 
-        <View style={styles.sortButtonContainer}>
-          <TouchableOpacity style={styles.sortButton} onPress={toggleSortOrder} disabled={isLoading}>
-            <Icon name={sortOrder === "desc" ? "arrow-down" : "arrow-up"} size={24} color="white" />
-            <Text style={styles.sortButtonText}>{sortOrder === "desc" ? "Mais antigo" : "Mais recente"}</Text>
-          </TouchableOpacity>
-        </View>
+            <View style={styles.sortButtonContainer}>
+              <TouchableOpacity style={styles.sortButton} onPress={toggleSortOrder} disabled={isLoading}>
+                <Icon name={sortOrder === "desc" ? "arrow-down" : "arrow-up"} size={24} color="white" />
+                <Text style={styles.sortButtonText}>{sortOrder === "desc" ? "Mais antigo" : "Mais recente"}</Text>
+              </TouchableOpacity>
+            </View>
 
-        {isLoading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#2a9d8f" />
-          </View>
+            {isLoading && (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#2a9d8f" />
+              </View>
+            )}
+
+            <FlatList
+              data={filteredApontamentos}
+              renderItem={renderApontamento}
+              keyExtractor={(item) => item.id.toString()}
+              contentContainerStyle={styles.apontamentosList}
+              showsVerticalScrollIndicator={false}
+              scrollEventThrottle={16}
+            />
+          </>
         )}
-
-        <FlatList
-          data={filteredApontamentos}
-          renderItem={renderApontamento}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.apontamentosList}
-          ListFooterComponent={renderFooter}
-          showsVerticalScrollIndicator={false}
-          scrollEventThrottle={16}
-        />
       </View>
+      <TouchableOpacity style={styles.sairButton} onPress={handleLogout}>
+        <Icon name="log-out-outline" size={24} color="#E74C3C" />
+        <Text style={styles.sairButtonText}>SAIR</Text>
+      </TouchableOpacity>
     </SafeAreaView>
   )
 }
@@ -178,7 +226,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#2a9d8f",
+    backgroundColor: "#F0F4F8", // Alterado de "#2a9d8f" para "#F0F4F8"
   },
   container: {
     flex: 1,
@@ -225,24 +273,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginBottom: 12,
     color: "#2C3E50",
-  },
-  filtroItem: {
-    backgroundColor: "#F0F4F8",
-    padding: 10,
-    borderRadius: 20,
-    marginRight: 12,
-    borderWidth: 2,
-    borderColor: "#2a9d8f",
-  },
-  filtroItemActive: {
-    backgroundColor: "#2a9d8f",
-  },
-  filtroItemText: {
-    color: "#2a9d8f",
-    fontWeight: "600",
-  },
-  filtroItemTextActive: {
-    color: "white",
   },
   sortButtonContainer: {
     marginBottom: 16,
@@ -310,17 +340,28 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#E74C3C",
+    backgroundColor: "#F0F4F8",
     padding: 16,
     borderRadius: 12,
     marginTop: 24,
-    elevation: 4,
+    marginHorizontal: 16,
+    marginBottom: 16,
   },
   sairButtonText: {
-    color: "white",
+    color: "#E74C3C",
     marginLeft: 12,
     fontSize: 18,
     fontWeight: "bold",
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 5,
+    marginBottom: 10,
+  },
+  picker: {
+    height: 50,
+    width: "100%",
   },
 })
 

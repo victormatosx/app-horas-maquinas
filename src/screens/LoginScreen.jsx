@@ -36,7 +36,6 @@ export default function LoginScreen() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
-          // First, check if the user exists in the users node
           const userRef = ref(database, `users/${user.uid}`)
           const userSnapshot = await get(userRef)
 
@@ -44,7 +43,6 @@ export default function LoginScreen() {
             const userData = userSnapshot.val()
             const propriedadeEscolhida = userData.propriedade_escolhida
 
-            // Now fetch the user's data from the correct propriedade
             const propriedadeRef = ref(database, `propriedades/${propriedadeEscolhida}/users/${user.uid}`)
             const propriedadeSnapshot = await get(propriedadeRef)
 

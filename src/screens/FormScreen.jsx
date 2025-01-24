@@ -217,7 +217,9 @@ export default function FormScreen() {
   }, [custoOperacoesData.horaMaquinaInicial, custoOperacoesData.horaMaquinaFinal])
 
   const handleDateConfirm = useCallback((date) => {
-    const formattedDate = `${date.getDate().toString().padStart(2, "0")}/${(date.getMonth() + 1).toString().padStart(2, "0")}/${date.getFullYear()}`
+    const formattedDate = `${date.getDate().toString().padStart(2, "0")}/${(date.getMonth() + 1)
+      .toString()
+      .padStart(2, "0")}/${date.getFullYear()}`
     setFormData((prev) => ({ ...prev, data: formattedDate }))
     setDatePickerVisible(false)
   }, [])
@@ -258,10 +260,7 @@ export default function FormScreen() {
           propriedade: userPropriedade,
         }
 
-        // Create a reference to the apontamentos under the user's property
         const apontamentosRef = ref(database, `propriedades/${userPropriedade}/apontamentos`)
-
-        // Push the new entry directly under the apontamentos reference
         const newEntryRef = push(apontamentosRef)
         await set(newEntryRef, apontamentoData)
 
@@ -532,15 +531,19 @@ export default function FormScreen() {
           />
           <Search size={24} color="#000" style={styles.searchIcon} />
         </View>
-        {renderDropdownField(
-          "",
-          "atividade",
-          filteredAtividades.length > 0
-            ? filteredAtividades
-            : Object.entries(atividade).map(([key, value]) => ({ label: value, value: key })),
-          formData.atividade,
-          handleChange,
-        )}
+        <View style={styles.dropdownContainer}>
+          <Picker
+            selectedValue={formData.atividade}
+            onValueChange={(value) => handleChange("atividade", value)}
+            style={styles.picker}
+            accessibilityLabel="Atividade"
+          >
+            <Picker.Item label="Selecione Atividade" value="" />
+            {filteredAtividades.length > 0
+              ? filteredAtividades.map((item) => <Picker.Item key={item.value} label={item.label} value={item.value} />)
+              : Object.entries(atividade).map(([key, value]) => <Picker.Item key={key} label={value} value={key} />)}
+          </Picker>
+        </View>
         <Text style={styles.label}>Fase</Text>
         <View style={styles.searchContainer}>
           <TextInput
@@ -551,23 +554,33 @@ export default function FormScreen() {
           />
           <Search size={24} color="#000" style={styles.searchIcon} />
         </View>
-        {renderDropdownField(
-          "",
-          "fase",
-          filteredFases.length > 0
-            ? filteredFases
-            : Object.entries(fases).map(([key, value]) => ({ label: value, value: key })),
-          "",
-          (name, value) => addSelectedFase(value),
-        )}
+        <View style={styles.dropdownContainer}>
+          <Picker
+            selectedValue={""}
+            onValueChange={(value) => addSelectedFase(value)}
+            style={styles.picker}
+            accessibilityLabel="Fase"
+          >
+            <Picker.Item label="Selecione Fase" value="" />
+            {filteredFases.length > 0
+              ? filteredFases.map((item) => <Picker.Item key={item.value} label={item.label} value={item.value} />)
+              : Object.entries(fases).map(([key, value]) => <Picker.Item key={key} label={value} value={key} />)}
+          </Picker>
+        </View>
         {renderSelectedItems(selectedFases, removeSelectedFase)}
-        {renderDropdownField(
-          "Direcionador",
-          "direcionador",
-          Object.entries(direcionadores).map(([key, value]) => ({ label: value, value: key })),
-          formData.direcionador,
-          handleChange,
-        )}
+        <View style={styles.dropdownContainer}>
+          <Picker
+            selectedValue={formData.direcionador}
+            onValueChange={(value) => handleChange("direcionador", value)}
+            style={styles.picker}
+            accessibilityLabel="Direcionador"
+          >
+            <Picker.Item label="Selecione Direcionador" value="" />
+            {Object.entries(direcionadores).map(([key, value]) => (
+              <Picker.Item key={key} label={value} value={key} />
+            ))}
+          </Picker>
+        </View>
         <TouchableOpacity
           style={styles.modalButton}
           onPress={() => setCustoInsumoModalVisible(true)}
@@ -625,13 +638,19 @@ export default function FormScreen() {
             />
             <Search size={24} color="#000" style={styles.searchIcon} />
           </View>
-          {renderDropdownField(
-            "",
-            "insumo",
-            filteredInsumos.map((key) => ({ label: key, value: key })),
-            custoInsumoData.insumo,
-            handleCustoInsumoChange,
-          )}
+          <View style={styles.dropdownContainer}>
+            <Picker
+              selectedValue={custoInsumoData.insumo}
+              onValueChange={(value) => handleCustoInsumoChange("insumo", value)}
+              style={styles.picker}
+              accessibilityLabel="Insumo"
+            >
+              <Picker.Item label="Selecione Insumo" value="" />
+              {filteredInsumos.map((key) => (
+                <Picker.Item key={key} label={key} value={key} />
+              ))}
+            </Picker>
+          </View>
           {renderInputField("Quantidade", "quantidade", custoInsumoData.quantidade, handleCustoInsumoChange, "numeric")}
           {renderInputField(
             "Valor Unitário",
@@ -678,13 +697,19 @@ export default function FormScreen() {
             />
             <Search size={24} color="#000" style={styles.searchIcon} />
           </View>
-          {renderDropdownField(
-            "",
-            "bem",
-            filteredBens.map((key) => ({ label: bens[key], value: key })),
-            custoOperacoesData.bem,
-            handleCustoOperacoesChange,
-          )}
+          <View style={styles.dropdownContainer}>
+            <Picker
+              selectedValue={custoOperacoesData.bem}
+              onValueChange={(value) => handleCustoOperacoesChange("bem", value)}
+              style={styles.picker}
+              accessibilityLabel="Bem"
+            >
+              <Picker.Item label="Selecione Bem" value="" />
+              {filteredBens.map((key) => (
+                <Picker.Item key={key} label={bens[key]} value={key} />
+              ))}
+            </Picker>
+          </View>
           {renderInputField(
             "Hora Máquina Inicial",
             "horaMaquinaInicial",
@@ -719,13 +744,19 @@ export default function FormScreen() {
             />
             <Search size={24} color="#000" style={styles.searchIcon} />
           </View>
-          {renderDropdownField(
-            "",
-            "bemImplemento",
-            filteredBensImplementos.map((key) => ({ label: bensImplementos[key], value: key })),
-            custoOperacoesData.bemImplemento,
-            handleCustoOperacoesChange,
-          )}
+          <View style={styles.dropdownContainer}>
+            <Picker
+              selectedValue={custoOperacoesData.bemImplemento}
+              onValueChange={(value) => handleCustoOperacoesChange("bemImplemento", value)}
+              style={styles.picker}
+              accessibilityLabel="Bem Implemento"
+            >
+              <Picker.Item label="Selecione Bem Implemento" value="" />
+              {filteredBensImplementos.map((key) => (
+                <Picker.Item key={key} label={bensImplementos[key]} value={key} />
+              ))}
+            </Picker>
+          </View>
           <TouchableOpacity
             style={[styles.button, !custoOperacoesData.bemImplemento && styles.disabledButton]}
             onPress={addSelectedBemImplemento}
@@ -759,23 +790,30 @@ export default function FormScreen() {
             handleCustoMaoDeObraChange,
             "numeric",
           )}
-          {renderDropdownField(
-            "Tipo",
-            "tipo",
-            [
-              { label: "Selecione o Tipo", value: "" },
-              { label: "Terceirizada", value: "Terceirizada" },
-            ],
-            custoMaoDeObraData.tipo,
-            handleCustoMaoDeObraChange,
-          )}
-          {renderDropdownField(
-            "Unidade",
-            "unidade",
-            Object.entries(unidades).map(([key, value]) => ({ label: value, value: key })),
-            custoMaoDeObraData.unidade,
-            handleCustoMaoDeObraChange,
-          )}
+          <View style={styles.dropdownContainer}>
+            <Picker
+              selectedValue={custoMaoDeObraData.tipo}
+              onValueChange={(value) => handleCustoMaoDeObraChange("tipo", value)}
+              style={styles.picker}
+              accessibilityLabel="Tipo"
+            >
+              <Picker.Item label="Selecione o Tipo" value="" />
+              <Picker.Item label="Terceirizada" value="Terceirizada" />
+            </Picker>
+          </View>
+          <View style={styles.dropdownContainer}>
+            <Picker
+              selectedValue={custoMaoDeObraData.unidade}
+              onValueChange={(value) => handleCustoMaoDeObraChange("unidade", value)}
+              style={styles.picker}
+              accessibilityLabel="Unidade"
+            >
+              <Picker.Item label="Selecione Unidade" value="" />
+              {Object.entries(unidades).map(([key, value]) => (
+                <Picker.Item key={key} label={value} value={key} />
+              ))}
+            </Picker>
+          </View>
           {renderInputField("Valor", "valor", custoMaoDeObraData.valor, handleCustoMaoDeObraChange, "numeric")}
           {renderInputField("Observação", "observacao", custoMaoDeObraData.observacao, handleCustoMaoDeObraChange)}
           {renderSummary("Resumo Lançamento Mão de Obra", custoMaoDeObraData, [
