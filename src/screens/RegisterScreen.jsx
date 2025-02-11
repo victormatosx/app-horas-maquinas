@@ -1,4 +1,3 @@
-import React from "react"
 import { View, Alert, SafeAreaView } from "react-native"
 import { useNavigation } from "@react-navigation/native"
 import RegisterForm from "../components/RegisterForm"
@@ -28,11 +27,14 @@ export default function RegisterScreen() {
 
       console.log("Dados a serem salvos:", userData)
 
-      // Salvar os dados do usuário na estrutura modificada
-      await set(ref(database, `propriedades/${propriedade}/users/${user.uid}`), userData)
+      // Salvar os dados do usuário na estrutura correta
+      await set(ref(database, `users/${user.uid}`), {
+        ...userData,
+        propriedade_escolhida: propriedade,
+      })
 
-      // Salvar a propriedade escolhida separadamente para facilitar consultas futuras
-      await set(ref(database, `users/${user.uid}/propriedade_escolhida`), propriedade)
+      // Salvar os dados do usuário também na propriedade
+      await set(ref(database, `propriedades/${propriedade}/users/${user.uid}`), userData)
 
       console.log("Dados salvos com sucesso")
 

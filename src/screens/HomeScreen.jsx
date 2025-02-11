@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo } from "react"
 import {
   View,
   Text,
@@ -17,50 +17,43 @@ import Icon from "react-native-vector-icons/Ionicons"
 import { database, auth } from "../config/firebaseConfig"
 import { ref, onValue, off, query, orderByChild, equalTo } from "firebase/database"
 import { signOut } from "firebase/auth"
-
+import { checkConnectivityAndSync } from "../utils/offlineManager"
 const USER_TOKEN_KEY = "@user_token"
 const USER_ROLE_KEY = "@user_role"
 const USER_PROPRIEDADE_KEY = "@user_propriedade"
-
 export default function HomeScreen() {
   const [apontamentos, setApontamentos] = useState([])
   const [responsaveis, setResponsaveis] = useState([])
-  //const [filtroResponsavel, setFiltroResponsavel] = useState(null)
   const [sortOrder, setSortOrder] = useState("desc")
   const [isLoading, setIsLoading] = useState(false)
   const [userRole, setUserRole] = useState("")
   const [userPropriedade, setUserPropriedade] = useState("")
   const [propertyUsers, setPropertyUsers] = useState([])
   const [filtroUsuario, setFiltroUsuario] = useState(null)
-  const [userId, setUserId] = useState(null) // Added state for userId
-
+  const [userId, setUserId] = useState(null)
   const navigation = useNavigation()
-
   useEffect(() => {
     const loadUserData = async () => {
       const role = await AsyncStorage.getItem(USER_ROLE_KEY)
       const propriedade = await AsyncStorage.getItem(USER_PROPRIEDADE_KEY)
-      const id = await AsyncStorage.getItem(USER_TOKEN_KEY) // Get userId from AsyncStorage
+      const id = await AsyncStorage.getItem(USER_TOKEN_KEY)
       setUserRole(role)
       setUserPropriedade(propriedade)
-      setUserId(id) // Set userId state
+      setUserId(id)
+      await checkConnectivityAndSync()
     }
     loadUserData()
   }, [])
-
   useEffect(() => {
     if (!userPropriedade || !userRole || !userId) return
-
     setIsLoading(true)
     const apontamentosRef = ref(database, `propriedades/${userPropriedade}/apontamentos`)
-
     let apontamentosQuery
     if (userRole === "user") {
       apontamentosQuery = query(apontamentosRef, orderByChild("userId"), equalTo(userId))
     } else if (userRole === "manager") {
       apontamentosQuery = apontamentosRef
     }
-
     if (userRole === "user" || userRole === "manager") {
       const listener = onValue(apontamentosQuery, (snapshot) => {
         const data = snapshot.val()
@@ -120,9 +113,6 @@ export default function HomeScreen() {
 
   const filteredApontamentos = useMemo(() => {
     let filtered = apontamentos
-    //if (filtroResponsavel) {
-    //  filtered = filtered.filter((item) => item.responsavel === filtroResponsavel)
-    //}
     if (userRole === "manager" && filtroUsuario) {
       filtered = filtered.filter((item) => item.userId === filtroUsuario)
     }
@@ -170,8 +160,6 @@ export default function HomeScreen() {
               <Icon name="add-circle-outline" size={28} color="white" />
               <Text style={styles.novoButtonText}>NOVO APONTAMENTO</Text>
             </TouchableOpacity>
-
-            {/*Removed Filtro por Responsavel Section*/}
 
             {userRole === "manager" && (
               <View style={styles.filtroContainer}>
@@ -226,7 +214,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F0F4F8", // Alterado de "#2a9d8f" para "#F0F4F8"
+    backgroundColor: "#F0F4F8",
   },
   container: {
     flex: 1,

@@ -1,17 +1,26 @@
-import React, { useState, useEffect, useCallback, useRef } from "react"
-import { Text, View, TextInput, TouchableOpacity, Alert, Modal, ScrollView, ActivityIndicator } from "react-native"
-import { SafeAreaView } from "react-native-safe-area-context"
+import { useState, useEffect, useCallback, useRef } from "react"
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Alert,
+  Modal,
+  ScrollView,
+  ActivityIndicator,
+  StyleSheet,
+  SafeAreaView,
+} from "react-native"
 import DateTimePickerModal from "react-native-modal-datetime-picker"
 import { Picker } from "@react-native-picker/picker"
-import { database, auth } from "../config/firebaseConfig"
+import { database } from "../config/firebaseConfig"
 import { ref, push, set, onValue } from "firebase/database"
 import { X, Trash2, Search } from "lucide-react-native"
 import AsyncStorage from "@react-native-async-storage/async-storage"
-import styles from "../styles/StyleForm"
-
+import NetInfo from "@react-native-community/netinfo"
+import { saveOfflineData } from "../utils/offlineManager"
 const USER_TOKEN_KEY = "@user_token"
 const USER_PROPRIEDADE_KEY = "@user_propriedade"
-
 const initialFormData = {
   ordemServico: "",
   data: "",
@@ -19,7 +28,6 @@ const initialFormData = {
   observacao: "",
   atividade: "",
 }
-
 const initialCustoInsumoData = {
   insumo: "",
   quantidade: "",
@@ -27,7 +35,6 @@ const initialCustoInsumoData = {
   total: "",
   observacao: "",
 }
-
 const initialCustoOperacoesData = {
   bem: "",
   horaMaquinaInicial: "",
@@ -35,7 +42,6 @@ const initialCustoOperacoesData = {
   totalHoras: "",
   bemImplemento: "",
 }
-
 const initialCustoMaoDeObraData = {
   quantidade: "",
   tipo: "",
@@ -43,7 +49,6 @@ const initialCustoMaoDeObraData = {
   valor: "",
   observacao: "",
 }
-
 export default function FormScreen() {
   const [formData, setFormData] = useState(initialFormData)
   const [custoInsumoData, setCustoInsumoData] = useState(initialCustoInsumoData)
@@ -53,12 +58,10 @@ export default function FormScreen() {
   const [custoInsumoModalVisible, setCustoInsumoModalVisible] = useState(false)
   const [custoOperacoesModalVisible, setCustoOperacoesModalVisible] = useState(false)
   const [custoMaoDeObraModalVisible, setCustoMaoDeObraModalVisible] = useState(false)
-
   const [selectedInsumos, setSelectedInsumos] = useState([])
   const [selectedOperacoes, setSelectedOperacoes] = useState([])
   const [selectedBemImplementos, setSelectedBemImplementos] = useState([])
   const [selectedFases, setSelectedFases] = useState([])
-
   const [insumosData, setInsumosData] = useState({})
   const [direcionadores, setDirecionadores] = useState([])
   const [bens, setBens] = useState([])
@@ -69,29 +72,23 @@ export default function FormScreen() {
   const [atividade, setAtividade] = useState({})
   const [filteredAtividades, setFilteredAtividades] = useState([])
   const [searchQueryAtividade, setSearchQueryAtividade] = useState("")
-
   const [searchQuery, setSearchQuery] = useState("")
   const [filteredInsumos, setFilteredInsumos] = useState([])
   const [searchQueryBem, setSearchQueryBem] = useState("")
   const [filteredBens, setFilteredBens] = useState([])
   const [searchQueryBemImplemento, setSearchQueryBemImplemento] = useState("")
   const [filteredBensImplementos, setFilteredBensImplementos] = useState([])
-
   const [fases, setFases] = useState({})
   const [filteredFases, setFilteredFases] = useState([])
   const [searchQueryFase, setSearchQueryFase] = useState("")
-
   const [userId, setUserId] = useState("")
   const [userPropriedade, setUserPropriedade] = useState("")
-
   const isMounted = useRef(true)
-
   useEffect(() => {
     return () => {
       isMounted.current = false
     }
   }, [])
-
   useEffect(() => {
     const fetchData = async (path, setterFunction) => {
       try {
@@ -118,7 +115,6 @@ export default function FormScreen() {
         }
       }
     }
-
     Promise.all([
       fetchData("insumos", setInsumosData),
       fetchData("direcionadores", setDirecionadores),
@@ -143,15 +139,12 @@ export default function FormScreen() {
         }
       })
   }, [])
-
   useEffect(() => {
     updateCustoInsumoTotal()
-  }, [custoInsumoData.quantidade, custoInsumoData.valor])
-
+  }, [custoInsumoData])
   useEffect(() => {
     updateCustoOperacoesTotalHoras()
-  }, [custoOperacoesData.horaMaquinaInicial, custoOperacoesData.horaMaquinaFinal])
-
+  }, [custoOperacoesData])
   useEffect(() => {
     if (custoInsumoData.insumo && insumosData[custoInsumoData.insumo]) {
       const selectedInsumo = insumosData[custoInsumoData.insumo]
@@ -160,38 +153,32 @@ export default function FormScreen() {
       }
     }
   }, [custoInsumoData.insumo, insumosData])
-
   useEffect(() => {
     const filtered = Object.keys(insumosData).filter((key) => key.toLowerCase().includes(searchQuery.toLowerCase()))
     setFilteredInsumos(filtered)
   }, [searchQuery, insumosData])
-
   useEffect(() => {
     const filtered = Object.keys(bens).filter((key) => bens[key].toLowerCase().includes(searchQueryBem.toLowerCase()))
     setFilteredBens(filtered)
   }, [searchQueryBem, bens])
-
   useEffect(() => {
     const filtered = Object.keys(bensImplementos).filter((key) =>
       bensImplementos[key].toLowerCase().includes(searchQueryBemImplemento.toLowerCase()),
     )
     setFilteredBensImplementos(filtered)
   }, [searchQueryBemImplemento, bensImplementos])
-
   useEffect(() => {
     const filtered = Object.entries(atividade)
       .filter(([key, value]) => value.toLowerCase().includes(searchQueryAtividade.toLowerCase()))
       .map(([key, value]) => ({ label: value, value: key }))
     setFilteredAtividades(filtered)
   }, [searchQueryAtividade, atividade])
-
   useEffect(() => {
     const filtered = Object.entries(fases)
       .filter(([key, value]) => value.toLowerCase().includes(searchQueryFase.toLowerCase()))
       .map(([key, value]) => ({ label: value, value: key }))
     setFilteredFases(filtered)
   }, [searchQueryFase, fases])
-
   useEffect(() => {
     const loadUserData = async () => {
       const id = await AsyncStorage.getItem(USER_TOKEN_KEY)
@@ -201,21 +188,22 @@ export default function FormScreen() {
     }
     loadUserData()
   }, [])
-
   const updateCustoInsumoTotal = useCallback(() => {
     const quantidade = Number.parseFloat(custoInsumoData.quantidade) || 0
     const valor = Number.parseFloat(custoInsumoData.valor) || 0
     const total = (quantidade * valor).toFixed(2)
-    setCustoInsumoData((prev) => ({ ...prev, total }))
-  }, [custoInsumoData.quantidade, custoInsumoData.valor])
-
+    if (total !== custoInsumoData.total) {
+      setCustoInsumoData((prev) => ({ ...prev, total }))
+    }
+  }, [custoInsumoData.quantidade, custoInsumoData.valor, custoInsumoData.total])
   const updateCustoOperacoesTotalHoras = useCallback(() => {
     const inicial = Number.parseFloat(custoOperacoesData.horaMaquinaInicial) || 0
     const final = Number.parseFloat(custoOperacoesData.horaMaquinaFinal) || 0
     const totalHoras = (final - inicial).toFixed(2)
-    setCustoOperacoesData((prev) => ({ ...prev, totalHoras }))
-  }, [custoOperacoesData.horaMaquinaInicial, custoOperacoesData.horaMaquinaFinal])
-
+    if (totalHoras !== custoOperacoesData.totalHoras) {
+      setCustoOperacoesData((prev) => ({ ...prev, totalHoras }))
+    }
+  }, [custoOperacoesData.horaMaquinaInicial, custoOperacoesData.horaMaquinaFinal, custoOperacoesData.totalHoras])
   const handleDateConfirm = useCallback((date) => {
     const formattedDate = `${date.getDate().toString().padStart(2, "0")}/${(date.getMonth() + 1)
       .toString()
@@ -223,7 +211,6 @@ export default function FormScreen() {
     setFormData((prev) => ({ ...prev, data: formattedDate }))
     setDatePickerVisible(false)
   }, [])
-
   const handleChange = useCallback((name, value) => setFormData((prev) => ({ ...prev, [name]: value })), [])
   const handleCustoInsumoChange = useCallback(
     (name, value) => {
@@ -242,7 +229,6 @@ export default function FormScreen() {
     (name, value) => setCustoMaoDeObraData((prev) => ({ ...prev, [name]: value })),
     [],
   )
-
   const handleSubmit = useCallback(async () => {
     if (isFormValid()) {
       try {
@@ -259,16 +245,21 @@ export default function FormScreen() {
           userId: userId,
           propriedade: userPropriedade,
         }
-
-        const apontamentosRef = ref(database, `propriedades/${userPropriedade}/apontamentos`)
-        const newEntryRef = push(apontamentosRef)
-        await set(newEntryRef, apontamentoData)
-
-        Alert.alert("Sucesso", "Dados enviados com sucesso!")
+        const netInfo = await NetInfo.fetch()
+        if (netInfo.isConnected) {
+          const apontamentosRef = ref(database, `propriedades/${userPropriedade}/apontamentos`)
+          const newEntryRef = push(apontamentosRef)
+          await set(newEntryRef, apontamentoData)
+          Alert.alert("Sucesso", "Dados enviados com sucesso!")
+        } else {
+          await saveOfflineData(apontamentoData)
+          Alert.alert("Modo Offline", "Dados salvos localmente e serão sincronizados quando houver conexão.")
+        }
         resetForm()
       } catch (error) {
         console.error("Error submitting form:", error)
-        Alert.alert("Erro", "Ocorreu um erro ao enviar os dados. Tente novamente.")
+        Alert.alert("Erro", "Ocorreu um erro ao enviar os dados. Os dados foram salvos localmente.")
+        await saveOfflineData(apontamentoData)
       }
     } else {
       Alert.alert("Atenção", "Preencha todos os campos obrigatórios!")
@@ -285,26 +276,21 @@ export default function FormScreen() {
     userId,
     userPropriedade,
   ])
-
   const isFormValid = useCallback(() => {
     const requiredFields = ["ordemServico", "data", "direcionador", "atividade"]
     return requiredFields.every((field) => formData[field] && formData[field].trim() !== "") && selectedFases.length > 0
   }, [formData, selectedFases])
-
   const isCustoInsumoValid = useCallback(() => {
     const requiredFields = ["insumo", "quantidade"]
     return requiredFields.every((field) => custoInsumoData[field] && custoInsumoData[field].trim() !== "")
   }, [custoInsumoData])
-
   const isCustoOperacoesValid = useCallback(() => {
     return custoOperacoesData.bem && custoOperacoesData.bem.trim() !== ""
   }, [custoOperacoesData.bem])
-
   const isCustoMaoDeObraValid = useCallback(() => {
     const requiredFields = ["quantidade", "tipo", "unidade", "valor"]
     return requiredFields.every((field) => custoMaoDeObraData[field] && custoMaoDeObraData[field].trim() !== "")
   }, [custoMaoDeObraData])
-
   const resetForm = useCallback(() => {
     setFormData(initialFormData)
     setCustoInsumoData(initialCustoInsumoData)
@@ -315,7 +301,6 @@ export default function FormScreen() {
     setSelectedBemImplementos([])
     setSelectedFases([])
   }, [])
-
   const renderInputField = useCallback(
     (label, name, value, onChange, keyboardType = "default", editable = true) => (
       <View>
@@ -333,7 +318,6 @@ export default function FormScreen() {
     ),
     [],
   )
-
   const renderDatePickerField = useCallback(
     (label, name) => (
       <View>
@@ -350,7 +334,6 @@ export default function FormScreen() {
     ),
     [formData],
   )
-
   const renderDropdownField = useCallback(
     (label, name, items, value, onChange) => (
       <View>
@@ -372,7 +355,6 @@ export default function FormScreen() {
     ),
     [],
   )
-
   const renderSummary = useCallback(
     (title, data, fields) => (
       <View style={styles.summaryContainer}>
@@ -387,7 +369,6 @@ export default function FormScreen() {
     ),
     [],
   )
-
   const renderModal = useCallback(
     (visible, setVisible, title, content) => (
       <Modal visible={visible} transparent={true} animationType="slide">
@@ -413,7 +394,6 @@ export default function FormScreen() {
     ),
     [],
   )
-
   const addSelectedInsumo = useCallback(() => {
     if (isCustoInsumoValid()) {
       setSelectedInsumos((prev) => [...prev, { ...custoInsumoData, id: Date.now() }])
@@ -422,11 +402,9 @@ export default function FormScreen() {
       Alert.alert("Atenção", "Preencha todos os campos obrigatórios!")
     }
   }, [custoInsumoData, isCustoInsumoValid])
-
   const removeSelectedInsumo = useCallback((id) => {
     setSelectedInsumos((prev) => prev.filter((item) => item.id !== id))
   }, [])
-
   const addSelectedOperacao = useCallback(() => {
     if (isCustoOperacoesValid()) {
       const newOperacao = { ...custoOperacoesData, id: Date.now() }
@@ -436,12 +414,10 @@ export default function FormScreen() {
       Alert.alert("Atenção", "Preencha todos os campos obrigatórios!")
     }
   }, [custoOperacoesData, isCustoOperacoesValid])
-
   const removeSelectedOperacao = useCallback((id) => {
     setSelectedOperacoes((prev) => prev.filter((item) => item.id !== id))
     setSelectedBemImplementos((prev) => prev.filter((item) => item.operacaoId !== id))
   }, [])
-
   const addSelectedBemImplemento = useCallback(() => {
     if (custoOperacoesData.bemImplemento) {
       const lastOperacao = selectedOperacoes[selectedOperacoes.length - 1]
@@ -462,11 +438,9 @@ export default function FormScreen() {
       Alert.alert("Atenção", "Selecione um Bem Implemento!")
     }
   }, [custoOperacoesData.bemImplemento, selectedOperacoes])
-
   const removeSelectedBemImplemento = useCallback((id) => {
     setSelectedBemImplementos((prev) => prev.filter((item) => item.id !== id))
   }, [])
-
   const addSelectedFase = useCallback(
     (fase) => {
       if (fase && !selectedFases.some((f) => f.value === fase)) {
@@ -475,11 +449,9 @@ export default function FormScreen() {
     },
     [fases, selectedFases],
   )
-
   const removeSelectedFase = useCallback((id) => {
     setSelectedFases((prev) => prev.filter((item) => item.id !== id))
   }, [])
-
   const renderSelectedItems = useCallback(
     (items, removeFunction) => (
       <View>
@@ -495,7 +467,6 @@ export default function FormScreen() {
     ),
     [],
   )
-
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -504,7 +475,6 @@ export default function FormScreen() {
       </SafeAreaView>
     )
   }
-
   if (error) {
     return (
       <SafeAreaView style={styles.container}>
@@ -515,7 +485,6 @@ export default function FormScreen() {
       </SafeAreaView>
     )
   }
-
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
@@ -615,14 +584,12 @@ export default function FormScreen() {
           <Text style={styles.buttonText}>Enviar</Text>
         </TouchableOpacity>
       </ScrollView>
-
       <DateTimePickerModal
         isVisible={isDatePickerVisible}
         mode="date"
         onConfirm={handleDateConfirm}
         onCancel={() => setDatePickerVisible(false)}
       />
-
       {renderModal(
         custoInsumoModalVisible,
         setCustoInsumoModalVisible,
@@ -681,7 +648,6 @@ export default function FormScreen() {
           </TouchableOpacity>
         </>,
       )}
-
       {renderModal(
         custoOperacoesModalVisible,
         setCustoOperacoesModalVisible,
@@ -777,7 +743,6 @@ export default function FormScreen() {
           </TouchableOpacity>
         </>,
       )}
-
       {renderModal(
         custoMaoDeObraModalVisible,
         setCustoMaoDeObraModalVisible,
@@ -842,4 +807,149 @@ export default function FormScreen() {
     </SafeAreaView>
   )
 }
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 16,
+    backgroundColor: "#F0F4F8",
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 8,
+    color: "#2C3E50",
+  },
+  input: {
+    height: 40,
+    borderColor: "#B2BABB",
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    marginBottom: 16,
+    backgroundColor: "#FFFFFF",
+  },
+  disabledInput: {
+    backgroundColor: "#EAECEE",
+  },
+  dropdownContainer: {
+    borderWidth: 1,
+    borderColor: "#B2BABB",
+    borderRadius: 4,
+    marginBottom: 16,
+    backgroundColor: "#FFFFFF",
+  },
+  picker: {
+    height: 40,
+  },
+  datePickerText: {
+    fontSize: 16,
+    color: "#2C3E50",
+  },
+  modalButton: {
+    backgroundColor: "#3498DB",
+    padding: 12,
+    borderRadius: 4,
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  buttonEnviar: {
+    backgroundColor: "#2ECC71",
+    padding: 12,
+    borderRadius: 4,
+    alignItems: "center",
+    marginTop: 16,
+  },
+  buttonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+    padding: 16,
+    margin: 16,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#2C3E50",
+  },
+  closeButton: {
+    padding: 8,
+  },
+  button: {
+    backgroundColor: "#3498DB",
+    padding: 12,
+    borderRadius: 4,
+    alignItems: "center",
+    marginTop: 16,
+  },
+  disabledButton: {
+    backgroundColor: "#B2BABB",
+  },
+  selectedItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#ECF0F1",
+    padding: 8,
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  summaryContainer: {
+    backgroundColor: "#ECF0F1",
+    padding: 16,
+    borderRadius: 4,
+    marginTop: 16,
+  },
+  summaryTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 8,
+    color: "#2C3E50",
+  },
+  summaryItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: "#7F8C8D",
+  },
+  summaryValue: {
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#2C3E50",
+  },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#B2BABB",
+    borderRadius: 4,
+  },
+  searchInput: {
+    flex: 1,
+    height: 40,
+    paddingHorizontal: 8,
+  },
+  searchIcon: {
+    padding: 8,
+  },
+})
 

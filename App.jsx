@@ -1,4 +1,4 @@
-import React from "react"
+import { useEffect } from "react"
 import { NavigationContainer } from "@react-navigation/native"
 import { createNativeStackNavigator } from "@react-navigation/native-stack"
 import { StatusBar } from "react-native"
@@ -9,10 +9,24 @@ import HomeScreen from "./src/screens/HomeScreen"
 import FormScreen from "./src/screens/FormScreen"
 import RegisterScreen from "./src/screens/RegisterScreen"
 import AdminPanelScreen from "./src/screens/AdminPanelScreen"
+import NetInfo from "@react-native-community/netinfo"
+import { checkConnectivityAndSync } from "./src/utils/offlineManager"
 
 const Stack = createNativeStackNavigator()
 
 export default function App() {
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      if (state.isConnected) {
+        checkConnectivityAndSync()
+      }
+    })
+
+    return () => {
+      unsubscribe()
+    }
+  }, [])
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
