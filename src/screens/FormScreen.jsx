@@ -1,4 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from "react"
+"use client"
+
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import {
   View,
   Text,
@@ -10,86 +12,92 @@ import {
   ActivityIndicator,
   StyleSheet,
   SafeAreaView,
+  FlatList,
 } from "react-native"
 import DateTimePickerModal from "react-native-modal-datetime-picker"
-import { Picker } from "@react-native-picker/picker"
 import { database } from "../config/firebaseConfig"
-import { ref, push, set, onValue } from "firebase/database"
-import { X, Trash2, Search } from "lucide-react-native"
+import { ref, push, set, onValue, query, orderByChild, equalTo, get } from "firebase/database"
+import { X, Trash2, ChevronDown } from "lucide-react-native"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import NetInfo from "@react-native-community/netinfo"
-import { saveOfflineData } from "../utils/offlineManager"
+import { saveOfflineData, checkConnectivityAndSync } from "../utils/offlineManager"
+import { BENS, IMPLEMENTOS, ATIVIDADES, PRODUTOS, DIRECIONADOR, TANQUEDIESEL, CULTURA } from "./assets"
+import { auth } from "../config/firebaseConfig"
+import { onAuthStateChanged } from "firebase/auth"
+
 const USER_TOKEN_KEY = "@user_token"
 const USER_PROPRIEDADE_KEY = "@user_propriedade"
+const OFFLINE_STORAGE_KEY = "@offline_apontamentos"
+
 const initialFormData = {
-  ordemServico: "",
+  fichaControle: "",
   data: "",
   direcionador: "",
-  observacao: "",
+  cultura: "",
   atividade: "",
-}
-const initialCustoInsumoData = {
-  insumo: "",
-  quantidade: "",
-  valor: "",
-  total: "",
   observacao: "",
 }
-const initialCustoOperacoesData = {
-  bem: "",
-  horaMaquinaInicial: "",
-  horaMaquinaFinal: "",
-  totalHoras: "",
-  bemImplemento: "",
-}
-const initialCustoMaoDeObraData = {
-  quantidade: "",
-  tipo: "",
-  unidade: "",
-  valor: "",
-  observacao: "",
-}
+
 export default function FormScreen() {
   const [formData, setFormData] = useState(initialFormData)
-  const [custoInsumoData, setCustoInsumoData] = useState(initialCustoInsumoData)
-  const [custoOperacoesData, setCustoOperacoesData] = useState(initialCustoOperacoesData)
-  const [custoMaoDeObraData, setCustoMaoDeObraData] = useState(initialCustoMaoDeObraData)
+  // Add the following state variables after the abastecimentoData state declaration
+  const [operacaoMecanizadaModalVisible, setOperacaoMecanizadaModalVisible] = useState(false)
+  const [operacaoMecanizadaData, setOperacaoMecanizadaData] = useState({
+    bem: "",
+    implemento: "",
+    horaInicial: "",
+    horaFinal: "",
+  })
+  const [selectedOperacoesMecanizadas, setSelectedOperacoesMecanizadas] = useState([])
   const [isDatePickerVisible, setDatePickerVisible] = useState(false)
-  const [custoInsumoModalVisible, setCustoInsumoModalVisible] = useState(false)
-  const [custoOperacoesModalVisible, setCustoOperacoesModalVisible] = useState(false)
-  const [custoMaoDeObraModalVisible, setCustoMaoDeObraModalVisible] = useState(false)
-  const [selectedInsumos, setSelectedInsumos] = useState([])
-  const [selectedOperacoes, setSelectedOperacoes] = useState([])
-  const [selectedBemImplementos, setSelectedBemImplementos] = useState([])
-  const [selectedFases, setSelectedFases] = useState([])
-  const [insumosData, setInsumosData] = useState({})
-  const [direcionadores, setDirecionadores] = useState([])
   const [bens, setBens] = useState([])
   const [bensImplementos, setBensImplementos] = useState([])
-  const [unidades, setUnidades] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [atividade, setAtividade] = useState({})
-  const [filteredAtividades, setFilteredAtividades] = useState([])
-  const [searchQueryAtividade, setSearchQueryAtividade] = useState("")
-  const [searchQuery, setSearchQuery] = useState("")
-  const [filteredInsumos, setFilteredInsumos] = useState([])
-  const [searchQueryBem, setSearchQueryBem] = useState("")
-  const [filteredBens, setFilteredBens] = useState([])
-  const [searchQueryBemImplemento, setSearchQueryBemImplemento] = useState("")
-  const [filteredBensImplementos, setFilteredBensImplementos] = useState([])
-  const [fases, setFases] = useState({})
-  const [filteredFases, setFilteredFases] = useState([])
-  const [searchQueryFase, setSearchQueryFase] = useState("")
   const [userId, setUserId] = useState("")
   const [userPropriedade, setUserPropriedade] = useState("")
+  const [isListModalVisible, setListModalVisible] = useState(false)
+  const [listModalType, setListModalType] = useState("")
+  const [listModalData, setListModalData] = useState([])
+  const [searchQuery, setSearchQuery] = useState("")
+  const [isAuthInitialized, setIsAuthInitialized] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
+
   const isMounted = useRef(true)
+
   useEffect(() => {
     return () => {
       isMounted.current = false
     }
   }, [])
+
   useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      setIsAuthenticated(!!user)
+      setIsAuthInitialized(true)
+    })
+
+    const loadUserData = async () => {
+      try {
+        const id = await AsyncStorage.getItem(USER_TOKEN_KEY)
+        const propriedade = await AsyncStorage.getItem(USER_PROPRIEDADE_KEY)
+        setUserId(id)
+        setUserPropriedade(propriedade)
+      } catch (error) {
+        console.error("Error loading user data:", error)
+      }
+    }
+    loadUserData()
+
+    return () => unsubscribeAuth()
+  }, [])
+
+  useEffect(() => {
+    if (!isAuthInitialized || !isAuthenticated) {
+      return
+    }
+
     const fetchData = async (path, setterFunction) => {
       try {
         const dbRef = ref(database, path)
@@ -115,16 +123,12 @@ export default function FormScreen() {
         }
       }
     }
+
     Promise.all([
-      fetchData("insumos", setInsumosData),
-      fetchData("direcionadores", setDirecionadores),
       fetchData("bens-implementos", (data) => {
         setBens(data || {})
         setBensImplementos(data || {})
       }),
-      fetchData("unidades", setUnidades),
-      fetchData("atividade", setAtividade),
-      fetchData("fases", setFases),
     ])
       .then(() => {
         if (isMounted.current) {
@@ -138,72 +142,23 @@ export default function FormScreen() {
           setIsLoading(false)
         }
       })
-  }, [])
+  }, [isAuthInitialized, isAuthenticated])
+
   useEffect(() => {
-    updateCustoInsumoTotal()
-  }, [custoInsumoData])
-  useEffect(() => {
-    updateCustoOperacoesTotalHoras()
-  }, [custoOperacoesData])
-  useEffect(() => {
-    if (custoInsumoData.insumo && insumosData[custoInsumoData.insumo]) {
-      const selectedInsumo = insumosData[custoInsumoData.insumo]
-      if (selectedInsumo) {
-        setCustoInsumoData((prev) => ({ ...prev, valor: selectedInsumo.toString() }))
+    const syncInterval = setInterval(async () => {
+      if (!isSyncing) {
+        setIsSyncing(true)
+        try {
+          await checkConnectivityAndSync()
+        } finally {
+          setIsSyncing(false)
+        }
       }
-    }
-  }, [custoInsumoData.insumo, insumosData])
-  useEffect(() => {
-    const filtered = Object.keys(insumosData).filter((key) => key.toLowerCase().includes(searchQuery.toLowerCase()))
-    setFilteredInsumos(filtered)
-  }, [searchQuery, insumosData])
-  useEffect(() => {
-    const filtered = Object.keys(bens).filter((key) => bens[key].toLowerCase().includes(searchQueryBem.toLowerCase()))
-    setFilteredBens(filtered)
-  }, [searchQueryBem, bens])
-  useEffect(() => {
-    const filtered = Object.keys(bensImplementos).filter((key) =>
-      bensImplementos[key].toLowerCase().includes(searchQueryBemImplemento.toLowerCase()),
-    )
-    setFilteredBensImplementos(filtered)
-  }, [searchQueryBemImplemento, bensImplementos])
-  useEffect(() => {
-    const filtered = Object.entries(atividade)
-      .filter(([key, value]) => value.toLowerCase().includes(searchQueryAtividade.toLowerCase()))
-      .map(([key, value]) => ({ label: value, value: key }))
-    setFilteredAtividades(filtered)
-  }, [searchQueryAtividade, atividade])
-  useEffect(() => {
-    const filtered = Object.entries(fases)
-      .filter(([key, value]) => value.toLowerCase().includes(searchQueryFase.toLowerCase()))
-      .map(([key, value]) => ({ label: value, value: key }))
-    setFilteredFases(filtered)
-  }, [searchQueryFase, fases])
-  useEffect(() => {
-    const loadUserData = async () => {
-      const id = await AsyncStorage.getItem(USER_TOKEN_KEY)
-      const propriedade = await AsyncStorage.getItem(USER_PROPRIEDADE_KEY)
-      setUserId(id)
-      setUserPropriedade(propriedade)
-    }
-    loadUserData()
-  }, [])
-  const updateCustoInsumoTotal = useCallback(() => {
-    const quantidade = Number.parseFloat(custoInsumoData.quantidade) || 0
-    const valor = Number.parseFloat(custoInsumoData.valor) || 0
-    const total = (quantidade * valor).toFixed(2)
-    if (total !== custoInsumoData.total) {
-      setCustoInsumoData((prev) => ({ ...prev, total }))
-    }
-  }, [custoInsumoData.quantidade, custoInsumoData.valor, custoInsumoData.total])
-  const updateCustoOperacoesTotalHoras = useCallback(() => {
-    const inicial = Number.parseFloat(custoOperacoesData.horaMaquinaInicial) || 0
-    const final = Number.parseFloat(custoOperacoesData.horaMaquinaFinal) || 0
-    const totalHoras = (final - inicial).toFixed(2)
-    if (totalHoras !== custoOperacoesData.totalHoras) {
-      setCustoOperacoesData((prev) => ({ ...prev, totalHoras }))
-    }
-  }, [custoOperacoesData.horaMaquinaInicial, custoOperacoesData.horaMaquinaFinal, custoOperacoesData.totalHoras])
+    }, 300000) // Check every 5 minutes
+
+    return () => clearInterval(syncInterval)
+  }, [isSyncing])
+
   const handleDateConfirm = useCallback((date) => {
     const formattedDate = `${date.getDate().toString().padStart(2, "0")}/${(date.getMonth() + 1)
       .toString()
@@ -211,96 +166,153 @@ export default function FormScreen() {
     setFormData((prev) => ({ ...prev, data: formattedDate }))
     setDatePickerVisible(false)
   }, [])
+
   const handleChange = useCallback((name, value) => setFormData((prev) => ({ ...prev, [name]: value })), [])
-  const handleCustoInsumoChange = useCallback(
-    (name, value) => {
-      setCustoInsumoData((prev) => ({ ...prev, [name]: value }))
-      if (name === "insumo" && insumosData[value]) {
-        setCustoInsumoData((prev) => ({ ...prev, valor: insumosData[value].toString() }))
+
+  // Add these handler functions after the handleAbastecimentoChange function
+  const handleOperacaoMecanizadaChange = useCallback((name, value) => {
+    setOperacaoMecanizadaData((prev) => ({ ...prev, [name]: value }))
+  }, [])
+
+  const addSelectedOperacaoMecanizada = useCallback((operacao) => {
+    // Calculate total hours
+    const horaInicial = Number.parseFloat(operacao.horaInicial) || 0
+    const horaFinal = Number.parseFloat(operacao.horaFinal) || 0
+    const totalHoras = horaFinal > horaInicial ? (horaFinal - horaInicial).toFixed(2) : 0
+
+    setSelectedOperacoesMecanizadas((prev) => [...prev, { ...operacao, id: Date.now(), totalHoras }])
+    setOperacaoMecanizadaData({
+      bem: "",
+      implemento: "",
+      horaInicial: "",
+      horaFinal: "",
+    })
+  }, [])
+
+  const removeSelectedOperacaoMecanizada = useCallback((id) => {
+    setSelectedOperacoesMecanizadas((prev) => prev.filter((item) => item.id !== id))
+  }, [])
+
+  const sendDataToFirebase = useCallback(
+    async (apontamentoData) => {
+      const apontamentosRef = ref(database, `propriedades/${userPropriedade}/apontamentos`)
+      const existingEntryQuery = query(apontamentosRef, orderByChild("localId"), equalTo(apontamentoData.localId))
+      const existingEntrySnapshot = await get(existingEntryQuery)
+
+      if (!existingEntrySnapshot.exists()) {
+        const newEntryRef = push(apontamentosRef)
+        await set(newEntryRef, apontamentoData)
+        console.log("Apontamento enviado com sucesso:", apontamentoData.localId)
+        return true
+      } else {
+        console.log("Apontamento já existe, ignorando:", apontamentoData.localId)
+        return false
       }
     },
-    [insumosData],
+    [userPropriedade],
   )
-  const handleCustoOperacoesChange = useCallback(
-    (name, value) => setCustoOperacoesData((prev) => ({ ...prev, [name]: value })),
-    [],
-  )
-  const handleCustoMaoDeObraChange = useCallback(
-    (name, value) => setCustoMaoDeObraData((prev) => ({ ...prev, [name]: value })),
-    [],
-  )
+
   const handleSubmit = useCallback(async () => {
     if (isFormValid()) {
       try {
+        const localId = Date.now().toString()
+        // Modify the handleSubmit function to include operacoesMecanizadas in the apontamentoData
         const apontamentoData = {
           ...formData,
+          atividade: ATIVIDADES.find((a) => a.id === formData.atividade)?.name || formData.atividade,
+          direcionador: DIRECIONADOR.find((d) => d.id === formData.direcionador)?.name || formData.direcionador,
+          cultura: CULTURA.find((c) => c.id === formData.cultura)?.name || formData.cultura,
           timestamp: Date.now(),
-          custoInsumo: selectedInsumos,
-          custoOperacoes: selectedOperacoes.map((operacao) => ({
-            ...operacao,
-            bemImplementos: selectedBemImplementos.filter((impl) => impl.operacaoId === operacao.id),
+          operacoesMecanizadas: selectedOperacoesMecanizadas.map((op) => ({
+            ...op,
+            bem: BENS.find((b) => b.id === op.bem)?.name || op.bem,
+            implemento: IMPLEMENTOS.find((i) => i.id === op.implemento)?.name || op.implemento,
           })),
-          custoMaoDeObra: custoMaoDeObraData,
-          fases: selectedFases,
           userId: userId,
           propriedade: userPropriedade,
+          localId: localId,
+          status: "pending",
         }
+
         const netInfo = await NetInfo.fetch()
         if (netInfo.isConnected) {
-          const apontamentosRef = ref(database, `propriedades/${userPropriedade}/apontamentos`)
-          const newEntryRef = push(apontamentosRef)
-          await set(newEntryRef, apontamentoData)
-          Alert.alert("Sucesso", "Dados enviados com sucesso!")
+          const sent = await sendDataToFirebase(apontamentoData)
+          if (sent) {
+            Alert.alert("Sucesso", "Dados enviados com sucesso!")
+            resetForm()
+          } else {
+            Alert.alert("Atenção", "Este apontamento já foi enviado anteriormente.")
+          }
         } else {
-          await saveOfflineData(apontamentoData)
-          Alert.alert("Modo Offline", "Dados salvos localmente e serão sincronizados quando houver conexão.")
+          // Check if we already have this localId saved offline
+          const existingData = await AsyncStorage.getItem(OFFLINE_STORAGE_KEY)
+          const offlineData = existingData ? JSON.parse(existingData) : []
+          const isDuplicate = offlineData.some((item) => item.localId === localId)
+
+          if (!isDuplicate) {
+            await saveOfflineData(apontamentoData)
+            Alert.alert("Modo Offline", "Dados salvos localmente e serão sincronizados quando houver conexão.")
+            resetForm()
+          } else {
+            Alert.alert("Atenção", "Este apontamento já foi salvo localmente.")
+          }
         }
-        resetForm()
       } catch (error) {
         console.error("Error submitting form:", error)
         Alert.alert("Erro", "Ocorreu um erro ao enviar os dados. Os dados foram salvos localmente.")
-        await saveOfflineData(apontamentoData)
+
+        try {
+          // Check if we already have this localId saved offline before saving
+          const localId = Date.now().toString()
+          const existingData = await AsyncStorage.getItem(OFFLINE_STORAGE_KEY)
+          const offlineData = existingData ? JSON.parse(existingData) : []
+          const isDuplicate = offlineData.some((item) => item.localId === localId)
+
+          if (!isDuplicate) {
+            const apontamentoData = {
+              ...formData,
+              atividade: ATIVIDADES.find((a) => a.id === formData.atividade)?.name || formData.atividade,
+              direcionador: DIRECIONADOR.find((d) => d.id === formData.direcionador)?.name || formData.direcionador,
+              cultura: CULTURA.find((c) => c.id === formData.cultura)?.name || formData.cultura,
+              timestamp: Date.now(),
+              operacoesMecanizadas: selectedOperacoesMecanizadas.map((op) => ({
+                ...op,
+                bem: BENS.find((b) => b.id === op.bem)?.name || op.bem,
+                implemento: IMPLEMENTOS.find((i) => i.id === op.implemento)?.name || op.implemento,
+              })),
+              userId: userId,
+              propriedade: userPropriedade,
+              localId: localId,
+              status: "pending",
+            }
+            await saveOfflineData(apontamentoData)
+          }
+        } catch (saveError) {
+          console.error("Error saving offline data after submission error:", saveError)
+        }
       }
     } else {
       Alert.alert("Atenção", "Preencha todos os campos obrigatórios!")
     }
-  }, [
-    formData,
-    selectedInsumos,
-    selectedOperacoes,
-    selectedBemImplementos,
-    custoMaoDeObraData,
-    selectedFases,
-    isFormValid,
-    resetForm,
-    userId,
-    userPropriedade,
-  ])
+  }, [formData, userId, userPropriedade, sendDataToFirebase, isFormValid, resetForm, selectedOperacoesMecanizadas])
+
   const isFormValid = useCallback(() => {
-    const requiredFields = ["ordemServico", "data", "direcionador", "atividade"]
-    return requiredFields.every((field) => formData[field] && formData[field].trim() !== "") && selectedFases.length > 0
-  }, [formData, selectedFases])
-  const isCustoInsumoValid = useCallback(() => {
-    const requiredFields = ["insumo", "quantidade"]
-    return requiredFields.every((field) => custoInsumoData[field] && custoInsumoData[field].trim() !== "")
-  }, [custoInsumoData])
-  const isCustoOperacoesValid = useCallback(() => {
-    return custoOperacoesData.bem && custoOperacoesData.bem.trim() !== ""
-  }, [custoOperacoesData.bem])
-  const isCustoMaoDeObraValid = useCallback(() => {
-    const requiredFields = ["quantidade", "tipo", "unidade", "valor"]
-    return requiredFields.every((field) => custoMaoDeObraData[field] && custoMaoDeObraData[field].trim() !== "")
-  }, [custoMaoDeObraData])
+    const requiredFields = ["fichaControle", "data", "atividade"]
+    return requiredFields.every((field) => formData[field] && formData[field].trim() !== "")
+  }, [formData])
+
+  // Also update the resetForm function to reset the operacoesMecanizadas state
   const resetForm = useCallback(() => {
     setFormData(initialFormData)
-    setCustoInsumoData(initialCustoInsumoData)
-    setCustoOperacoesData(initialCustoOperacoesData)
-    setCustoMaoDeObraData(initialCustoMaoDeObraData)
-    setSelectedInsumos([])
-    setSelectedOperacoes([])
-    setSelectedBemImplementos([])
-    setSelectedFases([])
+    setOperacaoMecanizadaData({
+      bem: "",
+      implemento: "",
+      horaInicial: "",
+      horaFinal: "",
+    })
+    setSelectedOperacoesMecanizadas([])
   }, [])
+
   const renderInputField = useCallback(
     (label, name, value, onChange, keyboardType = "default", editable = true) => (
       <View>
@@ -318,6 +330,7 @@ export default function FormScreen() {
     ),
     [],
   )
+
   const renderDatePickerField = useCallback(
     (label, name) => (
       <View>
@@ -334,41 +347,7 @@ export default function FormScreen() {
     ),
     [formData],
   )
-  const renderDropdownField = useCallback(
-    (label, name, items, value, onChange) => (
-      <View>
-        <Text style={styles.label}>{label}</Text>
-        <View style={styles.dropdownContainer}>
-          <Picker
-            selectedValue={value}
-            onValueChange={(value) => onChange(name, value)}
-            style={styles.picker}
-            accessibilityLabel={label}
-          >
-            <Picker.Item label={`Selecione ${label}`} value="" />
-            {items.map((item) => (
-              <Picker.Item key={item.value} label={item.label} value={item.value} />
-            ))}
-          </Picker>
-        </View>
-      </View>
-    ),
-    [],
-  )
-  const renderSummary = useCallback(
-    (title, data, fields) => (
-      <View style={styles.summaryContainer}>
-        <Text style={styles.summaryTitle}>{title}</Text>
-        {fields.map((field) => (
-          <View key={field.key} style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>{field.label}:</Text>
-            <Text style={styles.summaryValue}>{data[field.key] || field.defaultValue}</Text>
-          </View>
-        ))}
-      </View>
-    ),
-    [],
-  )
+
   const renderModal = useCallback(
     (visible, setVisible, title, content) => (
       <Modal visible={visible} transparent={true} animationType="slide">
@@ -394,70 +373,17 @@ export default function FormScreen() {
     ),
     [],
   )
-  const addSelectedInsumo = useCallback(() => {
-    if (isCustoInsumoValid()) {
-      setSelectedInsumos((prev) => [...prev, { ...custoInsumoData, id: Date.now() }])
-      setCustoInsumoData(initialCustoInsumoData)
-    } else {
-      Alert.alert("Atenção", "Preencha todos os campos obrigatórios!")
-    }
-  }, [custoInsumoData, isCustoInsumoValid])
-  const removeSelectedInsumo = useCallback((id) => {
-    setSelectedInsumos((prev) => prev.filter((item) => item.id !== id))
-  }, [])
-  const addSelectedOperacao = useCallback(() => {
-    if (isCustoOperacoesValid()) {
-      const newOperacao = { ...custoOperacoesData, id: Date.now() }
-      setSelectedOperacoes((prev) => [...prev, newOperacao])
-      setCustoOperacoesData(initialCustoOperacoesData)
-    } else {
-      Alert.alert("Atenção", "Preencha todos os campos obrigatórios!")
-    }
-  }, [custoOperacoesData, isCustoOperacoesValid])
-  const removeSelectedOperacao = useCallback((id) => {
-    setSelectedOperacoes((prev) => prev.filter((item) => item.id !== id))
-    setSelectedBemImplementos((prev) => prev.filter((item) => item.operacaoId !== id))
-  }, [])
-  const addSelectedBemImplemento = useCallback(() => {
-    if (custoOperacoesData.bemImplemento) {
-      const lastOperacao = selectedOperacoes[selectedOperacoes.length - 1]
-      if (lastOperacao) {
-        setSelectedBemImplementos((prev) => [
-          ...prev,
-          {
-            bemImplemento: custoOperacoesData.bemImplemento,
-            id: Date.now(),
-            operacaoId: lastOperacao.id,
-          },
-        ])
-        setCustoOperacoesData((prev) => ({ ...prev, bemImplemento: "" }))
-      } else {
-        Alert.alert("Atenção", "Adicione uma operação antes de adicionar um bem implemento!")
-      }
-    } else {
-      Alert.alert("Atenção", "Selecione um Bem Implemento!")
-    }
-  }, [custoOperacoesData.bemImplemento, selectedOperacoes])
-  const removeSelectedBemImplemento = useCallback((id) => {
-    setSelectedBemImplementos((prev) => prev.filter((item) => item.id !== id))
-  }, [])
-  const addSelectedFase = useCallback(
-    (fase) => {
-      if (fase && !selectedFases.some((f) => f.value === fase)) {
-        setSelectedFases((prev) => [...prev, { value: fase, label: fases[fase], id: Date.now() }])
-      }
-    },
-    [fases, selectedFases],
-  )
-  const removeSelectedFase = useCallback((id) => {
-    setSelectedFases((prev) => prev.filter((item) => item.id !== id))
-  }, [])
+
   const renderSelectedItems = useCallback(
-    (items, removeFunction) => (
+    (items, removeFunction, type) => (
       <View>
         {items.map((item) => (
           <View key={item.id} style={styles.selectedItem}>
-            <Text>{item.insumo || item.bem || item.bemImplemento || item.label}</Text>
+            <Text>
+              {type === "produto"
+                ? `${PRODUTOS.find((p) => p.id === item.produto)?.name} - ${TANQUEDIESEL.find((t) => t.id === item.tanqueDiesel)?.name || ""}`
+                : PRODUTOS.find((p) => p.id === item.produto)?.name}
+            </Text>
             <TouchableOpacity onPress={() => removeFunction(item.id)}>
               <Trash2 size={20} color="#FF0000" />
             </TouchableOpacity>
@@ -467,14 +393,123 @@ export default function FormScreen() {
     ),
     [],
   )
-  if (isLoading) {
+
+  const Separator = useCallback(() => <View style={styles.separator} />, [])
+
+  // Add the openListModal function to include bem and implemento types
+  const openListModal = useCallback((type) => {
+    setListModalType(type)
+    setListModalData(
+      type === "produto"
+        ? PRODUTOS
+        : type === "tanqueDiesel"
+          ? TANQUEDIESEL
+          : type === "direcionador"
+            ? DIRECIONADOR
+            : type === "cultura"
+              ? CULTURA
+              : type === "bem"
+                ? BENS
+                : type === "implemento"
+                  ? IMPLEMENTOS
+                  : ATIVIDADES,
+    )
+    setSearchQuery("")
+    setListModalVisible(true)
+  }, [])
+
+  const filteredListData = useMemo(() => {
+    if (!searchQuery) return listModalData
+    return listModalData.filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
+  }, [listModalData, searchQuery])
+
+  // Update the renderListItem function to handle bem and implemento selections
+  const renderListItem = useCallback(
+    ({ item }) => (
+      <TouchableOpacity
+        style={styles.listItem}
+        onPress={() => {
+          if (listModalType === "atividade") {
+            handleChange(listModalType, item.id)
+          } else if (listModalType === "produto" || listModalType === "tanqueDiesel") {
+            handleOperacaoMecanizadaChange(listModalType, item.id)
+          } else if (listModalType === "bem" || listModalType === "implemento") {
+            handleOperacaoMecanizadaChange(listModalType, item.id)
+          } else if (listModalType === "direcionador" || listModalType === "cultura") {
+            handleChange(listModalType, item.id)
+          }
+          setListModalVisible(false)
+        }}
+      >
+        <Text>{item.name}</Text>
+      </TouchableOpacity>
+    ),
+    [listModalType, handleChange, handleOperacaoMecanizadaChange],
+  )
+
+  // Update the renderListModal function to include bem and implemento types
+  const renderListModal = useCallback(() => {
+    return (
+      <Modal visible={isListModalVisible} transparent={true} animationType="slide">
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { flex: 1, textAlign: "center" }]}>
+                Selecione{" "}
+                {listModalType === "produto"
+                  ? "o Produto"
+                  : listModalType === "tanqueDiesel"
+                    ? "o Tanque de Diesel"
+                    : listModalType === "direcionador"
+                      ? "o Direcionador"
+                      : listModalType === "cultura"
+                        ? "a Cultura"
+                        : listModalType === "bem"
+                          ? "o Bem"
+                          : listModalType === "implemento"
+                            ? "o Implemento"
+                            : "a Atividade"}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setListModalVisible(false)}
+                style={[styles.closeButton, { position: "absolute", right: 0 }]}
+              >
+                <X size={24} color="#000" />
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Pesquisar..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            <FlatList
+              style={styles.flatList}
+              data={filteredListData}
+              renderItem={renderListItem}
+              keyExtractor={(item) => item.id}
+              ItemSeparatorComponent={Separator}
+            />
+          </View>
+        </SafeAreaView>
+      </Modal>
+    )
+  }, [isListModalVisible, listModalType, filteredListData, renderListItem, searchQuery, Separator])
+
+  if (!isAuthInitialized || isLoading) {
     return (
       <SafeAreaView style={styles.container}>
-        <ActivityIndicator size="large" color="#0000ff" />
+        <ActivityIndicator size="large" color="#2a9d8f" />
         <Text>Carregando...</Text>
       </SafeAreaView>
     )
   }
+
+  if (!isAuthenticated) {
+    navigation.replace("Login")
+    return null
+  }
+
   if (error) {
     return (
       <SafeAreaView style={styles.container}>
@@ -485,103 +520,64 @@ export default function FormScreen() {
       </SafeAreaView>
     )
   }
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
-        {renderInputField("Ordem de Serviço", "ordemServico", formData.ordemServico, handleChange)}
+        {renderInputField("Ficha de Controle", "fichaControle", formData.fichaControle, handleChange)}
+        <Separator />
         {renderDatePickerField("Data", "data")}
-        <Text style={styles.label}>Atividade</Text>
-        <View style={styles.searchContainer}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Pesquisar atividade..."
-            value={searchQueryAtividade}
-            onChangeText={setSearchQueryAtividade}
-          />
-          <Search size={24} color="#000" style={styles.searchIcon} />
-        </View>
-        <View style={styles.dropdownContainer}>
-          <Picker
-            selectedValue={formData.atividade}
-            onValueChange={(value) => handleChange("atividade", value)}
-            style={styles.picker}
-            accessibilityLabel="Atividade"
-          >
-            <Picker.Item label="Selecione Atividade" value="" />
-            {filteredAtividades.length > 0
-              ? filteredAtividades.map((item) => <Picker.Item key={item.value} label={item.label} value={item.value} />)
-              : Object.entries(atividade).map(([key, value]) => <Picker.Item key={key} label={value} value={key} />)}
-          </Picker>
-        </View>
-        <Text style={styles.label}>Fase</Text>
-        <View style={styles.searchContainer}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Pesquisar fase..."
-            value={searchQueryFase}
-            onChangeText={setSearchQueryFase}
-          />
-          <Search size={24} color="#000" style={styles.searchIcon} />
-        </View>
-        <View style={styles.dropdownContainer}>
-          <Picker
-            selectedValue={""}
-            onValueChange={(value) => addSelectedFase(value)}
-            style={styles.picker}
-            accessibilityLabel="Fase"
-          >
-            <Picker.Item label="Selecione Fase" value="" />
-            {filteredFases.length > 0
-              ? filteredFases.map((item) => <Picker.Item key={item.value} label={item.label} value={item.value} />)
-              : Object.entries(fases).map(([key, value]) => <Picker.Item key={key} label={value} value={key} />)}
-          </Picker>
-        </View>
-        {renderSelectedItems(selectedFases, removeSelectedFase)}
-        <View style={styles.dropdownContainer}>
-          <Picker
-            selectedValue={formData.direcionador}
-            onValueChange={(value) => handleChange("direcionador", value)}
-            style={styles.picker}
-            accessibilityLabel="Direcionador"
-          >
-            <Picker.Item label="Selecione Direcionador" value="" />
-            {Object.entries(direcionadores).map(([key, value]) => (
-              <Picker.Item key={key} label={value} value={key} />
-            ))}
-          </Picker>
-        </View>
+        <Separator />
+        <Text style={styles.label}>Direcionador</Text>
         <TouchableOpacity
-          style={styles.modalButton}
-          onPress={() => setCustoInsumoModalVisible(true)}
-          accessibilityLabel="Lançar Insumos"
-          accessibilityHint="Toque para abrir o formulário de lançamento de insumos"
+          style={styles.input}
+          onPress={() => openListModal("direcionador")}
+          accessibilityLabel="Selecionar Direcionador"
         >
-          <Text style={styles.buttonText}>Lançar Insumos</Text>
+          <Text>{DIRECIONADOR.find((d) => d.id === formData.direcionador)?.name || "Selecione o Direcionador"}</Text>
+          <ChevronDown size={20} color="#2a9d8f" />
         </TouchableOpacity>
+        <Separator />
+        <Text style={styles.label}>Cultura</Text>
+        <TouchableOpacity
+          style={styles.input}
+          onPress={() => openListModal("cultura")}
+          accessibilityLabel="Selecionar Cultura"
+        >
+          <Text>{CULTURA.find((c) => c.id === formData.cultura)?.name || "Selecione a Cultura"}</Text>
+          <ChevronDown size={20} color="#2a9d8f" />
+        </TouchableOpacity>
+        <Separator />
+        <Text style={styles.label}>Atividade</Text>
+        <TouchableOpacity
+          style={styles.input}
+          onPress={() => openListModal("atividade")}
+          accessibilityLabel="Selecionar Atividade"
+        >
+          <Text>{ATIVIDADES.find((a) => a.id === formData.atividade)?.name || "Selecione a Atividade"}</Text>
+          <ChevronDown size={20} color="#2a9d8f" />
+        </TouchableOpacity>
+        <Separator />
+        {/* Now add the Operações Mecanizadas section in the return statement */}
+        <Text style={styles.label}>Operações Mecanizadas</Text>
         <TouchableOpacity
           style={styles.modalButton}
-          onPress={() => setCustoOperacoesModalVisible(true)}
+          onPress={() => setOperacaoMecanizadaModalVisible(true)}
           accessibilityLabel="Lançar Operações Mecanizadas"
           accessibilityHint="Toque para abrir o formulário de lançamento de operações mecanizadas"
         >
           <Text style={styles.buttonText}>Lançar Operações Mecanizadas</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.modalButton}
-          onPress={() => setCustoMaoDeObraModalVisible(true)}
-          accessibilityLabel="Lançar Mão de Obra"
-          accessibilityHint="Toque para abrir o formulário de lançamento de mão de obra"
-        >
-          <Text style={styles.buttonText}>Lançar Mão de Obra</Text>
-        </TouchableOpacity>
+        <Separator />
         {renderInputField("Observação", "observacao", formData.observacao, handleChange)}
+        <Separator />
         <TouchableOpacity
           style={styles.buttonEnviar}
           onPress={handleSubmit}
           accessibilityLabel="Enviar formulário"
           accessibilityHint="Toque para enviar o formulário preenchido"
         >
-          <Text style={styles.buttonText}>Enviar</Text>
+          <Text style={styles.buttonTextEnviar}>ENVIAR</Text>
         </TouchableOpacity>
       </ScrollView>
       <DateTimePickerModal
@@ -590,279 +586,187 @@ export default function FormScreen() {
         onConfirm={handleDateConfirm}
         onCancel={() => setDatePickerVisible(false)}
       />
+      {renderListModal()}
+      {/* Finally, add the modal for Operações Mecanizadas */}
       {renderModal(
-        custoInsumoModalVisible,
-        setCustoInsumoModalVisible,
-        "Lançamento de Insumos",
-        <>
-          <Text style={styles.label}>Insumos</Text>
-          <View style={styles.searchContainer}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Pesquisar insumos..."
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-            <Search size={24} color="#000" style={styles.searchIcon} />
-          </View>
-          <View style={styles.dropdownContainer}>
-            <Picker
-              selectedValue={custoInsumoData.insumo}
-              onValueChange={(value) => handleCustoInsumoChange("insumo", value)}
-              style={styles.picker}
-              accessibilityLabel="Insumo"
-            >
-              <Picker.Item label="Selecione Insumo" value="" />
-              {filteredInsumos.map((key) => (
-                <Picker.Item key={key} label={key} value={key} />
-              ))}
-            </Picker>
-          </View>
-          {renderInputField("Quantidade", "quantidade", custoInsumoData.quantidade, handleCustoInsumoChange, "numeric")}
-          {renderInputField(
-            "Valor Unitário",
-            "valor",
-            custoInsumoData.valor,
-            handleCustoInsumoChange,
-            "numeric",
-            false,
-          )}
-          {renderInputField("Observação", "observacao", custoInsumoData.observacao, handleCustoInsumoChange)}
-          <TouchableOpacity
-            style={[styles.button, !isCustoInsumoValid() && styles.disabledButton]}
-            onPress={addSelectedInsumo}
-            accessibilityLabel="Adicionar insumo"
-            accessibilityHint="Toque para adicionar o insumo à lista"
-            disabled={!isCustoInsumoValid()}
-          >
-            <Text style={styles.buttonText}>Adicionar Insumo</Text>
-          </TouchableOpacity>
-          {renderSelectedItems(selectedInsumos, removeSelectedInsumo)}
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => setCustoInsumoModalVisible(false)}
-            accessibilityLabel="Salvar e sair do modal de insumos"
-            accessibilityHint="Toque para salvar e sair do modal de insumos"
-          >
-            <Text style={styles.buttonText}>Salvar e Sair</Text>
-          </TouchableOpacity>
-        </>,
-      )}
-      {renderModal(
-        custoOperacoesModalVisible,
-        setCustoOperacoesModalVisible,
-        "Lançamento Operações Mecanizadas",
+        operacaoMecanizadaModalVisible,
+        setOperacaoMecanizadaModalVisible,
+        "Lançar Operações Mecanizadas",
         <>
           <Text style={styles.label}>Bem</Text>
-          <View style={styles.searchContainer}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Pesquisar bem..."
-              value={searchQueryBem}
-              onChangeText={setSearchQueryBem}
-            />
-            <Search size={24} color="#000" style={styles.searchIcon} />
-          </View>
-          <View style={styles.dropdownContainer}>
-            <Picker
-              selectedValue={custoOperacoesData.bem}
-              onValueChange={(value) => handleCustoOperacoesChange("bem", value)}
-              style={styles.picker}
-              accessibilityLabel="Bem"
-            >
-              <Picker.Item label="Selecione Bem" value="" />
-              {filteredBens.map((key) => (
-                <Picker.Item key={key} label={bens[key]} value={key} />
-              ))}
-            </Picker>
-          </View>
+          <TouchableOpacity
+            style={styles.input}
+            onPress={() => openListModal("bem")}
+            accessibilityLabel="Selecionar Bem"
+          >
+            <Text>{BENS.find((b) => b.id === operacaoMecanizadaData.bem)?.name || "Selecione o Bem"}</Text>
+            <ChevronDown size={20} color="#2a9d8f" />
+          </TouchableOpacity>
+          <Text style={styles.label}>Implemento</Text>
+          <TouchableOpacity
+            style={styles.input}
+            onPress={() => openListModal("implemento")}
+            accessibilityLabel="Selecionar Implemento"
+          >
+            <Text>
+              {IMPLEMENTOS.find((i) => i.id === operacaoMecanizadaData.implemento)?.name || "Selecione o Implemento"}
+            </Text>
+            <ChevronDown size={20} color="#2a9d8f" />
+          </TouchableOpacity>
           {renderInputField(
             "Hora Máquina Inicial",
-            "horaMaquinaInicial",
-            custoOperacoesData.horaMaquinaInicial,
-            handleCustoOperacoesChange,
+            "horaInicial",
+            operacaoMecanizadaData.horaInicial,
+            handleOperacaoMecanizadaChange,
             "numeric",
           )}
           {renderInputField(
             "Hora Máquina Final",
-            "horaMaquinaFinal",
-            custoOperacoesData.horaMaquinaFinal,
-            handleCustoOperacoesChange,
+            "horaFinal",
+            operacaoMecanizadaData.horaFinal,
+            handleOperacaoMecanizadaChange,
             "numeric",
           )}
-          <TouchableOpacity
-            style={[styles.button, !isCustoOperacoesValid() && styles.disabledButton]}
-            onPress={addSelectedOperacao}
-            accessibilityLabel="Adicionar operação"
-            accessibilityHint="Toque para adicionar a operação à lista"
-            disabled={!isCustoOperacoesValid()}
-          >
-            <Text style={styles.buttonText}>Adicionar Operação</Text>
-          </TouchableOpacity>
-          {renderSelectedItems(selectedOperacoes, removeSelectedOperacao)}
-          <Text style={styles.label}>Bem Implemento</Text>
-          <View style={styles.searchContainer}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Pesquisar bem implemento..."
-              value={searchQueryBemImplemento}
-              onChangeText={setSearchQueryBemImplemento}
-            />
-            <Search size={24} color="#000" style={styles.searchIcon} />
-          </View>
-          <View style={styles.dropdownContainer}>
-            <Picker
-              selectedValue={custoOperacoesData.bemImplemento}
-              onValueChange={(value) => handleCustoOperacoesChange("bemImplemento", value)}
-              style={styles.picker}
-              accessibilityLabel="Bem Implemento"
-            >
-              <Picker.Item label="Selecione Bem Implemento" value="" />
-              {filteredBensImplementos.map((key) => (
-                <Picker.Item key={key} label={bensImplementos[key]} value={key} />
-              ))}
-            </Picker>
-          </View>
-          <TouchableOpacity
-            style={[styles.button, !custoOperacoesData.bemImplemento && styles.disabledButton]}
-            onPress={addSelectedBemImplemento}
-            accessibilityLabel="Adicionar bem implemento"
-            accessibilityHint="Toque para adicionar o bem implemento à lista"
-            disabled={!custoOperacoesData.bemImplemento}
-          >
-            <Text style={styles.buttonText}>Adicionar Bem Implemento</Text>
-          </TouchableOpacity>
-          {renderSelectedItems(selectedBemImplementos, removeSelectedBemImplemento)}
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => setCustoOperacoesModalVisible(false)}
-            accessibilityLabel="Salvar e sair do modal de operações mecanizadas"
-            accessibilityHint="Toque para salvar e sair do modal de operações mecanizadas"
-          >
-            <Text style={styles.buttonText}>Salvar e Sair</Text>
-          </TouchableOpacity>
-        </>,
-      )}
-      {renderModal(
-        custoMaoDeObraModalVisible,
-        setCustoMaoDeObraModalVisible,
-        "Lançamento Mão de Obra",
-        <>
-          {renderInputField(
-            "Quantidade",
-            "quantidade",
-            custoMaoDeObraData.quantidade,
-            handleCustoMaoDeObraChange,
-            "numeric",
+          {operacaoMecanizadaData.horaInicial && operacaoMecanizadaData.horaFinal && (
+            <View style={styles.calculatedHours}>
+              <Text style={styles.label}>Total de Horas:</Text>
+              <Text style={styles.hoursValue}>
+                {Number.parseFloat(operacaoMecanizadaData.horaFinal) >
+                Number.parseFloat(operacaoMecanizadaData.horaInicial)
+                  ? (
+                      Number.parseFloat(operacaoMecanizadaData.horaFinal) -
+                      Number.parseFloat(operacaoMecanizadaData.horaInicial)
+                    ).toFixed(2)
+                  : "0.00"}
+              </Text>
+            </View>
           )}
-          <View style={styles.dropdownContainer}>
-            <Picker
-              selectedValue={custoMaoDeObraData.tipo}
-              onValueChange={(value) => handleCustoMaoDeObraChange("tipo", value)}
-              style={styles.picker}
-              accessibilityLabel="Tipo"
-            >
-              <Picker.Item label="Selecione o Tipo" value="" />
-              <Picker.Item label="Terceirizada" value="Terceirizada" />
-            </Picker>
-          </View>
-          <View style={styles.dropdownContainer}>
-            <Picker
-              selectedValue={custoMaoDeObraData.unidade}
-              onValueChange={(value) => handleCustoMaoDeObraChange("unidade", value)}
-              style={styles.picker}
-              accessibilityLabel="Unidade"
-            >
-              <Picker.Item label="Selecione Unidade" value="" />
-              {Object.entries(unidades).map(([key, value]) => (
-                <Picker.Item key={key} label={value} value={key} />
+          {selectedOperacoesMecanizadas.length > 0 && (
+            <View style={styles.selectedItemsContainer}>
+              <Text style={[styles.label, { marginTop: 16 }]}>Operações Adicionadas:</Text>
+              {selectedOperacoesMecanizadas.map((item) => (
+                <View key={item.id} style={styles.selectedItem}>
+                  <View>
+                    <Text style={styles.selectedItemTitle}>{BENS.find((b) => b.id === item.bem)?.name}</Text>
+                    <Text style={styles.selectedItemSubtitle}>
+                      {IMPLEMENTOS.find((i) => i.id === item.implemento)?.name}
+                    </Text>
+                    <Text>
+                      Horas: {item.horaInicial} - {item.horaFinal} = {item.totalHoras}
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={() => removeSelectedOperacaoMecanizada(item.id)}>
+                    <Trash2 size={20} color="#FF0000" />
+                  </TouchableOpacity>
+                </View>
               ))}
-            </Picker>
-          </View>
-          {renderInputField("Valor", "valor", custoMaoDeObraData.valor, handleCustoMaoDeObraChange, "numeric")}
-          {renderInputField("Observação", "observacao", custoMaoDeObraData.observacao, handleCustoMaoDeObraChange)}
-          {renderSummary("Resumo Lançamento Mão de Obra", custoMaoDeObraData, [
-            { key: "quantidade", label: "Quantidade", defaultValue: "0" },
-            { key: "tipo", label: "Tipo", defaultValue: "Não selecionado" },
-            { key: "unidade", label: "Unidade", defaultValue: "Não selecionado" },
-            { key: "valor", label: "Valor", defaultValue: "0" },
-          ])}
+            </View>
+          )}
           <TouchableOpacity
-            style={[styles.button, !isCustoMaoDeObraValid() && styles.disabledButton]}
+            style={[
+              styles.button,
+              (!operacaoMecanizadaData.bem ||
+                !operacaoMecanizadaData.implemento ||
+                !operacaoMecanizadaData.horaInicial ||
+                !operacaoMecanizadaData.horaFinal ||
+                Number.parseFloat(operacaoMecanizadaData.horaFinal) <=
+                  Number.parseFloat(operacaoMecanizadaData.horaInicial)) &&
+                styles.disabledButton,
+            ]}
             onPress={() => {
-              if (isCustoMaoDeObraValid()) {
-                setCustoMaoDeObraModalVisible(false)
-              } else {
-                Alert.alert("Atenção", "Preencha todos os campos obrigatórios!")
+              if (
+                operacaoMecanizadaData.bem &&
+                operacaoMecanizadaData.implemento &&
+                operacaoMecanizadaData.horaInicial &&
+                operacaoMecanizadaData.horaFinal &&
+                Number.parseFloat(operacaoMecanizadaData.horaFinal) >
+                  Number.parseFloat(operacaoMecanizadaData.horaInicial)
+              ) {
+                addSelectedOperacaoMecanizada(operacaoMecanizadaData)
+                setOperacaoMecanizadaModalVisible(false)
               }
             }}
-            accessibilityLabel="Salvar e sair do lançamento de mão de obra"
-            accessibilityHint="Toque para salvar e sair do lançamento de mão de obra"
-            disabled={!isCustoMaoDeObraValid()}
+            disabled={
+              !operacaoMecanizadaData.bem ||
+              !operacaoMecanizadaData.implemento ||
+              !operacaoMecanizadaData.horaInicial ||
+              !operacaoMecanizadaData.horaFinal ||
+              Number.parseFloat(operacaoMecanizadaData.horaFinal) <=
+                Number.parseFloat(operacaoMecanizadaData.horaInicial)
+            }
+            accessibilityLabel="Adicionar operação mecanizada"
+            accessibilityHint="Toque para adicionar a operação mecanizada e fechar o modal"
           >
-            <Text style={styles.buttonText}>Salvar e Sair</Text>
+            <Text style={styles.buttonText}>Adicionar Operação</Text>
           </TouchableOpacity>
         </>,
       )}
     </SafeAreaView>
   )
 }
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
-    backgroundColor: "#F0F4F8",
+    padding: 20,
+    backgroundColor: "#FFFFFF",
   },
   label: {
-    fontSize: 16,
-    fontWeight: "bold",
+    fontSize: 14,
     marginBottom: 8,
-    color: "#2C3E50",
+    color: "#2a9d8f",
+    textTransform: "uppercase",
+    fontWeight: "bold",
   },
   input: {
-    height: 40,
-    borderColor: "#B2BABB",
+    height: 50,
+    borderColor: "#2a9d8f",
     borderWidth: 1,
-    borderRadius: 4,
-    paddingHorizontal: 8,
+    borderRadius: 8,
+    paddingHorizontal: 16,
     marginBottom: 16,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F5F5F5",
+    fontSize: 16,
+    color: "#333333",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   disabledInput: {
-    backgroundColor: "#EAECEE",
-  },
-  dropdownContainer: {
-    borderWidth: 1,
-    borderColor: "#B2BABB",
-    borderRadius: 4,
-    marginBottom: 16,
-    backgroundColor: "#FFFFFF",
-  },
-  picker: {
-    height: 40,
+    backgroundColor: "#F5F5F5",
+    color: "#666666",
   },
   datePickerText: {
     fontSize: 16,
-    color: "#2C3E50",
+    color: "#333333",
+    paddingVertical: 12,
   },
   modalButton: {
-    backgroundColor: "#3498DB",
-    padding: 12,
-    borderRadius: 4,
+    backgroundColor: "#F5F5F5",
+    padding: 16,
+    borderRadius: 8,
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: "#2a9d8f",
   },
   buttonEnviar: {
-    backgroundColor: "#2ECC71",
-    padding: 12,
-    borderRadius: 4,
+    backgroundColor: "#2a9d8f",
+    padding: 16,
+    borderRadius: 8,
     alignItems: "center",
     marginTop: 16,
+    marginBottom: 24,
   },
   buttonText: {
+    color: "#333333",
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  buttonTextEnviar: {
     color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: "bold",
+    fontWeight: "600",
   },
   modalContainer: {
     flex: 1,
@@ -872,84 +776,93 @@ const styles = StyleSheet.create({
   modalContent: {
     backgroundColor: "#FFFFFF",
     borderRadius: 8,
-    padding: 16,
-    margin: 16,
+    padding: 20,
+    margin: 20,
+    maxHeight: "80%",
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 24,
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: "bold",
-    color: "#2C3E50",
+    fontWeight: "600",
+    color: "#333333",
   },
   closeButton: {
     padding: 8,
   },
   button: {
-    backgroundColor: "#3498DB",
-    padding: 12,
-    borderRadius: 4,
+    backgroundColor: "#2a9d8f",
+    padding: 16,
+    borderRadius: 8,
     alignItems: "center",
     marginTop: 16,
   },
   disabledButton: {
-    backgroundColor: "#B2BABB",
+    backgroundColor: "#E5E5E5",
   },
   selectedItem: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#ECF0F1",
-    padding: 8,
-    borderRadius: 4,
+    backgroundColor: "#F5F5F5",
+    padding: 12,
+    borderRadius: 8,
     marginBottom: 8,
   },
-  summaryContainer: {
-    backgroundColor: "#ECF0F1",
+  separator: {
+    height: 1,
+    backgroundColor: "#E5E5E5",
+    marginVertical: 8,
+    marginHorizontal: 20,
+  },
+  listItem: {
     padding: 16,
-    borderRadius: 4,
-    marginTop: 16,
-  },
-  summaryTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 8,
-    color: "#2C3E50",
-  },
-  summaryItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 4,
-  },
-  summaryLabel: {
-    fontSize: 14,
-    color: "#7F8C8D",
-  },
-  summaryValue: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#2C3E50",
-  },
-  searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 16,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#B2BABB",
-    borderRadius: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E5E5",
+    marginVertical: 4,
   },
   searchInput: {
-    flex: 1,
     height: 40,
-    paddingHorizontal: 8,
+    borderColor: "#2a9d8f",
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    backgroundColor: "#FFFFFF",
+    fontSize: 16,
+    color: "#333333",
   },
-  searchIcon: {
-    padding: 8,
+  flatList: {
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  calculatedHours: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F5F5F5",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  hoursValue: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#2a9d8f",
+  },
+  selectedItemsContainer: {
+    marginBottom: 16,
+  },
+  selectedItemTitle: {
+    fontWeight: "bold",
+  },
+  selectedItemSubtitle: {
+    color: "#666",
+    marginBottom: 4,
   },
 })
 

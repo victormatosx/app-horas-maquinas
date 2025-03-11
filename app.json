@@ -2,27 +2,29 @@
   "expo": {
     "name": "App Apontamentos",
     "slug": "app-horas-maquinas",
-    "version": "1.0.0",
+    "version": "1.0.3", 
     "orientation": "portrait",
     "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "buildNumber": "5" 
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/logo.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.victormatos1.apphorasmaquinas"
+      "package": "com.victormatos1.apphorasmaquinas",
+      "versionCode": 5 
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/logo.png"
     },
     "owner": "victormatos1",
     "extra": {
