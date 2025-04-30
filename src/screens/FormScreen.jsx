@@ -16,7 +16,7 @@ import {
 } from "react-native"
 import DateTimePickerModal from "react-native-modal-datetime-picker"
 import { database } from "../config/firebaseConfig"
-import { ref, push, set, onValue, query, orderByChild, equalTo, get } from "firebase/database"
+import { ref, push, set, onValue, query, orderByChild, equalTo, get, update, remove } from "firebase/database"
 import { X, Trash2, ChevronDown } from "lucide-react-native"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import NetInfo from "@react-native-community/netinfo"
@@ -28,6 +28,7 @@ import { onAuthStateChanged } from "firebase/auth"
 const USER_TOKEN_KEY = "@user_token"
 const USER_PROPRIEDADE_KEY = "@user_propriedade"
 const OFFLINE_STORAGE_KEY = "@offline_apontamentos"
+const PREVIOUS_HORIMETROS_KEY = "@previous_horimetros"
 
 const initialFormData = {
   fichaControle: "",
@@ -40,14 +41,13 @@ const initialFormData = {
 
 export default function FormScreen() {
   const [formData, setFormData] = useState(initialFormData)
-  // Add the following state variables after the abastecimentoData state declaration
   const [operacaoMecanizadaModalVisible, setOperacaoMecanizadaModalVisible] = useState(false)
   const [operacaoMecanizadaData, setOperacaoMecanizadaData] = useState({
     bem: "",
     implemento: "",
-    horaInicial: "",
     horaFinal: "",
   })
+  const [previousHorimetros, setPreviousHorimetros] = useState({})
   const [selectedOperacoesMecanizadas, setSelectedOperacoesMecanizadas] = useState([])
   const [isDatePickerVisible, setDatePickerVisible] = useState(false)
   const [bens, setBens] = useState([])
@@ -63,14 +63,86 @@ export default function FormScreen() {
   const [isAuthInitialized, setIsAuthInitialized] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
+  const [isHorimetrosLoading, setIsHorimetrosLoading] = useState(true)
 
   const isMounted = useRef(true)
+
+  const isFormValid = useCallback(() => {
+    const requiredFields = ["fichaControle", "data", "atividade"]
+    return requiredFields.every((field) => formData[field] && formData[field].trim() !== "")
+  }, [formData])
+
+  const resetForm = useCallback(() => {
+    setFormData(initialFormData)
+    setOperacaoMecanizadaData({
+      bem: "",
+      implemento: "",
+      horaFinal: "",
+    })
+    setSelectedOperacoesMecanizadas([])
+  }, [])
 
   useEffect(() => {
     return () => {
       isMounted.current = false
     }
   }, [])
+
+  // Carregar horímetros do Firebase em vez do AsyncStorage
+  useEffect(() => {
+    if (!userPropriedade) return
+
+    const loadHorimetrosFromFirebase = () => {
+      try {
+        setIsHorimetrosLoading(true)
+        const horimetrosRef = ref(database, `propriedades/${userPropriedade}/horimetros`)
+
+        // Configurar listener para atualizações em tempo real
+        const unsubscribe = onValue(
+          horimetrosRef,
+          (snapshot) => {
+            if (isMounted.current) {
+              const data = snapshot.val() || {}
+              setPreviousHorimetros(data)
+              setIsHorimetrosLoading(false)
+            }
+          },
+          (error) => {
+            console.error("Erro ao carregar horímetros do Firebase:", error)
+            setIsHorimetrosLoading(false)
+
+            // Fallback para dados locais em caso de erro
+            loadLocalHorimetros()
+          },
+        )
+
+        return unsubscribe
+      } catch (error) {
+        console.error("Erro ao configurar listener para horímetros:", error)
+        setIsHorimetrosLoading(false)
+
+        // Fallback para dados locais em caso de erro
+        loadLocalHorimetros()
+      }
+    }
+
+    const loadLocalHorimetros = async () => {
+      try {
+        const storedHorimetros = await AsyncStorage.getItem(PREVIOUS_HORIMETROS_KEY)
+        if (storedHorimetros) {
+          setPreviousHorimetros(JSON.parse(storedHorimetros))
+        }
+      } catch (error) {
+        console.error("Erro ao carregar horímetros locais:", error)
+      }
+    }
+
+    const unsubscribe = loadHorimetrosFromFirebase()
+
+    return () => {
+      if (unsubscribe) unsubscribe()
+    }
+  }, [userPropriedade])
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
@@ -167,31 +239,180 @@ export default function FormScreen() {
     setDatePickerVisible(false)
   }, [])
 
-  const handleChange = useCallback((name, value) => setFormData((prev) => ({ ...prev, [name]: value })), [])
+  const handleChange = useCallback((name, value) => {
+    if (name === "direcionador") {
+      const selectedDirecionador = DIRECIONADOR.find((d) => d.id === value)
+      let cultura = ""
 
-  // Add these handler functions after the handleAbastecimentoChange function
-  const handleOperacaoMecanizadaChange = useCallback((name, value) => {
-    setOperacaoMecanizadaData((prev) => ({ ...prev, [name]: value }))
+      if (selectedDirecionador) {
+        const direcionadorName = selectedDirecionador.name.toLowerCase()
+        if (direcionadorName.includes("alh")) {
+          cultura = "alho"
+        } else if (direcionadorName.includes("ceb")) {
+          cultura = "cebola"
+        } else if (direcionadorName.includes("sorgo")) {
+          cultura = "sorgo"
+        }
+      }
+
+      return setFormData((prev) => ({ ...prev, [name]: value, cultura }))
+    }
+
+    return setFormData((prev) => ({ ...prev, [name]: value }))
   }, [])
 
-  const addSelectedOperacaoMecanizada = useCallback((operacao) => {
-    // Calculate total hours
-    const horaInicial = Number.parseFloat(operacao.horaInicial) || 0
-    const horaFinal = Number.parseFloat(operacao.horaFinal) || 0
-    const totalHoras = horaFinal > horaInicial ? (horaFinal - horaInicial).toFixed(2) : 0
+  const handleOperacaoMecanizadaChange = useCallback(
+    (name, value) => {
+      setOperacaoMecanizadaData((prev) => {
+        // Se o campo alterado for "bem", resetamos o horaFinal
+        if (name === "bem") {
+          return { ...prev, [name]: value, horaFinal: "" }
+        }
 
-    setSelectedOperacoesMecanizadas((prev) => [...prev, { ...operacao, id: Date.now(), totalHoras }])
-    setOperacaoMecanizadaData({
-      bem: "",
-      implemento: "",
-      horaInicial: "",
-      horaFinal: "",
-    })
-  }, [])
+        // Não validamos mais aqui, apenas atualizamos o valor
+        return { ...prev, [name]: value }
+      })
+    },
+    [previousHorimetros],
+  )
 
-  const removeSelectedOperacaoMecanizada = useCallback((id) => {
-    setSelectedOperacoesMecanizadas((prev) => prev.filter((item) => item.id !== id))
-  }, [])
+  // Função para salvar os horímetros atualizados no Firebase
+  const saveHorimetrosToFirebase = async (updatedHorimetros) => {
+    if (!userPropriedade) {
+      console.error("Propriedade não definida, não é possível salvar horímetros")
+      return false
+    }
+
+    try {
+      const horimetrosRef = ref(database, `propriedades/${userPropriedade}/horimetros`)
+      await update(horimetrosRef, updatedHorimetros)
+
+      // Também salva localmente como backup
+      await AsyncStorage.setItem(PREVIOUS_HORIMETROS_KEY, JSON.stringify(updatedHorimetros))
+      return true
+    } catch (error) {
+      console.error("Erro ao salvar horímetros no Firebase:", error)
+
+      // Em caso de falha, salva apenas localmente
+      try {
+        await AsyncStorage.setItem(PREVIOUS_HORIMETROS_KEY, JSON.stringify(updatedHorimetros))
+      } catch (localError) {
+        console.error("Erro ao salvar horímetros localmente:", localError)
+      }
+      return false
+    }
+  }
+
+  const addSelectedOperacaoMecanizada = useCallback(
+    async (operacao) => {
+      // Obter o horímetro anterior para este bem
+      const horaInicial = previousHorimetros[operacao.bem] || "0.00"
+
+      // Calcular total de horas
+      const horaFinal = Number.parseFloat(operacao.horaFinal) || 0
+      const horaInicialNum = Number.parseFloat(horaInicial) || 0
+      const totalHoras = horaFinal > horaInicialNum ? (horaFinal - horaInicialNum).toFixed(2) : "0.00"
+
+      // Adicionar à lista de operações selecionadas
+      setSelectedOperacoesMecanizadas((prev) => [
+        ...prev,
+        {
+          ...operacao,
+          id: Date.now(),
+          horaInicial,
+          totalHoras,
+        },
+      ])
+
+      // Atualizar o horímetro anterior para este bem
+      const updated = { ...previousHorimetros, [operacao.bem]: operacao.horaFinal }
+
+      // Salvar no Firebase e atualizar o estado local
+      const saved = await saveHorimetrosToFirebase(updated)
+      if (saved) {
+        setPreviousHorimetros(updated)
+      } else {
+        // Se falhar ao salvar no Firebase, pelo menos atualiza localmente
+        setPreviousHorimetros(updated)
+        Alert.alert(
+          "Atenção",
+          "Horímetro salvo apenas localmente. A sincronização com outros dispositivos ocorrerá quando houver conexão.",
+        )
+      }
+
+      // Resetar o formulário de operação mecanizada
+      setOperacaoMecanizadaData({
+        bem: "",
+        implemento: "",
+        horaFinal: "",
+      })
+    },
+    [previousHorimetros, userPropriedade],
+  )
+
+  // Função simplificada para remover horímetros do Firebase
+  const removeSelectedOperacaoMecanizada = useCallback(
+    async (id) => {
+      try {
+        // Encontrar a operação que será removida
+        const operacaoParaRemover = selectedOperacoesMecanizadas.find((item) => item.id === id)
+
+        if (!operacaoParaRemover || !userPropriedade) {
+          console.error("Operação não encontrada ou propriedade não definida")
+          return
+        }
+
+        // Remover da lista local primeiro
+        setSelectedOperacoesMecanizadas((prev) => prev.filter((item) => item.id !== id))
+
+        // Verificar se existem outras operações para o mesmo bem
+        const outrasOperacoesDoMesmoBem = selectedOperacoesMecanizadas.filter(
+          (item) => item.id !== id && item.bem === operacaoParaRemover.bem,
+        )
+
+        // Referência para o nó específico do horímetro no Firebase
+        const horimetroRef = ref(database, `propriedades/${userPropriedade}/horimetros/${operacaoParaRemover.bem}`)
+
+        if (outrasOperacoesDoMesmoBem.length === 0) {
+          // Se não houver outras operações, remover o horímetro completamente
+          await remove(horimetroRef)
+
+          // Atualizar o estado local
+          const updatedHorimetros = { ...previousHorimetros }
+          delete updatedHorimetros[operacaoParaRemover.bem]
+          setPreviousHorimetros(updatedHorimetros)
+
+          // Atualizar o AsyncStorage
+          await AsyncStorage.setItem(PREVIOUS_HORIMETROS_KEY, JSON.stringify(updatedHorimetros))
+
+          console.log(`Horímetro para o bem ${operacaoParaRemover.bem} removido com sucesso`)
+        } else {
+          // Se houver outras operações, encontrar o valor anterior
+          // Usamos o horaInicial da operação que está sendo removida como valor a restaurar
+          const valorAnterior = operacaoParaRemover.horaInicial
+
+          // Atualizar o Firebase com o valor anterior
+          await set(horimetroRef, valorAnterior)
+
+          // Atualizar o estado local
+          const updatedHorimetros = {
+            ...previousHorimetros,
+            [operacaoParaRemover.bem]: valorAnterior,
+          }
+          setPreviousHorimetros(updatedHorimetros)
+
+          // Atualizar o AsyncStorage
+          await AsyncStorage.setItem(PREVIOUS_HORIMETROS_KEY, JSON.stringify(updatedHorimetros))
+
+          console.log(`Horímetro para o bem ${operacaoParaRemover.bem} restaurado para ${valorAnterior}`)
+        }
+      } catch (error) {
+        console.error("Erro ao remover/atualizar horímetro:", error)
+        Alert.alert("Erro", "Não foi possível remover o horímetro. Tente novamente.")
+      }
+    },
+    [selectedOperacoesMecanizadas, userPropriedade, previousHorimetros],
+  )
 
   const sendDataToFirebase = useCallback(
     async (apontamentoData) => {
@@ -296,23 +517,6 @@ export default function FormScreen() {
     }
   }, [formData, userId, userPropriedade, sendDataToFirebase, isFormValid, resetForm, selectedOperacoesMecanizadas])
 
-  const isFormValid = useCallback(() => {
-    const requiredFields = ["fichaControle", "data", "atividade"]
-    return requiredFields.every((field) => formData[field] && formData[field].trim() !== "")
-  }, [formData])
-
-  // Also update the resetForm function to reset the operacoesMecanizadas state
-  const resetForm = useCallback(() => {
-    setFormData(initialFormData)
-    setOperacaoMecanizadaData({
-      bem: "",
-      implemento: "",
-      horaInicial: "",
-      horaFinal: "",
-    })
-    setSelectedOperacoesMecanizadas([])
-  }, [])
-
   const renderInputField = useCallback(
     (label, name, value, onChange, keyboardType = "default", editable = true) => (
       <View>
@@ -396,7 +600,6 @@ export default function FormScreen() {
 
   const Separator = useCallback(() => <View style={styles.separator} />, [])
 
-  // Add the openListModal function to include bem and implemento types
   const openListModal = useCallback((type) => {
     setListModalType(type)
     setListModalData(
@@ -406,13 +609,11 @@ export default function FormScreen() {
           ? TANQUEDIESEL
           : type === "direcionador"
             ? DIRECIONADOR
-            : type === "cultura"
-              ? CULTURA
-              : type === "bem"
-                ? BENS
-                : type === "implemento"
-                  ? IMPLEMENTOS
-                  : ATIVIDADES,
+            : type === "bem"
+              ? BENS
+              : type === "implemento"
+                ? IMPLEMENTOS
+                : ATIVIDADES,
     )
     setSearchQuery("")
     setListModalVisible(true)
@@ -423,7 +624,6 @@ export default function FormScreen() {
     return listModalData.filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
   }, [listModalData, searchQuery])
 
-  // Update the renderListItem function to handle bem and implemento selections
   const renderListItem = useCallback(
     ({ item }) => (
       <TouchableOpacity
@@ -435,7 +635,7 @@ export default function FormScreen() {
             handleOperacaoMecanizadaChange(listModalType, item.id)
           } else if (listModalType === "bem" || listModalType === "implemento") {
             handleOperacaoMecanizadaChange(listModalType, item.id)
-          } else if (listModalType === "direcionador" || listModalType === "cultura") {
+          } else if (listModalType === "direcionador") {
             handleChange(listModalType, item.id)
           }
           setListModalVisible(false)
@@ -447,7 +647,6 @@ export default function FormScreen() {
     [listModalType, handleChange, handleOperacaoMecanizadaChange],
   )
 
-  // Update the renderListModal function to include bem and implemento types
   const renderListModal = useCallback(() => {
     return (
       <Modal visible={isListModalVisible} transparent={true} animationType="slide">
@@ -462,13 +661,11 @@ export default function FormScreen() {
                     ? "o Tanque de Diesel"
                     : listModalType === "direcionador"
                       ? "o Direcionador"
-                      : listModalType === "cultura"
-                        ? "a Cultura"
-                        : listModalType === "bem"
-                          ? "o Bem"
-                          : listModalType === "implemento"
-                            ? "o Implemento"
-                            : "a Atividade"}
+                      : listModalType === "bem"
+                        ? "o Bem"
+                        : listModalType === "implemento"
+                          ? "o Implemento"
+                          : "a Atividade"}
               </Text>
               <TouchableOpacity
                 onPress={() => setListModalVisible(false)}
@@ -539,14 +736,9 @@ export default function FormScreen() {
         </TouchableOpacity>
         <Separator />
         <Text style={styles.label}>Cultura</Text>
-        <TouchableOpacity
-          style={styles.input}
-          onPress={() => openListModal("cultura")}
-          accessibilityLabel="Selecionar Cultura"
-        >
-          <Text>{CULTURA.find((c) => c.id === formData.cultura)?.name || "Selecione a Cultura"}</Text>
-          <ChevronDown size={20} color="#2a9d8f" />
-        </TouchableOpacity>
+        <View style={[styles.input, styles.disabledInput]}>
+          <Text>{CULTURA.find((c) => c.id === formData.cultura)?.name || "Será definida pelo direcionador"}</Text>
+        </View>
         <Separator />
         <Text style={styles.label}>Atividade</Text>
         <TouchableOpacity
@@ -558,7 +750,6 @@ export default function FormScreen() {
           <ChevronDown size={20} color="#2a9d8f" />
         </TouchableOpacity>
         <Separator />
-        {/* Now add the Operações Mecanizadas section in the return statement */}
         <Text style={styles.label}>Operações Mecanizadas</Text>
         <TouchableOpacity
           style={styles.modalButton}
@@ -587,7 +778,6 @@ export default function FormScreen() {
         onCancel={() => setDatePickerVisible(false)}
       />
       {renderListModal()}
-      {/* Finally, add the modal for Operações Mecanizadas */}
       {renderModal(
         operacaoMecanizadaModalVisible,
         setOperacaoMecanizadaModalVisible,
@@ -602,6 +792,16 @@ export default function FormScreen() {
             <Text>{BENS.find((b) => b.id === operacaoMecanizadaData.bem)?.name || "Selecione o Bem"}</Text>
             <ChevronDown size={20} color="#2a9d8f" />
           </TouchableOpacity>
+
+          {operacaoMecanizadaData.bem && (
+            <View style={styles.horimetroAnteriorContainer}>
+              <Text style={styles.label}>Horímetro Anterior</Text>
+              <View style={styles.horimetroAnteriorValue}>
+                <Text style={styles.horimetroText}>{previousHorimetros[operacaoMecanizadaData.bem] || "0.00"}</Text>
+              </View>
+            </View>
+          )}
+
           <Text style={styles.label}>Implemento</Text>
           <TouchableOpacity
             style={styles.input}
@@ -613,34 +813,28 @@ export default function FormScreen() {
             </Text>
             <ChevronDown size={20} color="#2a9d8f" />
           </TouchableOpacity>
+
           {renderInputField(
-            "Hora Máquina Inicial",
-            "horaInicial",
-            operacaoMecanizadaData.horaInicial,
-            handleOperacaoMecanizadaChange,
-            "numeric",
-          )}
-          {renderInputField(
-            "Hora Máquina Final",
+            "Horímetro Atual",
             "horaFinal",
             operacaoMecanizadaData.horaFinal,
             handleOperacaoMecanizadaChange,
             "numeric",
           )}
-          {operacaoMecanizadaData.horaInicial && operacaoMecanizadaData.horaFinal && (
+
+          {operacaoMecanizadaData.bem && operacaoMecanizadaData.horaFinal && (
             <View style={styles.calculatedHours}>
               <Text style={styles.label}>Total de Horas:</Text>
               <Text style={styles.hoursValue}>
-                {Number.parseFloat(operacaoMecanizadaData.horaFinal) >
-                Number.parseFloat(operacaoMecanizadaData.horaInicial)
-                  ? (
-                      Number.parseFloat(operacaoMecanizadaData.horaFinal) -
-                      Number.parseFloat(operacaoMecanizadaData.horaInicial)
-                    ).toFixed(2)
-                  : "0.00"}
+                {(() => {
+                  const horaAnterior = Number.parseFloat(previousHorimetros[operacaoMecanizadaData.bem] || "0.00")
+                  const horaAtual = Number.parseFloat(operacaoMecanizadaData.horaFinal)
+                  return horaAtual > horaAnterior ? (horaAtual - horaAnterior).toFixed(2) : "0.00"
+                })()}
               </Text>
             </View>
           )}
+
           {selectedOperacoesMecanizadas.length > 0 && (
             <View style={styles.selectedItemsContainer}>
               <Text style={[styles.label, { marginTop: 16 }]}>Operações Adicionadas:</Text>
@@ -652,7 +846,7 @@ export default function FormScreen() {
                       {IMPLEMENTOS.find((i) => i.id === item.implemento)?.name}
                     </Text>
                     <Text>
-                      Horas: {item.horaInicial} - {item.horaFinal} = {item.totalHoras}
+                      Horas: {item.horaInicial} → {item.horaFinal} = {item.totalHoras}
                     </Text>
                   </View>
                   <TouchableOpacity onPress={() => removeSelectedOperacaoMecanizada(item.id)}>
@@ -662,37 +856,40 @@ export default function FormScreen() {
               ))}
             </View>
           )}
+
           <TouchableOpacity
             style={[
               styles.button,
               (!operacaoMecanizadaData.bem ||
                 !operacaoMecanizadaData.implemento ||
-                !operacaoMecanizadaData.horaInicial ||
                 !operacaoMecanizadaData.horaFinal ||
                 Number.parseFloat(operacaoMecanizadaData.horaFinal) <=
-                  Number.parseFloat(operacaoMecanizadaData.horaInicial)) &&
+                  Number.parseFloat(previousHorimetros[operacaoMecanizadaData.bem] || "0.00")) &&
                 styles.disabledButton,
             ]}
             onPress={() => {
-              if (
-                operacaoMecanizadaData.bem &&
-                operacaoMecanizadaData.implemento &&
-                operacaoMecanizadaData.horaInicial &&
-                operacaoMecanizadaData.horaFinal &&
-                Number.parseFloat(operacaoMecanizadaData.horaFinal) >
-                  Number.parseFloat(operacaoMecanizadaData.horaInicial)
-              ) {
-                addSelectedOperacaoMecanizada(operacaoMecanizadaData)
-                setOperacaoMecanizadaModalVisible(false)
+              if (operacaoMecanizadaData.bem && operacaoMecanizadaData.implemento && operacaoMecanizadaData.horaFinal) {
+                const horaAnterior = Number.parseFloat(previousHorimetros[operacaoMecanizadaData.bem] || "0.00")
+                const horaAtual = Number.parseFloat(operacaoMecanizadaData.horaFinal)
+
+                if (horaAtual <= horaAnterior) {
+                  Alert.alert(
+                    "Valor inválido",
+                    "O horímetro atual não pode ser menor ou igual ao horímetro anterior. Por favor, insira um valor maior.",
+                    [{ text: "OK" }],
+                  )
+                } else {
+                  addSelectedOperacaoMecanizada(operacaoMecanizadaData)
+                  setOperacaoMecanizadaModalVisible(false)
+                }
               }
             }}
             disabled={
               !operacaoMecanizadaData.bem ||
               !operacaoMecanizadaData.implemento ||
-              !operacaoMecanizadaData.horaInicial ||
               !operacaoMecanizadaData.horaFinal ||
               Number.parseFloat(operacaoMecanizadaData.horaFinal) <=
-                Number.parseFloat(operacaoMecanizadaData.horaInicial)
+                Number.parseFloat(previousHorimetros[operacaoMecanizadaData.bem] || "0.00")
             }
             accessibilityLabel="Adicionar operação mecanizada"
             accessibilityHint="Toque para adicionar a operação mecanizada e fechar o modal"
@@ -709,7 +906,24 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#f5f5f5",
+  },
+  header: {
+    backgroundColor: "#f5f5f5",
+    padding: 12,
+    paddingTop: 25,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  headerTitle: {
+    color: "#2a9d8f",
+    fontSize: 20,
+    fontWeight: "bold",
+  },
+  backButton: {
+    padding: 8,
   },
   label: {
     fontSize: 14,
@@ -725,7 +939,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 16,
     marginBottom: 16,
-    backgroundColor: "#F5F5F5",
+    backgroundColor: "#FFFFFF",
     fontSize: 16,
     color: "#333333",
     flexDirection: "row",
@@ -733,8 +947,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   disabledInput: {
-    backgroundColor: "#F5F5F5",
-    color: "#666666",
+    backgroundColor: "#F0F8F7",
+    color: "#2a9d8f",
+    borderStyle: "dashed",
   },
   datePickerText: {
     fontSize: 16,
@@ -742,7 +957,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   modalButton: {
-    backgroundColor: "#F5F5F5",
+    backgroundColor: "#FFFFFF",
     padding: 16,
     borderRadius: 8,
     alignItems: "center",
@@ -808,7 +1023,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#F5F5F5",
+    backgroundColor: "#FFFFFF",
     padding: 12,
     borderRadius: 8,
     marginBottom: 8,
@@ -844,13 +1059,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#F5F5F5",
+    backgroundColor: "#F0F8F7",
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#2a9d8f",
   },
   hoursValue: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "bold",
     color: "#2a9d8f",
   },
@@ -864,5 +1081,22 @@ const styles = StyleSheet.create({
     color: "#666",
     marginBottom: 4,
   },
+  horimetroAnteriorContainer: {
+    marginBottom: 16,
+  },
+  horimetroAnteriorValue: {
+    backgroundColor: "#F0F8F7",
+    borderWidth: 1,
+    borderColor: "#2a9d8f",
+    borderStyle: "dashed",
+    borderRadius: 8,
+    padding: 12,
+    height: 50,
+    justifyContent: "center",
+  },
+  horimetroText: {
+    fontSize: 16,
+    color: "#2a9d8f",
+    fontWeight: "bold",
+  },
 })
-

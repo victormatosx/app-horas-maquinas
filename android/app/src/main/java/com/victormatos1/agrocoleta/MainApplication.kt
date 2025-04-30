@@ -1,4 +1,4 @@
-package com.victormatos1.apphorasmaquinas
+package com.victormatos1.agrocoleta
 
 import android.app.Application
 import android.content.res.Configuration

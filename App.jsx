@@ -1,3 +1,5 @@
+"use client"
+
 import { useEffect } from "react"
 import { NavigationContainer } from "@react-navigation/native"
 import { createNativeStackNavigator } from "@react-navigation/native-stack"
@@ -9,10 +11,23 @@ import HomeScreen from "./src/screens/HomeScreen"
 import FormScreen from "./src/screens/FormScreen"
 import RegisterScreen from "./src/screens/RegisterScreen"
 import AdminPanelScreen from "./src/screens/AdminPanelScreen"
+import OpeningScreen from "./src/screens/OpeningScreen"
+import VeiculosScreen from "./src/screens/VeiculosScreen"
+import FormVeiculosScreen from "./src/screens/FormVeiculosScreen"
 import NetInfo from "@react-native-community/netinfo"
 import { checkConnectivityAndSync } from "./src/utils/offlineManager"
 
 const Stack = createNativeStackNavigator()
+
+// Define COLORS here so it's available to the entire app
+export const COLORS = {
+  background: "#f0f0f0",
+  text: "#333333",
+  textLight: "#777777",
+  vehicle: {
+    primary: "#2a9d8f",
+  }
+}
 
 export default function App() {
   useEffect(() => {
@@ -47,7 +62,10 @@ export default function App() {
           >
             <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Register" component={RegisterScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Opening" component={OpeningScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Veiculos" component={VeiculosScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="FormVeiculos" component={FormVeiculosScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Formulario" component={FormScreen} options={{ title: "Novo Apontamento" }} />
             <Stack.Screen name="AdminPanel" component={AdminPanelScreen} options={{ title: "Admin Panel" }} />
           </Stack.Navigator>
@@ -56,4 +74,3 @@ export default function App() {
     </GestureHandlerRootView>
   )
 }
-

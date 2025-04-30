@@ -109,13 +109,13 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.victormatos1.apphorasmaquinas'
+    namespace 'com.victormatos1.agrocoleta'
     defaultConfig {
-        applicationId 'com.victormatos1.apphorasmaquinas'
+        applicationId 'com.victormatos1.agrocoleta'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 4
-        versionName "1.0.1"
+        versionCode 14
+        versionName "1.0.3"
     }
     signingConfigs {
         debug {

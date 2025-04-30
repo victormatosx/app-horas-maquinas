@@ -23,7 +23,7 @@ import { database, auth } from "../config/firebaseConfig"
 import { ref, onValue, off, query, orderByChild, equalTo, push, set as dbSet } from "firebase/database"
 import { signOut } from "firebase/auth"
 import { checkConnectivityAndSync } from "../utils/offlineManager"
-import { PRODUTOS, TANQUEDIESEL } from "./assets"
+import { PRODUTOS, TANQUEDIESEL, BENS, IMPLEMENTOS } from "./assets"
 import NetInfo from "@react-native-community/netinfo"
 
 const USER_TOKEN_KEY = "@user_token"
@@ -51,6 +51,7 @@ export default function HomeScreen() {
     quantidade: "",
     horimetro: "",
     tanqueDiesel: "",
+    bem: "",
   })
   const [listModalVisible, setListModalVisible] = useState(false)
   const [listModalType, setListModalType] = useState("")
@@ -217,7 +218,7 @@ export default function HomeScreen() {
             <Text style={styles.data}>{new Date(item.timestamp).toLocaleDateString("pt-BR")}</Text>
           </View>
           <Text style={styles.responsavel}>{usersMap[item.userId] || "Não especificado"}</Text>
-          <Text style={styles.direcionador}>Produto: {item.produto}</Text>
+          <Text style={styles.direcionador}>Combustível: {item.produto}</Text>
         </TouchableOpacity>
       )
     }
@@ -291,9 +292,11 @@ export default function HomeScreen() {
       <View style={styles.abastecimentoContainer}>
         <Text style={styles.abastecimentoTitle}>Detalhes do Abastecimento</Text>
         {renderDetailItem("Tanque", abastecimento.tanqueDiesel)}
-        {renderDetailItem("Produto", abastecimento.produto)}
+        {renderDetailItem("Combustível", abastecimento.produto)}
         {renderDetailItem("Quantidade", `${abastecimento.quantidade} L`)}
         {renderDetailItem("Horímetro", abastecimento.horimetro)}
+        {renderDetailItem("Máquina", abastecimento.bem || "-")}
+        {renderDetailItem("Implemento", abastecimento.implemento || "-")}
         {renderDetailItem("Responsável", usersMap[abastecimento.userId] || "Não especificado")}
         {renderDetailItem("Data", new Date(abastecimento.timestamp).toLocaleString("pt-BR"))}
         {renderDetailItem("Status", abastecimento.status)}
@@ -308,7 +311,15 @@ export default function HomeScreen() {
 
   const openListModal = (type) => {
     setListModalType(type)
-    setListModalData(type === "produto" ? PRODUTOS : TANQUEDIESEL)
+    if (type === "produto") {
+      setListModalData(PRODUTOS)
+    } else if (type === "tanqueDiesel") {
+      setListModalData(TANQUEDIESEL)
+    } else if (type === "bem") {
+      setListModalData(BENS)
+    } else if (type === "implemento") {
+      setListModalData(IMPLEMENTOS)
+    }
     setSearchQuery("")
     setListModalVisible(true)
   }
@@ -363,7 +374,8 @@ export default function HomeScreen() {
       !abastecimentoData.produto ||
       !abastecimentoData.quantidade ||
       !abastecimentoData.tanqueDiesel ||
-      !abastecimentoData.horimetro
+      !abastecimentoData.horimetro ||
+      !abastecimentoData.bem
     ) {
       Alert.alert("Atenção", "Preencha todos os campos obrigatórios!")
       return
@@ -376,6 +388,7 @@ export default function HomeScreen() {
         produto: PRODUTOS.find((p) => p.id === abastecimentoData.produto)?.name || abastecimentoData.produto,
         tanqueDiesel:
           TANQUEDIESEL.find((t) => t.id === abastecimentoData.tanqueDiesel)?.name || abastecimentoData.tanqueDiesel,
+        bem: BENS.find((b) => b.id === abastecimentoData.bem)?.name || abastecimentoData.bem,
         timestamp: Date.now(),
         userId: userId, // This ensures the logged-in user's ID is stored
         propriedade: userPropriedade,
@@ -396,6 +409,7 @@ export default function HomeScreen() {
           quantidade: "",
           horimetro: "",
           tanqueDiesel: "",
+          bem: "",
         })
       } else {
         // Salvar offline para sincronização posterior
@@ -407,6 +421,7 @@ export default function HomeScreen() {
           quantidade: "",
           horimetro: "",
           tanqueDiesel: "",
+          bem: "",
         })
       }
     } catch (error) {
@@ -422,12 +437,9 @@ export default function HomeScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { flex: 1, textAlign: "center" }]}>
-                Selecione {listModalType === "produto" ? "o Produto" : "o Tanque de Diesel"}
+                Selecione {listModalType === "produto" ? "o Combustível" : "o Tanque"}
               </Text>
-              <TouchableOpacity
-                onPress={() => setListModalVisible(false)}
-                style={[styles.closeButton, { position: "absolute", right: 0 }]}
-              >
+              <TouchableOpacity onPress={() => setListModalVisible(false)} style={{ position: "absolute", right: 0 }}>
                 <Icon name="close" size={24} color="#000" />
               </TouchableOpacity>
             </View>
@@ -566,7 +578,11 @@ export default function HomeScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#2a9d8f" />
 
       <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.navigate("Opening")} style={styles.backButton}>
+          <Icon name="arrow-back" size={24} color="#2a9d8f" />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Meus Apontamentos</Text>
+        <View style={{ width: 24 }} />
       </View>
 
       <View style={styles.container}>
@@ -578,28 +594,28 @@ export default function HomeScreen() {
             </TouchableOpacity>
             <TouchableOpacity style={styles.novoButton} onPress={() => navigation.navigate("Formulario")}>
               <Icon name="add-circle-outline" size={24} color="white" />
-              <Text style={styles.novoButtonText}>NOVO APONTAMENTO</Text>
+              <Text style={styles.novoButtonText}>APONTAMENTO</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.novoButton, { backgroundColor: "#e67e22", marginTop: 10 }]}
               onPress={() => setAbastecimentoModalVisible(true)}
             >
               <Icon name="water-outline" size={24} color="white" />
-              <Text style={styles.novoButtonText}>NOVO ABASTECIMENTO</Text>
+              <Text style={styles.novoButtonText}>ABASTECIMENTO</Text>
             </TouchableOpacity>
           </>
         ) : (
           <>
             <TouchableOpacity style={styles.novoButton} onPress={() => navigation.navigate("Formulario")}>
               <Icon name="add-circle-outline" size={24} color="white" />
-              <Text style={styles.novoButtonText}>NOVO APONTAMENTO</Text>
+              <Text style={styles.novoButtonText}>APONTAMENTO</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.novoButton, { backgroundColor: "#e67e22", marginTop: 10 }]}
               onPress={() => setAbastecimentoModalVisible(true)}
             >
               <Icon name="water-outline" size={24} color="white" />
-              <Text style={styles.novoButtonText}>NOVO ABASTECIMENTO</Text>
+              <Text style={styles.novoButtonText}>ABASTECIMENTO</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.filterButton} onPress={() => setFilterModalVisible(true)}>
@@ -696,26 +712,37 @@ export default function HomeScreen() {
             </View>
 
             <ScrollView style={styles.abastecimentoForm}>
-              <Text style={styles.label}>Produto</Text>
+              <Text style={styles.label}>Combustível</Text>
               <TouchableOpacity
                 style={styles.input}
                 onPress={() => openListModal("produto")}
-                accessibilityLabel="Selecionar Produto"
+                accessibilityLabel="Selecionar Combustível"
               >
-                <Text>{PRODUTOS.find((p) => p.id === abastecimentoData.produto)?.name || "Selecione o Produto"}</Text>
+                <Text>
+                  {PRODUTOS.find((p) => p.id === abastecimentoData.produto)?.name || "Selecione o Combustível"}
+                </Text>
                 <Icon name="chevron-down" size={20} color="#e67e22" />
               </TouchableOpacity>
 
-              <Text style={styles.label}>Tanque de Diesel</Text>
+              <Text style={styles.label}>Tanque</Text>
               <TouchableOpacity
                 style={styles.input}
                 onPress={() => openListModal("tanqueDiesel")}
-                accessibilityLabel="Selecionar Tanque de Diesel"
+                accessibilityLabel="Selecionar Tanque"
               >
                 <Text>
-                  {TANQUEDIESEL.find((t) => t.id === abastecimentoData.tanqueDiesel)?.name ||
-                    "Selecione o Tanque de Diesel"}
+                  {TANQUEDIESEL.find((t) => t.id === abastecimentoData.tanqueDiesel)?.name || "Selecione o Tanque"}
                 </Text>
+                <Icon name="chevron-down" size={20} color="#e67e22" />
+              </TouchableOpacity>
+
+              <Text style={styles.label}>Máquina</Text>
+              <TouchableOpacity
+                style={styles.input}
+                onPress={() => openListModal("bem")}
+                accessibilityLabel="Selecionar Máquina"
+              >
+                <Text>{BENS.find((b) => b.id === abastecimentoData.bem)?.name || "Selecione a Máquina"}</Text>
                 <Icon name="chevron-down" size={20} color="#e67e22" />
               </TouchableOpacity>
 
@@ -757,15 +784,20 @@ const styles = StyleSheet.create({
     backgroundColor: "#f5f5f5",
   },
   header: {
-    backgroundColor: "#2a9d8f",
+    backgroundColor: "#ffffff",
     padding: 12,
     paddingTop: 25,
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
   },
   headerTitle: {
-    color: "white",
+    color: "#2a9d8f",
     fontSize: 20,
     fontWeight: "bold",
+  },
+  backButton: {
+    padding: 8,
   },
   container: {
     flex: 1,
@@ -1162,4 +1194,3 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 })
-

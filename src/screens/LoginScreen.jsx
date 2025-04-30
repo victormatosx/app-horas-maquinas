@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from "react"
+"use client"
+
+import { useEffect, useState } from "react"
 import { View, Alert, SafeAreaView, ActivityIndicator } from "react-native"
 import { useNavigation } from "@react-navigation/native"
 import AsyncStorage from "@react-native-async-storage/async-storage"
@@ -24,7 +26,7 @@ export default function LoginScreen() {
         const userRole = await AsyncStorage.getItem(USER_ROLE_KEY)
         const userPropriedade = await AsyncStorage.getItem(USER_PROPRIEDADE_KEY)
         if (userToken && userRole && userPropriedade) {
-          navigation.replace("Home")
+          navigation.replace("Opening")
         }
       } catch (error) {
         console.error("Error checking user data:", error)
@@ -51,7 +53,7 @@ export default function LoginScreen() {
               await AsyncStorage.setItem(USER_TOKEN_KEY, user.uid)
               await AsyncStorage.setItem(USER_ROLE_KEY, propriedadeUserData.role)
               await AsyncStorage.setItem(USER_PROPRIEDADE_KEY, propriedadeEscolhida)
-              navigation.replace("Home")
+              navigation.replace("Opening")
             } else {
               console.error("User data not found in the specified propriedade")
               Alert.alert("Error", "User data not found. Please contact support.")
@@ -125,4 +127,3 @@ export default function LoginScreen() {
     </SafeAreaView>
   )
 }
-

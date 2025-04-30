@@ -16,6 +16,7 @@ export const BENS = [
 ]
 
 export const IMPLEMENTOS = [
+  { id: "1", name: "Sem Implemento" },
   { id: "193", name: "193 - 02 Micron" },
   { id: "30", name: "30 - Abastecedor de Pulverizador 6500 Mepel" },
   { id: "31", name: "31 - Abastecedor de Pulverizador 6500 Mepel" },
@@ -124,75 +125,167 @@ export const IMPLEMENTOS = [
   { id: "343", name: "343 - Uniporte Plus Terceirizado Somar" },
   { id: "58", name: "58 - Vincon - Dist de Adubos" },
 ]
-  
-  export const ATIVIDADES = [
-    { id: "75", name: "Abastecimento" },
-    { id: "125", name: "Abertura de Adutora" },
-    { id: "7", name: "Adubação" },
-    { id: "121", name: "Aplicar Biológico" },
-    { id: "27", name: "Beneficiamento" },
-    { id: "115", name: "Carregamento e Descarregamento" },
-    { id: "8", name: "Colheita" },
-    { id: "16", name: "Correção de Solo" },
-    { id: "5", name: "Dessecação" },
-    { id: "1", name: "Gradear" },
-    { id: "77", name: "Molhar Estrada" },
-    { id: "52", name: "Molhar Patio" },
-    { id: "88", name: "Manutenção Estrutural" },
-    { id: "15", name: "Manutenção Em Geral" },
-    { id: "102", name: "Manutenção Irrigação" },
-    { id: "74", name: "Manutenção Máquinas" },
-    { id: "2", name: "Nivelar" },
-    { id: "105", name: "Plantio" },
-    { id: "82", name: "Plantio de Alho" },
-    { id: "91", name: "Preparo de Solo" },
-    { id: "92", name: "Pulverizar" },
-    { id: "96", name: "Reflorestar" },
-    { id: "17", name: "Roçar" },
-    { id: "120", name: "Silo" },
-    { id: "10", name: "Subsolar" },
-    { id: "126", name: "Rotativar" },
-    { id: "124", name: "Terraplanagem" },
-    { id: "51", name: "Transporte de implementos" },
-    { id: "122", name: "Transporte de Insumos" },
-    { id: "76", name: "Tratamento de Semente" },
-    { id: "89", name: "Vigia/Guarda" }
-];
 
-  export const PRODUTOS = [
-    { id: "92", name: "Diesel" },
-  ]
+export const ATIVIDADES = [
+  { id: "75", name: "Abastecimento" },
+  { id: "125", name: "Abertura de Adutora" },
+  { id: "7", name: "Adubação" },
+  { id: "121", name: "Aplicar Biológico" },
+  { id: "27", name: "Beneficiamento" },
+  { id: "115", name: "Carregamento e Descarregamento" },
+  { id: "8", name: "Colheita" },
+  { id: "16", name: "Correção de Solo" },
+  { id: "5", name: "Dessecação" },
+  { id: "1", name: "Gradear" },
+  { id: "77", name: "Molhar Estrada" },
+  { id: "52", name: "Molhar Patio" },
+  { id: "88", name: "Manutenção Estrutural" },
+  { id: "15", name: "Manutenção Em Geral" },
+  { id: "102", name: "Manutenção Irrigação" },
+  { id: "74", name: "Manutenção Máquinas" },
+  { id: "2", name: "Nivelar" },
+  { id: "105", name: "Plantio" },
+  { id: "82", name: "Plantio de Alho" },
+  { id: "91", name: "Preparo de Solo" },
+  { id: "92", name: "Pulverizar" },
+  { id: "96", name: "Reflorestar" },
+  { id: "17", name: "Roçar" },
+  { id: "120", name: "Silo" },
+  { id: "10", name: "Subsolar" },
+  { id: "126", name: "Rotativar" },
+  { id: "124", name: "Terraplanagem" },
+  { id: "51", name: "Transporte de implementos" },
+  { id: "122", name: "Transporte de Insumos" },
+  { id: "76", name: "Tratamento de Semente" },
+  { id: "89", name: "Vigia/Guarda" },
+]
 
-  export const TANQUEDIESEL = [
-    { id: "17", name: "Tanque Diesel Formoso" },
-    { id: "3", name: "Tanque Diesel Matrice Sede" },
-    { id: "12", name: "Tanque Diesel Nascente do Rio Verde" },
-  ]
+export const PRODUTOS = [
+  { id: "92", name: "Diesel" },
+  { id: "1", name: "Gasolina" },
+  { id: "2", name: "Álcool" },
+]
 
-  export const CULTURA = [
-    { id: "alho", name: "Alho" },
-    { id: "beterraba", name: "Beterraba" },
-    { id: "cebola", name: "Cebola" },
-    { id: "cenoura", name: "Cenoura" },
-    { id: "soja", name: "Soja" },
-    { id: "milho", name: "Milho" },
-    { id: "brachiaria", name: "Brachiaria" },
-    { id: "milheto", name: "Milheto" },
-  ]
+export const TANQUEDIESEL = [
+  { id: "17", name: "Tanque Diesel Formoso" },
+  { id: "3", name: "Tanque Diesel Matrice Sede" },
+  { id: "12", name: "Tanque Diesel Nascente do Rio Verde" },
+  { id: "1", name: "Posto Externo" },
+]
 
+export const CULTURA = [
+  { id: "alho", name: "Alho" },
+  { id: "beterraba", name: "Beterraba" },
+  { id: "cebola", name: "Cebola" },
+  { id: "cenoura", name: "Cenoura" },
+  { id: "soja", name: "Soja" },
+  { id: "milho", name: "Milho" },
+  { id: "brachiaria", name: "Brachiaria" },
+  { id: "milheto", name: "Milheto" },
+  { id: "sorgo", name: "Sorgo" },
+]
 
-  export const DIRECIONADOR = [
-    { id: "500", name: "Tl 01 Ceb P03 Mat 2" },
-    { id: "501", name: "Tl 02 Ceb P03 Mat 2" },
-    { id: "502", name: "Tl 03 Ceb P03 Mat 2" },
-    { id: "503", name: "Tl 04 Ceb P08 Mat 2" },
-    { id: "510", name: "Tl 01 Alh 25 P04 Nasc" },
-    { id: "511", name: "Tl 02 Alh 25 P05 Nasc" },
-    { id: "512", name: "Tl 03 Alh 25 P06 Nasc" },
-    { id: "509", name: "Pivo 02 Sorgo Matrice 2 25 Nc" },
-    { id: "504", name: "Sequeiro Sorgo Matrice 2 2025 Nc" },
-  ]
+export const DIRECIONADOR = [
+  { id: "500", name: "Tl 01 Ceb P03 Mat 2" },
+  { id: "501", name: "Tl 02 Ceb P03 Mat 2" },
+  { id: "502", name: "Tl 03 Ceb P03 Mat 2" },
+  { id: "503", name: "Tl 04 Ceb P08 Mat 2" },
+  { id: "510", name: "Tl 01 Alh 25 P04 Nasc" },
+  { id: "511", name: "Tl 02 Alh 25 P05 Nasc" },
+  { id: "512", name: "Tl 03 Alh 25 P06 Nasc" },
+  { id: "509", name: "Pivo 02 Sorgo Matrice 2 25 Nc" },
+  { id: "504", name: "Sequeiro Sorgo Matrice 2 2025 Nc" },
+]
 
-
-
-  
+export const VEICULOS = [
+  {
+    id: "1",
+    placa: "SGY6A51",
+    modelo: "Amarok V6 Extreme Branca",
+  },
+  {
+    id: "2",
+    placa: "SGY-2E80",
+    modelo: "Fiat Toro Endurance Branca",
+  },
+  {
+    id: "3",
+    placa: "EGU-9G97",
+    modelo: "Fiat Toro Freedom Cinza",
+  },
+  {
+    id: "4",
+    placa: "FZA-8F10",
+    modelo: "Ford Cargo 2629",
+  },
+  {
+    id: "5",
+    placa: "REM-1F38",
+    modelo: "Gol 1.0",
+  },
+  {
+    id: "6",
+    placa: "SCK4H11",
+    modelo: "Nissan Frontier 2.3 Se At X4",
+  },
+  {
+    id: "7",
+    placa: "REP-1A91",
+    modelo: "Saveiro Cross Cd",
+  },
+  {
+    id: "8",
+    placa: "SCH-0E88",
+    modelo: "Strada Endurance",
+  },
+  {
+    id: "9",
+    placa: "SCH7C28",
+    modelo: "Strada Endurance",
+  },
+  {
+    id: "10",
+    placa: "SSQ6H40",
+    modelo: "Toyota Hilux Sw4",
+  },
+  {
+    id: "11",
+    placa: "PRQ2A75",
+    modelo: "R/IMAVE",
+  },
+  {
+    id: "12",
+    placa: "GXH5237",
+    modelo: "F4000",
+  },
+  {
+    id: "13",
+    placa: "PBM-8844",
+    modelo: "Honda Pop 110 - 02",
+  },
+  {
+    id: "14",
+    placa: "SCI-2H74",
+    modelo: "Moto Honda Pop 110i",
+  },
+  {
+    id: "15",
+    placa: "PAW-8787",
+    modelo: "Moto Honda Pop 110 - 01",
+  },
+  {
+    id: "16",
+    placa: "JPY4275",
+    modelo: "Moto Lander 250",
+  },
+  {
+    id: "17",
+    placa: "SCO1H97",
+    modelo: "Saveiro Cs Robust 1.6",
+  },
+  {
+    id: "18",
+    placa: "SSI3E83",
+    modelo: "I/Byd Song Plus GS DM",
+  },
+]
