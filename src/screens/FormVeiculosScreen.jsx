@@ -16,11 +16,17 @@ import {
 } from "react-native"
 import DateTimePickerModal from "react-native-modal-datetime-picker"
 import { database } from "../config/firebaseConfig"
-import { ref, push, set, onValue, query, orderByChild, equalTo, get } from "firebase/database"
+import { ref, push, set, query, orderByChild, equalTo, get, onValue, off } from "firebase/database"
 import { ChevronDown } from "lucide-react-native"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import NetInfo from "@react-native-community/netinfo"
-import { saveOfflineData, checkConnectivityAndSync } from "../utils/offlineManager"
+import {
+  saveOfflineData,
+  checkConnectivityAndSync,
+  cacheFirebaseData,
+  getCachedData,
+  CACHE_KEYS,
+} from "../utils/offlineManager"
 import { auth } from "../config/firebaseConfig"
 import { onAuthStateChanged } from "firebase/auth"
 import Icon from "react-native-vector-icons/Ionicons"
@@ -38,12 +44,13 @@ const COLORS = {
 
 const USER_TOKEN_KEY = "@user_token"
 const USER_PROPRIEDADE_KEY = "@user_propriedade"
-const OFFLINE_STORAGE_KEY = "@offline_percursos"
+const OFFLINE_PERCURSOS_KEY = "@offline_percursos"
 
 const initialFormData = {
   placa: "",
+  placaId: "", // Adicionado para armazenar o ID do veículo
+  veiculo: "", // Adicionado para armazenar o nome do veículo
   data: "",
-  kmAnterior: "",
   kmAtual: "",
   objetivo: "",
 }
@@ -63,18 +70,21 @@ export default function FormVeiculosScreen() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
   const [veiculos, setVeiculos] = useState([])
+  const [isConnected, setIsConnected] = useState(true)
+  const [selectedDate, setSelectedDate] = useState(new Date()) // Inicializado com a data atual
 
   const navigation = useNavigation()
   const route = useRoute()
   const isMounted = useRef(true)
 
   const isFormValid = useCallback(() => {
-    const requiredFields = ["placa", "data", "kmAnterior", "kmAtual", "objetivo"]
+    const requiredFields = ["placaId", "data", "kmAtual", "objetivo"] // Alterado para verificar placaId
     return requiredFields.every((field) => formData[field] && formData[field].trim() !== "")
   }, [formData])
 
   const resetForm = useCallback(() => {
     setFormData(initialFormData)
+    setSelectedDate(new Date()) // Reset para a data atual
   }, [])
 
   useEffect(() => {
@@ -83,12 +93,27 @@ export default function FormVeiculosScreen() {
     }
   }, [])
 
+  // Monitorar o estado da conexão
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      setIsConnected(state.isConnected)
+      if (state.isConnected) {
+        checkConnectivityAndSync()
+      }
+    })
+
+    return () => unsubscribe()
+  }, [])
+
   useEffect(() => {
     // Check if we have a vehicle from route params
     if (route.params?.veiculo) {
+      const veiculo = route.params.veiculo
       setFormData((prev) => ({
         ...prev,
-        placa: route.params.veiculo.placa,
+        placaId: veiculo.id, // Armazena o ID
+        placa: veiculo.placa, // Armazena a placa
+        veiculo: `${veiculo.modelo} (${veiculo.placa})`, // Armazena o nome completo
       }))
     }
   }, [route.params])
@@ -114,54 +139,84 @@ export default function FormVeiculosScreen() {
     return () => unsubscribeAuth()
   }, [])
 
+  // Carregar veículos do Firebase ou do cache
   useEffect(() => {
     if (!isAuthInitialized || !isAuthenticated || !userPropriedade) {
       return
     }
 
-    // Fetch vehicles
-    const veiculosRef = ref(database, `propriedades/${userPropriedade}/veiculos`)
-    onValue(veiculosRef, (snapshot) => {
-      const data = snapshot.val()
-      if (data) {
-        const veiculosArray = Object.entries(data).map(([key, value]) => ({
-          id: key,
-          ...value,
-        }))
-        setVeiculos(veiculosArray)
-      } else {
-        // Mock data if no vehicles exist
-        const mockVeiculos = [
-          {
-            id: "1",
-            placa: "ABC-1234",
-            modelo: "Toyota Hilux",
-          },
-          {
-            id: "2",
-            placa: "DEF-5678",
-            modelo: "Ford Ranger",
-          },
-          {
-            id: "3",
-            placa: "GHI-9012",
-            modelo: "Volkswagen Gol",
-          },
-          {
-            id: "4",
-            placa: "JKL-3456",
-            modelo: "Fiat Strada",
-          },
-        ]
-        setVeiculos(mockVeiculos)
+    setIsLoading(true)
+
+    const loadVeiculos = async () => {
+      try {
+        if (isConnected) {
+          const veiculosRef = ref(database, `propriedades/${userPropriedade}/veiculos`)
+
+          const veiculosListener = onValue(
+            veiculosRef,
+            (snapshot) => {
+              if (isMounted.current) {
+                const data = snapshot.val()
+                if (data) {
+                  const veiculosArray = Object.entries(data).map(([key, value]) => ({
+                    id: key,
+                    modelo: value.modelo,
+                    placa: value.placa,
+                  }))
+                  setVeiculos(veiculosArray)
+
+                  // Salvar em cache para uso offline
+                  cacheFirebaseData(veiculosArray, CACHE_KEYS.VEICULOS)
+                } else {
+                  setVeiculos([])
+                }
+                setIsLoading(false)
+              }
+            },
+            (error) => {
+              console.error("Error fetching vehicles:", error)
+              setError("Erro ao carregar veículos. Por favor, tente novamente.")
+              loadCachedVeiculos()
+            },
+          )
+
+          return () => {
+            off(veiculosRef, "value", veiculosListener)
+          }
+        } else {
+          // Carregar do cache se estiver offline
+          loadCachedVeiculos()
+        }
+      } catch (error) {
+        console.error("Erro ao configurar listener para veículos:", error)
+        loadCachedVeiculos()
       }
-      setIsLoading(false)
-    })
-  }, [isAuthInitialized, isAuthenticated, userPropriedade])
+    }
+
+    const loadCachedVeiculos = async () => {
+      try {
+        const cachedVeiculos = await getCachedData(CACHE_KEYS.VEICULOS)
+        if (cachedVeiculos) {
+          setVeiculos(cachedVeiculos)
+          console.log("Veículos carregados do cache")
+        } else {
+          setVeiculos([])
+          console.log("Nenhum veículo em cache")
+        }
+        setIsLoading(false)
+      } catch (error) {
+        console.error("Erro ao carregar veículos do cache:", error)
+        setIsLoading(false)
+        setError("Erro ao carregar veículos. Por favor, tente novamente.")
+      }
+    }
+
+    loadVeiculos()
+  }, [isAuthInitialized, isAuthenticated, userPropriedade, isConnected])
 
   useEffect(() => {
     const syncInterval = setInterval(async () => {
-      if (!isSyncing) {
+      if (!isSyncing && isConnected) {
         setIsSyncing(true)
         try {
           await checkConnectivityAndSync()
@@ -172,50 +227,31 @@ export default function FormVeiculosScreen() {
     }, 300000) // Check every 5 minutes
 
     return () => clearInterval(syncInterval)
-  }, [isSyncing])
+  }, [isSyncing, isConnected])
 
   const handleDateConfirm = useCallback((date) => {
-    const formattedDate = `${date.getDate().toString().padStart(2, "0")}/${(date.getMonth() + 1)
-      .toString()
-      .padStart(2, "0")}/${date.getFullYear()}`
-    setFormData((prev) => ({ ...prev, data: formattedDate }))
-    setDatePickerVisible(false)
+    try {
+      if (!date) {
+        console.warn("Data selecionada é nula ou indefinida")
+        setDatePickerVisible(false)
+        return
+      }
+      
+      const formattedDate = `${date.getDate().toString().padStart(2, "0")}/${(date.getMonth() + 1)
+        .toString()
+        .padStart(2, "0")}/${date.getFullYear()}`
+      
+      setFormData((prev) => ({ ...prev, data: formattedDate }))
+      setSelectedDate(date)
+      setDatePickerVisible(false)
+    } catch (error) {
+      console.error("Erro ao confirmar data:", error)
+      // Fechar o picker mesmo em caso de erro para evitar que o app trave
+      setDatePickerVisible(false)
+    }
   }, [])
 
   const handleChange = useCallback((name, value) => setFormData((prev) => ({ ...prev, [name]: value })), [])
-
-  // Função para formatar a placa no padrão brasileiro
-  const formatarPlaca = useCallback((placa) => {
-    // Remove todos os caracteres não alfanuméricos
-    const placaLimpa = placa.replace(/[^a-zA-Z0-9]/g, "").toUpperCase()
-
-    // Verifica se é o formato Mercosul (AAA0A00) ou formato antigo (AAA-0000)
-    if (placaLimpa.length <= 3) {
-      return placaLimpa
-    } else if (placaLimpa.length <= 7) {
-      // Verifica se é formato Mercosul (com letra na posição 4)
-      const isFormatoMercosul = /^[A-Z]{3}[0-9A-Z][0-9]{2}[0-9A-Z]?$/.test(placaLimpa)
-
-      if (isFormatoMercosul && placaLimpa.length >= 4) {
-        // Formato Mercosul: AAA0A00
-        return `${placaLimpa.substring(0, 3)}${placaLimpa.length > 3 ? placaLimpa.substring(3, 4) : ""}${
-          placaLimpa.length > 4 ? placaLimpa.substring(4, 6) : ""
-        }${placaLimpa.length > 6 ? placaLimpa.substring(6, 7) : ""}`
-      } else {
-        // Formato antigo: AAA-0000
-        return `${placaLimpa.substring(0, 3)}${placaLimpa.length > 3 ? "-" + placaLimpa.substring(3) : ""}`
-      }
-    }
-    return placaLimpa
-  }, [])
-
-  const handlePlacaChange = useCallback(
-    (value) => {
-      const placaFormatada = formatarPlaca(value)
-      setFormData((prev) => ({ ...prev, placa: placaFormatada }))
-    },
-    [formatarPlaca],
-  )
 
   const sendDataToFirebase = useCallback(
     async (percursoData) => {
@@ -240,26 +276,27 @@ export default function FormVeiculosScreen() {
     if (isFormValid()) {
       try {
         const localId = Date.now().toString()
-        const kmAnterior = Number.parseFloat(formData.kmAnterior)
         const kmAtual = Number.parseFloat(formData.kmAtual)
 
-        if (kmAtual <= kmAnterior) {
-          Alert.alert("Erro", "O KM atual deve ser maior que o KM anterior.")
-          return
+        // Converter a data do formato DD/MM/YYYY para um timestamp
+        let timestamp = Date.now()
+        if (formData.data) {
+          const [day, month, year] = formData.data.split("/")
+          const dateObj = new Date(year, month - 1, day)
+          timestamp = dateObj.getTime()
         }
 
         const percursoData = {
           ...formData,
-          kmTotal: (kmAtual - kmAnterior).toFixed(1),
-          timestamp: Date.now(),
+          kmAtual: kmAtual.toFixed(1),
+          timestamp: timestamp,
           userId: userId,
           propriedade: userPropriedade,
           localId: localId,
           status: "pending",
         }
 
-        const netInfo = await NetInfo.fetch()
-        if (netInfo.isConnected) {
+        if (isConnected) {
           const sent = await sendDataToFirebase(percursoData)
           if (sent) {
             Alert.alert("Sucesso", "Dados enviados com sucesso!")
@@ -270,12 +307,12 @@ export default function FormVeiculosScreen() {
           }
         } else {
           // Check if we already have this localId saved offline
-          const existingData = await AsyncStorage.getItem(OFFLINE_STORAGE_KEY)
+          const existingData = await AsyncStorage.getItem(OFFLINE_PERCURSOS_KEY)
           const offlineData = existingData ? JSON.parse(existingData) : []
           const isDuplicate = offlineData.some((item) => item.localId === localId)
 
           if (!isDuplicate) {
-            await saveOfflineData(percursoData, OFFLINE_STORAGE_KEY)
+            await saveOfflineData(percursoData, OFFLINE_PERCURSOS_KEY)
             Alert.alert("Modo Offline", "Dados salvos localmente e serão sincronizados quando houver conexão.")
             resetForm()
             navigation.goBack()
@@ -290,24 +327,31 @@ export default function FormVeiculosScreen() {
         try {
           // Check if we already have this localId saved offline before saving
           const localId = Date.now().toString()
-          const existingData = await AsyncStorage.getItem(OFFLINE_STORAGE_KEY)
+          const existingData = await AsyncStorage.getItem(OFFLINE_PERCURSOS_KEY)
           const offlineData = existingData ? JSON.parse(existingData) : []
           const isDuplicate = offlineData.some((item) => item.localId === localId)
 
           if (!isDuplicate) {
-            const kmAnterior = Number.parseFloat(formData.kmAnterior)
             const kmAtual = Number.parseFloat(formData.kmAtual)
+
+            // Converter a data do formato DD/MM/YYYY para um timestamp
+            let timestamp = Date.now()
+            if (formData.data) {
+              const [day, month, year] = formData.data.split("/")
+              const dateObj = new Date(year, month - 1, day)
+              timestamp = dateObj.getTime()
+            }
 
             const percursoData = {
               ...formData,
-              kmTotal: (kmAtual - kmAnterior).toFixed(1),
-              timestamp: Date.now(),
+              kmAtual: kmAtual.toFixed(1),
+              timestamp: timestamp,
               userId: userId,
               propriedade: userPropriedade,
               localId: localId,
               status: "pending",
             }
-            await saveOfflineData(percursoData, OFFLINE_STORAGE_KEY)
+            await saveOfflineData(percursoData, OFFLINE_PERCURSOS_KEY)
           }
         } catch (saveError) {
           console.error("Error saving offline data after submission error:", saveError)
@@ -316,7 +360,7 @@ export default function FormVeiculosScreen() {
     } else {
       Alert.alert("Atenção", "Preencha todos os campos obrigatórios!")
     }
-  }, [formData, userId, userPropriedade, sendDataToFirebase, isFormValid, resetForm, navigation])
+  }, [formData, userId, userPropriedade, sendDataToFirebase, isFormValid, resetForm, navigation, isConnected])
 
   const renderInputField = useCallback(
     (label, name, value, onChange, keyboardType = "default", editable = true) => (
@@ -360,7 +404,7 @@ export default function FormVeiculosScreen() {
       setListModalType(type)
 
       if (type === "placa") {
-        setListModalData(veiculos.map((v) => ({ id: v.placa, name: `${v.placa} - ${v.modelo || ""}` })))
+        setListModalData(veiculos.map((v) => ({ id: v.id, name: `${v.modelo} (${v.placa})` })))
       }
 
       setSearchQuery("")
@@ -380,7 +424,14 @@ export default function FormVeiculosScreen() {
         style={styles.listItem}
         onPress={() => {
           if (listModalType === "placa") {
-            handleChange(listModalType, item.id)
+            // Encontrar o veículo completo pelo ID
+            const selectedVehicle = veiculos.find((v) => v.id === item.id)
+            if (selectedVehicle) {
+              // Atualizar o formData com o ID, a placa e o nome completo do veículo
+              handleChange("placaId", item.id)
+              handleChange("placa", selectedVehicle.placa)
+              handleChange("veiculo", item.name)
+            }
           }
           setListModalVisible(false)
         }}
@@ -388,7 +439,7 @@ export default function FormVeiculosScreen() {
         <Text>{item.name}</Text>
       </TouchableOpacity>
     ),
-    [listModalType, handleChange],
+    [listModalType, handleChange, veiculos],
   )
 
   const renderListModal = useCallback(() => {
@@ -417,6 +468,7 @@ export default function FormVeiculosScreen() {
               renderItem={renderListItem}
               keyExtractor={(item) => item.id}
               ItemSeparatorComponent={Separator}
+              showsVerticalScrollIndicator={false}
             />
           </View>
         </SafeAreaView>
@@ -466,7 +518,7 @@ export default function FormVeiculosScreen() {
           onPress={() => openListModal("placa")}
           accessibilityLabel="Selecionar Veículo"
         >
-          <Text>{formData.placa || "Selecione o Veículo"}</Text>
+          <Text>{formData.veiculo || "Selecione o Veículo"}</Text>
           <ChevronDown size={20} color={COLORS.vehicle.primary} />
         </TouchableOpacity>
         <Separator />
@@ -474,22 +526,7 @@ export default function FormVeiculosScreen() {
         {renderDatePickerField("Data", "data")}
         <Separator />
 
-        {renderInputField("KM Anterior", "kmAnterior", formData.kmAnterior, handleChange, "numeric")}
-        <Separator />
-
         {renderInputField("KM Atual", "kmAtual", formData.kmAtual, handleChange, "numeric")}
-        <Separator />
-
-        {formData.kmAnterior && formData.kmAtual && (
-          <View style={styles.calculatedKm}>
-            <Text style={styles.label}>Total de KM:</Text>
-            <Text style={styles.kmValue}>
-              {Number.parseFloat(formData.kmAtual) > Number.parseFloat(formData.kmAnterior)
-                ? (Number.parseFloat(formData.kmAtual) - Number.parseFloat(formData.kmAnterior)).toFixed(1)
-                : "0.0"}
-            </Text>
-          </View>
-        )}
         <Separator />
 
         {renderInputField("Objetivo do Percurso", "objetivo", formData.objetivo, handleChange)}
@@ -505,11 +542,14 @@ export default function FormVeiculosScreen() {
         </TouchableOpacity>
       </ScrollView>
 
+      {/* Componente DateTimePickerModal com tratamento de erro */}
       <DateTimePickerModal
         isVisible={isDatePickerVisible}
         mode="date"
         onConfirm={handleDateConfirm}
         onCancel={() => setDatePickerVisible(false)}
+        date={selectedDate || new Date()} // Garantir que sempre tenha uma data válida
+        maximumDate={new Date()} // Limitar a data máxima para hoje
       />
 
       {renderListModal()}
@@ -635,19 +675,5 @@ const styles = StyleSheet.create({
   flatList: {
     marginTop: 10,
     marginBottom: 10,
-  },
-  calculatedKm: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#FFFFFF",
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  kmValue: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: COLORS.vehicle.primary,
   },
 })

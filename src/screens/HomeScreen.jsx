@@ -22,17 +22,25 @@ import Icon from "react-native-vector-icons/Ionicons"
 import { database, auth } from "../config/firebaseConfig"
 import { ref, onValue, off, query, orderByChild, equalTo, push, set as dbSet } from "firebase/database"
 import { signOut } from "firebase/auth"
-import { checkConnectivityAndSync } from "../utils/offlineManager"
-import { PRODUTOS, TANQUEDIESEL, BENS, IMPLEMENTOS } from "./assets"
+import {
+  checkConnectivityAndSync,
+  saveOfflineData,
+  cacheFirebaseData,
+  getCachedData,
+  CACHE_KEYS,
+} from "../utils/offlineManager"
+import { PRODUTOS, TANQUEDIESEL, IMPLEMENTOS } from "./assets"
 import NetInfo from "@react-native-community/netinfo"
+import DateTimePicker from "@react-native-community/datetimepicker"
 
 const USER_TOKEN_KEY = "@user_token"
 const USER_ROLE_KEY = "@user_role"
 const USER_PROPRIEDADE_KEY = "@user_propriedade"
+const OFFLINE_ABASTECIMENTOS_KEY = "@offline_abastecimentos"
 
 export default function HomeScreen() {
   const [apontamentos, setApontamentos] = useState([])
-  const [abastecimentos, setAbastecimentos] = useState([]) // New state for abastecimentos
+  const [abastecimentos, setAbastecimentos] = useState([])
   const [responsaveis, setResponsaveis] = useState([])
   const [sortOrder, setSortOrder] = useState("desc")
   const [isLoading, setIsLoading] = useState(false)
@@ -52,6 +60,7 @@ export default function HomeScreen() {
     horimetro: "",
     tanqueDiesel: "",
     bem: "",
+    observacao: "",
   })
   const [listModalVisible, setListModalVisible] = useState(false)
   const [listModalType, setListModalType] = useState("")
@@ -60,6 +69,9 @@ export default function HomeScreen() {
   const [filterModalVisible, setFilterModalVisible] = useState(false)
   const [dateFilter, setDateFilter] = useState(null)
   const [typeFilter, setTypeFilter] = useState(null)
+  const [showDatePicker, setShowDatePicker] = useState(false)
+  const [maquinas, setMaquinas] = useState([])
+  const [isConnected, setIsConnected] = useState(true)
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -74,102 +86,261 @@ export default function HomeScreen() {
     loadUserData()
   }, [])
 
+  // Monitorar o estado da conexão
   useEffect(() => {
-    if (!userPropriedade || !userRole || !userId) return
-    setIsLoading(true)
-    // Fetch apontamentos
-    const apontamentosRef = ref(database, `propriedades/${userPropriedade}/apontamentos`)
-    let apontamentosQuery
-
-    if (userRole === "user") {
-      apontamentosQuery = query(apontamentosRef, orderByChild("userId"), equalTo(userId))
-    } else if (userRole === "manager") {
-      apontamentosQuery = apontamentosRef
-    }
-
-    // Fetch abastecimentos
-    const abastecimentosRef = ref(database, `propriedades/${userPropriedade}/abastecimentos`)
-    let abastecimentosQuery
-
-    if (userRole === "user") {
-      abastecimentosQuery = query(abastecimentosRef, orderByChild("userId"), equalTo(userId))
-    } else if (userRole === "manager") {
-      abastecimentosQuery = abastecimentosRef
-    }
-
-    if (userRole === "user" || userRole === "manager") {
-      const apontamentosListener = onValue(apontamentosQuery, (snapshot) => {
-        const data = snapshot.val()
-        if (data) {
-          const apontamentosArray = Object.entries(data).map(([key, value]) => ({
-            id: key,
-            ...value,
-          }))
-
-          sortApontamentos(apontamentosArray)
-
-          const uniqueResponsaveis = [...new Set(apontamentosArray.map((item) => item.responsavel))]
-          setResponsaveis(uniqueResponsaveis)
-        } else {
-          setApontamentos([])
-          setResponsaveis([])
-        }
-      })
-
-      const abastecimentosListener = onValue(abastecimentosQuery, (snapshot) => {
-        const data = snapshot.val()
-        if (data) {
-          const abastecimentosArray = Object.entries(data).map(([key, value]) => ({
-            id: key,
-            ...value,
-          }))
-          setAbastecimentos(sortByTimestamp(abastecimentosArray))
-        } else {
-          setAbastecimentos([])
-        }
-        setIsLoading(false)
-      })
-
-      return () => {
-        off(apontamentosRef, "value", apontamentosListener)
-        off(abastecimentosRef, "value", abastecimentosListener)
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      setIsConnected(state.isConnected)
+      if (state.isConnected) {
+        checkConnectivityAndSync()
       }
-    } else {
-      setIsLoading(false)
-    }
-  }, [userPropriedade, userRole, userId])
+    })
 
-  useEffect(() => {
-    if (userRole === "manager" && userPropriedade) {
-      const usersRef = ref(database, `propriedades/${userPropriedade}/users`)
-      onValue(usersRef, (snapshot) => {
-        const data = snapshot.val()
-        if (data) {
-          const usersArray = Object.entries(data).map(([key, value]) => ({
-            id: key,
-            ...value,
-          }))
-          setPropertyUsers(usersArray)
-        }
-      })
-    }
-  }, [userRole, userPropriedade])
+    return () => unsubscribe()
+  }, [])
 
+  // Carregar máquinas do Firebase ou do cache
   useEffect(() => {
     if (!userPropriedade) return
 
-    const usersRef = ref(database, `propriedades/${userPropriedade}/users`)
-    return onValue(usersRef, (snapshot) => {
-      const data = snapshot.val()
-      if (data) {
-        const usersMapping = {}
-        Object.entries(data).forEach(([key, value]) => {
-          usersMapping[key] = value.nome
-        })
-        setUsersMap(usersMapping)
+    const loadMaquinarios = async () => {
+      try {
+        if (isConnected) {
+          const maquinariosRef = ref(database, `propriedades/${userPropriedade}/maquinarios`)
+
+          const maquinariosListener = onValue(maquinariosRef, (snapshot) => {
+            const data = snapshot.val()
+            if (data) {
+              const maquinasArray = Object.entries(data).map(([key, value]) => ({
+                id: value.id || key,
+                name: `${value.id} - ${value.nome}`,
+                rawName: value.nome || "Máquina sem nome",
+              }))
+              setMaquinas(maquinasArray)
+
+              // Salvar em cache para uso offline
+              cacheFirebaseData(maquinasArray, CACHE_KEYS.MAQUINARIOS)
+            } else {
+              setMaquinas([])
+            }
+          })
+
+          return () => {
+            off(maquinariosRef, "value", maquinariosListener)
+          }
+        } else {
+          // Carregar do cache se estiver offline
+          const cachedMaquinarios = await getCachedData(CACHE_KEYS.MAQUINARIOS)
+          if (cachedMaquinarios) {
+            setMaquinas(cachedMaquinarios)
+            console.log("Maquinários carregados do cache")
+          } else {
+            setMaquinas([])
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao configurar listener para maquinários:", error)
+        const cachedMaquinarios = await getCachedData(CACHE_KEYS.MAQUINARIOS)
+        if (cachedMaquinarios) {
+          setMaquinas(cachedMaquinarios)
+        }
       }
-    })
-  }, [userPropriedade])
+    }
+
+    loadMaquinarios()
+  }, [userPropriedade, isConnected])
+
+  // Carregar apontamentos e abastecimentos
+  useEffect(() => {
+    if (!userPropriedade || !userRole || !userId) return
+    setIsLoading(true)
+
+    const loadData = async () => {
+      try {
+        // Fetch apontamentos
+        const apontamentosRef = ref(database, `propriedades/${userPropriedade}/apontamentos`)
+        let apontamentosQuery
+
+        if (userRole === "user") {
+          apontamentosQuery = query(apontamentosRef, orderByChild("userId"), equalTo(userId))
+        } else if (userRole === "manager") {
+          apontamentosQuery = apontamentosRef
+        }
+
+        // Fetch abastecimentos
+        const abastecimentosRef = ref(database, `propriedades/${userPropriedade}/abastecimentos`)
+        let abastecimentosQuery
+
+        if (userRole === "user") {
+          abastecimentosQuery = query(abastecimentosRef, orderByChild("userId"), equalTo(userId))
+        } else if (userRole === "manager") {
+          abastecimentosQuery = abastecimentosRef
+        }
+
+        if (userRole === "user" || userRole === "manager") {
+          if (isConnected) {
+            // Carregar do Firebase se estiver conectado
+            const apontamentosListener = onValue(apontamentosQuery, (snapshot) => {
+              const data = snapshot.val()
+              if (data) {
+                const apontamentosArray = Object.entries(data).map(([key, value]) => ({
+                  id: key,
+                  ...value,
+                }))
+
+                sortApontamentos(apontamentosArray)
+
+                // Salvar em cache para uso offline
+                cacheFirebaseData(apontamentosArray, "cached_apontamentos")
+
+                const uniqueResponsaveis = [...new Set(apontamentosArray.map((item) => item.responsavel))]
+                setResponsaveis(uniqueResponsaveis)
+              } else {
+                setApontamentos([])
+                setResponsaveis([])
+              }
+            })
+
+            const abastecimentosListener = onValue(abastecimentosQuery, (snapshot) => {
+              const data = snapshot.val()
+              if (data) {
+                const abastecimentosArray = Object.entries(data).map(([key, value]) => ({
+                  id: key,
+                  ...value,
+                  tipo: "abastecimento",
+                }))
+                setAbastecimentos(sortByTimestamp(abastecimentosArray))
+
+                // Salvar em cache para uso offline
+                cacheFirebaseData(abastecimentosArray, "cached_abastecimentos")
+              } else {
+                setAbastecimentos([])
+              }
+              setIsLoading(false)
+            })
+
+            return () => {
+              off(apontamentosRef, "value", apontamentosListener)
+              off(abastecimentosRef, "value", abastecimentosListener)
+            }
+          } else {
+            // Carregar do cache se estiver offline
+            loadCachedData()
+          }
+        } else {
+          setIsLoading(false)
+        }
+      } catch (error) {
+        console.error("Erro ao configurar listeners:", error)
+        loadCachedData()
+      }
+    }
+
+    const loadCachedData = async () => {
+      try {
+        const cachedApontamentos = await getCachedData("cached_apontamentos")
+        const cachedAbastecimentos = await getCachedData("cached_abastecimentos")
+
+        if (cachedApontamentos) {
+          setApontamentos(cachedApontamentos)
+          const uniqueResponsaveis = [...new Set(cachedApontamentos.map((item) => item.responsavel))]
+          setResponsaveis(uniqueResponsaveis)
+          console.log("Apontamentos carregados do cache")
+        }
+
+        if (cachedAbastecimentos) {
+          setAbastecimentos(cachedAbastecimentos)
+          console.log("Abastecimentos carregados do cache")
+        }
+
+        setIsLoading(false)
+      } catch (error) {
+        console.error("Erro ao carregar dados do cache:", error)
+        setIsLoading(false)
+      }
+    }
+
+    loadData()
+  }, [userPropriedade, userRole, userId, isConnected])
+
+  // Carregar usuários da propriedade para o filtro (para gerentes)
+  useEffect(() => {
+    if (userRole === "manager" && userPropriedade) {
+      const loadUsers = async () => {
+        try {
+          if (isConnected) {
+            const usersRef = ref(database, `propriedades/${userPropriedade}/users`)
+            onValue(usersRef, (snapshot) => {
+              const data = snapshot.val()
+              if (data) {
+                const usersArray = Object.entries(data).map(([key, value]) => ({
+                  id: key,
+                  ...value,
+                }))
+                setPropertyUsers(usersArray)
+
+                // Salvar em cache para uso offline
+                cacheFirebaseData(usersArray, CACHE_KEYS.USERS)
+              }
+            })
+          } else {
+            // Carregar do cache se estiver offline
+            const cachedUsers = await getCachedData(CACHE_KEYS.USERS)
+            if (cachedUsers) {
+              setPropertyUsers(cachedUsers)
+            }
+          }
+        } catch (error) {
+          console.error("Erro ao carregar usuários:", error)
+          const cachedUsers = await getCachedData(CACHE_KEYS.USERS)
+          if (cachedUsers) {
+            setPropertyUsers(cachedUsers)
+          }
+        }
+      }
+
+      loadUsers()
+    }
+  }, [userRole, userPropriedade, isConnected])
+
+  // Carregar mapa de usuários
+  useEffect(() => {
+    if (!userPropriedade) return
+
+    const loadUsersMap = async () => {
+      try {
+        if (isConnected) {
+          const usersRef = ref(database, `propriedades/${userPropriedade}/users`)
+          return onValue(usersRef, (snapshot) => {
+            const data = snapshot.val()
+            if (data) {
+              const usersMapping = {}
+              Object.entries(data).forEach(([key, value]) => {
+                usersMapping[key] = value.nome
+              })
+              setUsersMap(usersMapping)
+
+              // Salvar em cache para uso offline
+              cacheFirebaseData(usersMapping, "cached_users_map")
+            }
+          })
+        } else {
+          // Carregar do cache se estiver offline
+          const cachedUsersMap = await getCachedData("cached_users_map")
+          if (cachedUsersMap) {
+            setUsersMap(cachedUsersMap)
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao carregar mapa de usuários:", error)
+        const cachedUsersMap = await getCachedData("cached_users_map")
+        if (cachedUsersMap) {
+          setUsersMap(cachedUsersMap)
+        }
+      }
+    }
+
+    loadUsersMap()
+  }, [userPropriedade, isConnected])
 
   const sortApontamentos = (apontamentosArray) => {
     const sortedApontamentos = [...apontamentosArray].sort((a, b) => {
@@ -224,7 +395,11 @@ export default function HomeScreen() {
     }
 
     return (
-      <TouchableOpacity onPress={() => handleShowDetails(item)} style={styles.apontamentoItem} key={item.id}>
+      <TouchableOpacity
+        onPress={() => handleShowDetails(item)}
+        style={[styles.apontamentoItem, styles.horamaquinaItem]}
+        key={item.id}
+      >
         <View style={styles.apontamentoHeader}>
           <Text style={styles.fichaControle}>Ficha de Controle: {item.fichaControle}</Text>
           <Text style={styles.data}>{item.data}</Text>
@@ -316,7 +491,7 @@ export default function HomeScreen() {
     } else if (type === "tanqueDiesel") {
       setListModalData(TANQUEDIESEL)
     } else if (type === "bem") {
-      setListModalData(BENS)
+      setListModalData(maquinas)
     } else if (type === "implemento") {
       setListModalData(IMPLEMENTOS)
     }
@@ -358,17 +533,6 @@ export default function HomeScreen() {
     </View>
   )
 
-  const saveOfflineData = async (data) => {
-    try {
-      const offlineData = await AsyncStorage.getItem("offlineData")
-      const parsedData = offlineData ? JSON.parse(offlineData) : []
-      parsedData.push(data)
-      await AsyncStorage.setItem("offlineData", JSON.stringify(parsedData))
-    } catch (error) {
-      console.error("Erro ao salvar dados offline:", error)
-    }
-  }
-
   const handleSubmitAbastecimento = async () => {
     if (
       !abastecimentoData.produto ||
@@ -383,22 +547,23 @@ export default function HomeScreen() {
 
     try {
       const localId = Date.now().toString()
+      const selectedMaquina = maquinas.find((b) => b.id === abastecimentoData.bem)
+
       const abastecimentoInfo = {
         ...abastecimentoData,
         produto: PRODUTOS.find((p) => p.id === abastecimentoData.produto)?.name || abastecimentoData.produto,
         tanqueDiesel:
           TANQUEDIESEL.find((t) => t.id === abastecimentoData.tanqueDiesel)?.name || abastecimentoData.tanqueDiesel,
-        bem: BENS.find((b) => b.id === abastecimentoData.bem)?.name || abastecimentoData.bem,
+        bem: selectedMaquina ? selectedMaquina.name : abastecimentoData.bem,
         timestamp: Date.now(),
-        userId: userId, // This ensures the logged-in user's ID is stored
+        userId: userId,
         propriedade: userPropriedade,
         localId: localId,
         status: "pending",
         tipo: "abastecimento",
       }
 
-      const netInfo = await NetInfo.fetch()
-      if (netInfo.isConnected) {
+      if (isConnected) {
         const abastecimentosRef = ref(database, `propriedades/${userPropriedade}/abastecimentos`)
         const newEntryRef = push(abastecimentosRef)
         await dbSet(newEntryRef, abastecimentoInfo)
@@ -410,10 +575,21 @@ export default function HomeScreen() {
           horimetro: "",
           tanqueDiesel: "",
           bem: "",
+          observacao: "",
         })
       } else {
         // Salvar offline para sincronização posterior
-        await saveOfflineData(abastecimentoInfo)
+        await saveOfflineData(abastecimentoInfo, OFFLINE_ABASTECIMENTOS_KEY)
+
+        // Adicionar ao estado local para exibição imediata
+        setAbastecimentos((prev) => [
+          {
+            id: `local-${localId}`,
+            ...abastecimentoInfo,
+          },
+          ...prev,
+        ])
+
         Alert.alert("Modo Offline", "Dados salvos localmente e serão sincronizados quando houver conexão.")
         setAbastecimentoModalVisible(false)
         setAbastecimentoData({
@@ -422,6 +598,7 @@ export default function HomeScreen() {
           horimetro: "",
           tanqueDiesel: "",
           bem: "",
+          observacao: "",
         })
       }
     } catch (error) {
@@ -437,7 +614,14 @@ export default function HomeScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { flex: 1, textAlign: "center" }]}>
-                Selecione {listModalType === "produto" ? "o Combustível" : "o Tanque"}
+                Selecione{" "}
+                {listModalType === "produto"
+                  ? "o Combustível"
+                  : listModalType === "tanqueDiesel"
+                    ? "o Tanque"
+                    : listModalType === "bem"
+                      ? "a Máquina"
+                      : "o Implemento"}
               </Text>
               <TouchableOpacity onPress={() => setListModalVisible(false)} style={{ position: "absolute", right: 0 }}>
                 <Icon name="close" size={24} color="#000" />
@@ -462,6 +646,19 @@ export default function HomeScreen() {
     )
   }
 
+  const handleDateChange = (event, selectedDate) => {
+    setShowDatePicker(false)
+    if (selectedDate) {
+      setDateFilter(selectedDate)
+    }
+  }
+
+  const clearFilters = () => {
+    setDateFilter(null)
+    setTypeFilter(null)
+    setFiltroUsuario(null)
+  }
+
   const renderFilterModal = () => {
     return (
       <Modal
@@ -471,78 +668,113 @@ export default function HomeScreen() {
         onRequestClose={() => setFilterModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Filtros</Text>
-              <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
-                <Icon name="close" size={24} color="#333" />
+          <View style={styles.filterModalContent}>
+            <View style={styles.filterModalHeader}>
+              <Text style={styles.filterModalTitle}>Filtros</Text>
+              <TouchableOpacity
+                onPress={() => setFilterModalVisible(false)}
+                hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+              >
+                <Icon name="close" size={22} color="#666" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView>
+            <ScrollView style={styles.filterScrollView} showsVerticalScrollIndicator={false}>
               {userRole === "manager" && (
                 <View style={styles.filterSection}>
-                  <Text style={styles.filterLabel}>Filtrar por usuário:</Text>
-                  <Picker
-                    selectedValue={filtroUsuario}
-                    onValueChange={(itemValue) => setFiltroUsuario(itemValue)}
-                    style={styles.filterPicker}
-                  >
-                    <Picker.Item label="Todos os usuários" value={null} />
-                    {propertyUsers.map((user) => (
-                      <Picker.Item key={user.id} label={user.nome} value={user.id} />
-                    ))}
-                  </Picker>
+                  <Text style={styles.filterLabel}>Usuário</Text>
+                  <View style={styles.pickerContainer}>
+                    <Picker
+                      selectedValue={filtroUsuario}
+                      onValueChange={(itemValue) => setFiltroUsuario(itemValue)}
+                      style={styles.filterPicker}
+                    >
+                      <Picker.Item label="Todos os usuários" value={null} />
+                      {propertyUsers.map((user) => (
+                        <Picker.Item key={user.id} label={user.nome} value={user.id} />
+                      ))}
+                    </Picker>
+                  </View>
                 </View>
               )}
 
               <View style={styles.filterSection}>
-                <Text style={styles.filterLabel}>Ordenar por:</Text>
-                <Picker
-                  selectedValue={sortOrder}
-                  onValueChange={(itemValue) => setSortOrder(itemValue)}
-                  style={styles.filterPicker}
-                >
-                  <Picker.Item label="Mais recente" value="desc" />
-                  <Picker.Item label="Mais antigo" value="asc" />
-                </Picker>
+                <Text style={styles.filterLabel}>Ordenação</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={sortOrder}
+                    onValueChange={(itemValue) => setSortOrder(itemValue)}
+                    style={styles.filterPicker}
+                  >
+                    <Picker.Item label="Mais recente" value="desc" />
+                    <Picker.Item label="Mais antigo" value="asc" />
+                  </Picker>
+                </View>
               </View>
 
               <View style={styles.filterSection}>
-                <Text style={styles.filterLabel}>Filtrar por data:</Text>
+                <Text style={styles.filterLabel}>Data</Text>
                 <TouchableOpacity
                   style={styles.datePickerButton}
-                  onPress={() => {
-                    // Implementar seletor de data aqui
-                  }}
+                  onPress={() => setShowDatePicker(true)}
+                  activeOpacity={0.7}
                 >
-                  <Text>{dateFilter ? dateFilter.toLocaleDateString() : "Selecionar data"}</Text>
+                  <Text style={styles.datePickerText}>
+                    {dateFilter ? dateFilter.toLocaleDateString("pt-BR") : "Selecionar data"}
+                  </Text>
+                  <Icon name="calendar" size={18} color="#2a9d8f" />
                 </TouchableOpacity>
+                {dateFilter && (
+                  <TouchableOpacity
+                    style={styles.clearDateButton}
+                    onPress={() => setDateFilter(null)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.clearDateButtonText}>Limpar data</Text>
+                    <Icon name="close-circle-outline" size={16} color="#e74c3c" />
+                  </TouchableOpacity>
+                )}
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={dateFilter || new Date()}
+                    mode="date"
+                    display="default"
+                    onChange={handleDateChange}
+                  />
+                )}
               </View>
 
               <View style={styles.filterSection}>
-                <Text style={styles.filterLabel}>Filtrar por tipo:</Text>
-                <Picker
-                  selectedValue={typeFilter}
-                  onValueChange={(itemValue) => setTypeFilter(itemValue)}
-                  style={styles.filterPicker}
-                >
-                  <Picker.Item label="Todos" value={null} />
-                  <Picker.Item label="Mecanizadas" value="mecanizada" />
-                  <Picker.Item label="Abastecimento" value="abastecimento" />
-                </Picker>
+                <Text style={styles.filterLabel}>Tipo</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={typeFilter}
+                    onValueChange={(itemValue) => setTypeFilter(itemValue)}
+                    style={styles.filterPicker}
+                  >
+                    <Picker.Item label="Todos" value={null} />
+                    <Picker.Item label="Mecanizadas" value="mecanizada" />
+                    <Picker.Item label="Abastecimento" value="abastecimento" />
+                  </Picker>
+                </View>
               </View>
             </ScrollView>
 
-            <TouchableOpacity
-              style={styles.applyFilterButton}
-              onPress={() => {
-                // Aplicar filtros
-                setFilterModalVisible(false)
-              }}
-            >
-              <Text style={styles.applyFilterButtonText}>Aplicar Filtros</Text>
-            </TouchableOpacity>
+            <View style={styles.filterButtonsContainer}>
+              <TouchableOpacity style={styles.clearFilterButton} onPress={clearFilters} activeOpacity={0.7}>
+                <Icon name="trash-outline" size={18} color="white" style={{ marginRight: 5 }} />
+                <Text style={styles.clearFilterButtonText}>Limpar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.applyFilterButton}
+                onPress={() => setFilterModalVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Icon name="checkmark-outline" size={18} color="white" style={{ marginRight: 5 }} />
+                <Text style={styles.applyFilterButtonText}>Aplicar</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -559,7 +791,14 @@ export default function HomeScreen() {
     if (dateFilter) {
       filtered = filtered.filter((item) => {
         const itemDate = item.data ? new Date(item.data.split("/").reverse().join("-")) : new Date(item.timestamp)
-        return itemDate.toDateString() === dateFilter.toDateString()
+
+        const filterDate = new Date(dateFilter)
+
+        return (
+          itemDate.getDate() === filterDate.getDate() &&
+          itemDate.getMonth() === filterDate.getMonth() &&
+          itemDate.getFullYear() === filterDate.getFullYear()
+        )
       })
     }
 
@@ -571,7 +810,7 @@ export default function HomeScreen() {
     }
 
     return sortByTimestamp(filtered)
-  }, [apontamentos, abastecimentos, userRole, filtroUsuario, dateFilter, typeFilter])
+  }, [apontamentos, abastecimentos, userRole, filtroUsuario, dateFilter, typeFilter, sortOrder])
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -582,16 +821,19 @@ export default function HomeScreen() {
           <Icon name="arrow-back" size={24} color="#2a9d8f" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Meus Apontamentos</Text>
-        <View style={{ width: 24 }} />
+        <TouchableOpacity
+          style={styles.filterButtonSmall}
+          onPress={() => setFilterModalVisible(true)}
+          activeOpacity={0.7}
+        >
+          <Icon name="funnel-outline" size={20} color="#2a9d8f" />
+          {(dateFilter || typeFilter || filtroUsuario) && <View style={styles.filterBadge} />}
+        </TouchableOpacity>
       </View>
 
       <View style={styles.container}>
         {userRole === "admin" ? (
           <>
-            <TouchableOpacity style={styles.adminButton} onPress={() => navigation.navigate("AdminPanel")}>
-              <Icon name="settings-outline" size={28} color="white" />
-              <Text style={styles.adminButtonText}>Admin Panel</Text>
-            </TouchableOpacity>
             <TouchableOpacity style={styles.novoButton} onPress={() => navigation.navigate("Formulario")}>
               <Icon name="add-circle-outline" size={24} color="white" />
               <Text style={styles.novoButtonText}>APONTAMENTO</Text>
@@ -602,25 +844,6 @@ export default function HomeScreen() {
             >
               <Icon name="water-outline" size={24} color="white" />
               <Text style={styles.novoButtonText}>ABASTECIMENTO</Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          <>
-            <TouchableOpacity style={styles.novoButton} onPress={() => navigation.navigate("Formulario")}>
-              <Icon name="add-circle-outline" size={24} color="white" />
-              <Text style={styles.novoButtonText}>APONTAMENTO</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.novoButton, { backgroundColor: "#e67e22", marginTop: 10 }]}
-              onPress={() => setAbastecimentoModalVisible(true)}
-            >
-              <Icon name="water-outline" size={24} color="white" />
-              <Text style={styles.novoButtonText}>ABASTECIMENTO</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.filterButton} onPress={() => setFilterModalVisible(true)}>
-              <Icon name="filter-outline" size={24} color="white" />
-              <Text style={styles.filterButtonText}>FILTRAR</Text>
             </TouchableOpacity>
 
             {renderFilterModal()}
@@ -636,6 +859,46 @@ export default function HomeScreen() {
                 keyExtractor={(item) => item.id.toString()}
                 contentContainerStyle={styles.apontamentosList}
                 showsVerticalScrollIndicator={false}
+                ListEmptyComponent={
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyText}>Nenhum registro encontrado</Text>
+                  </View>
+                }
+              />
+            )}
+          </>
+        ) : (
+          <>
+            <TouchableOpacity style={styles.novoButton} onPress={() => navigation.navigate("Formulario")}>
+              <Icon name="add-circle-outline" size={24} color="white" />
+              <Text style={styles.novoButtonText}>APONTAMENTO</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.novoButton, { backgroundColor: "#e67e22", marginTop: 10 }]}
+              onPress={() => setAbastecimentoModalVisible(true)}
+            >
+              <Icon name="water-outline" size={24} color="white" />
+              <Text style={styles.novoButtonText}>ABASTECIMENTO</Text>
+            </TouchableOpacity>
+
+            {renderFilterModal()}
+
+            {isLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#2a9d8f" />
+              </View>
+            ) : (
+              <FlatList
+                data={filteredData}
+                renderItem={renderApontamento}
+                keyExtractor={(item) => item.id.toString()}
+                contentContainerStyle={styles.apontamentosList}
+                showsVerticalScrollIndicator={false}
+                ListEmptyComponent={
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyText}>Nenhum registro encontrado</Text>
+                  </View>
+                }
               />
             )}
           </>
@@ -656,14 +919,21 @@ export default function HomeScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Detalhes do Apontamento</Text>
+              <Text
+                style={[
+                  styles.modalTitle,
+                  { color: selectedApontamento?.tipo === "abastecimento" ? "#FF8C00" : "#2a9d8f" },
+                ]}
+              >
+                Detalhes do {selectedApontamento?.tipo === "abastecimento" ? "Abastecimento" : "Apontamento"}
+              </Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <Icon name="close" size={24} color="#333" />
               </TouchableOpacity>
             </View>
 
             {selectedApontamento && (
-              <ScrollView style={styles.detailsContainer}>
+              <ScrollView style={styles.detailsContainer} showsVerticalScrollIndicator={false}>
                 {selectedApontamento.tipo === "abastecimento" ? (
                   renderAbastecimentoDetails(selectedApontamento)
                 ) : (
@@ -690,7 +960,13 @@ export default function HomeScreen() {
               </ScrollView>
             )}
 
-            <TouchableOpacity style={styles.closeButton} onPress={() => setModalVisible(false)}>
+            <TouchableOpacity
+              style={[
+                styles.closeButton,
+                { backgroundColor: selectedApontamento?.tipo === "abastecimento" ? "#FF8C00" : "#2a9d8f" },
+              ]}
+              onPress={() => setModalVisible(false)}
+            >
               <Text style={styles.closeButtonText}>Fechar</Text>
             </TouchableOpacity>
           </View>
@@ -711,7 +987,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.abastecimentoForm}>
+            <ScrollView style={styles.abastecimentoForm} showsVerticalScrollIndicator={false}>
               <Text style={styles.label}>Combustível</Text>
               <TouchableOpacity
                 style={styles.input}
@@ -742,7 +1018,7 @@ export default function HomeScreen() {
                 onPress={() => openListModal("bem")}
                 accessibilityLabel="Selecionar Máquina"
               >
-                <Text>{BENS.find((b) => b.id === abastecimentoData.bem)?.name || "Selecione a Máquina"}</Text>
+                <Text>{maquinas.find((b) => b.id === abastecimentoData.bem)?.name || "Selecione a Máquina"}</Text>
                 <Icon name="chevron-down" size={20} color="#e67e22" />
               </TouchableOpacity>
 
@@ -760,6 +1036,14 @@ export default function HomeScreen() {
                 abastecimentoData.horimetro,
                 handleAbastecimentoChange,
                 "numeric",
+              )}
+
+              {renderInputField(
+                "Observação",
+                "observacao",
+                abastecimentoData.observacao,
+                handleAbastecimentoChange,
+                "default",
               )}
             </ScrollView>
 
@@ -1035,10 +1319,6 @@ const styles = StyleSheet.create({
     padding: 10,
     marginBottom: 10,
     borderLeftWidth: 3,
-    borderLeftColor: 8,
-    padding: 10,
-    marginBottom: 10,
-    borderLeftWidth: 3,
     borderLeftColor: "#2a9d8f",
   },
   input: {
@@ -1125,6 +1405,10 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: "#e67e22",
   },
+  horamaquinaItem: {
+    borderLeftWidth: 3,
+    borderLeftColor: "#2a9d8f",
+  },
   abastecimentoDetails: {
     marginTop: 8,
   },
@@ -1149,48 +1433,102 @@ const styles = StyleSheet.create({
     color: "#e67e22",
     marginBottom: 10,
   },
-  filterButton: {
-    flexDirection: "row",
-    alignItems: "center",
+  filterButtonSmall: {
+    backgroundColor: "white",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: "center",
-    backgroundColor: "#3498db",
-    padding: 16,
-    borderRadius: 25,
-    marginBottom: 20,
+    alignItems: "center",
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.22,
+    shadowRadius: 2.22,
   },
-  filterButtonText: {
-    color: "white",
-    marginLeft: 10,
-    fontSize: 16,
+  filterBadge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#e74c3c",
+  },
+  filterModalContent: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    width: "90%",
+    maxHeight: "80%",
+    padding: 0,
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    overflow: "hidden",
+  },
+  filterModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  filterModalTitle: {
+    fontSize: 18,
     fontWeight: "bold",
+    color: "#2a9d8f",
+  },
+  filterScrollView: {
+    padding: 20,
   },
   filterSection: {
     marginBottom: 20,
   },
   filterLabel: {
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 8,
+    fontSize: 15,
+    fontWeight: "600",
+    marginBottom: 10,
+    color: "#555",
+  },
+  pickerContainer: {
+    backgroundColor: "#f8f8f8",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    overflow: "hidden",
   },
   filterPicker: {
-    backgroundColor: "#f0f0f0",
-    borderRadius: 8,
+    height: 50,
   },
   datePickerButton: {
-    backgroundColor: "#f0f0f0",
-    padding: 12,
-    borderRadius: 8,
-  },
-  applyFilterButton: {
-    backgroundColor: "#2a9d8f",
-    padding: 16,
-    borderRadius: 25,
+    backgroundColor: "#f8f8f8",
+    padding: 15,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 20,
   },
-  applyFilterButtonText: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "bold",
+  datePickerText: {
+    color: "#333",
+  },
+  clearDateButton: {
+    marginTop: 10,
+    padding: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  clearDateButtonText: {
+    color: "#e74c3c",
+    fontWeight: "500",
+    marginRight: 5,
+  },
+  filterButtonsContainer: {
+    flexDirection: "row",
   },
 })

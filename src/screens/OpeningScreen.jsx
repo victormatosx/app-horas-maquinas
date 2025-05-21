@@ -1,15 +1,37 @@
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, StatusBar, Alert } from "react-native"
+"use client"
+
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, StatusBar, Alert, ScrollView } from "react-native"
 import { useNavigation } from "@react-navigation/native"
 import Icon from "react-native-vector-icons/Ionicons"
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import { signOut } from "firebase/auth"
 import { auth } from "../config/firebaseConfig"
+import { useState, useEffect } from "react"
+import NetInfo from "@react-native-community/netinfo"
 
 const USER_TOKEN_KEY = "@user_token"
+const USER_ROLE_KEY = "@user_role"
 
 export default function OpeningScreen() {
   const navigation = useNavigation()
+  const [userRole, setUserRole] = useState("")
+  const [isConnected, setIsConnected] = useState(true)
+
+  useEffect(() => {
+    const loadUserRole = async () => {
+      const role = await AsyncStorage.getItem(USER_ROLE_KEY)
+      setUserRole(role)
+    }
+    loadUserRole()
+
+    // Monitorar o estado da conexão
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      setIsConnected(state.isConnected)
+    })
+
+    return () => unsubscribe()
+  }, [])
 
   const handleLogout = async () => {
     try {
@@ -27,34 +49,57 @@ export default function OpeningScreen() {
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
       <View style={styles.container}>
-        <View style={styles.titleSection}>
-          <Text style={styles.mainTitle}>Painel Principal</Text>
-          <Text style={styles.subtitle}>Selecione uma área para continuar</Text>
-        </View>
+        {!isConnected && (
+          <View style={styles.offlineBanner}>
+            <Icon name="cloud-offline-outline" size={18} color="white" style={styles.offlineIcon} />
+            <Text style={styles.offlineBannerText}>
+              Modo Offline - Os dados serão sincronizados quando houver conexão
+            </Text>
+          </View>
+        )}
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          <View style={styles.titleSection}>
+            <Text style={styles.mainTitle}>Painel Principal</Text>
+            <Text style={styles.subtitle}>Selecione uma área para continuar</Text>
+          </View>
 
-        <View style={styles.optionsContainer}>
-          <TouchableOpacity style={styles.optionCard} onPress={() => navigation.navigate("Home")}>
-            <View style={[styles.iconContainer, { backgroundColor: "#2a9d8f" }]}>
-              <MaterialCommunityIcons name="tractor" size={40} color="white" />
-            </View>
-            <Text style={styles.optionTitle}>Máquinas</Text>
-            <Text style={styles.optionDescription}>Gerenciar apontamentos e abastecimentos</Text>
-            <View style={styles.arrowContainer}>
-              <Icon name="chevron-forward" size={24} color="#2a9d8f" />
-            </View>
-          </TouchableOpacity>
+          <View style={styles.optionsContainer}>
+            <TouchableOpacity style={styles.optionCard} onPress={() => navigation.navigate("Home")}>
+              <View style={[styles.iconContainer, { backgroundColor: "#2a9d8f" }]}>
+                <MaterialCommunityIcons name="tractor" size={40} color="white" />
+              </View>
+              <Text style={styles.optionTitle}>Máquinas</Text>
+              <Text style={styles.optionDescription}>Gerenciar apontamentos e abastecimentos</Text>
+              <View style={styles.arrowContainer}>
+                <Icon name="chevron-forward" size={24} color="#2a9d8f" />
+              </View>
+            </TouchableOpacity>
 
-          <TouchableOpacity style={styles.optionCard} onPress={() => navigation.navigate("Veiculos")}>
-            <View style={[styles.iconContainer, { backgroundColor: "#e67e22" }]}>
-              <Icon name="car-outline" size={40} color="white" />
-            </View>
-            <Text style={styles.optionTitle}>Veículos</Text>
-            <Text style={styles.optionDescription}>Gerenciar frota e registros de uso</Text>
-            <View style={styles.arrowContainer}>
-              <Icon name="chevron-forward" size={24} color="#e67e22" />
-            </View>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity style={styles.optionCard} onPress={() => navigation.navigate("Veiculos")}>
+              <View style={[styles.iconContainer, { backgroundColor: "#e67e22" }]}>
+                <Icon name="car-outline" size={40} color="white" />
+              </View>
+              <Text style={styles.optionTitle}>Veículos</Text>
+              <Text style={styles.optionDescription}>Gerenciar frota e registros de uso</Text>
+              <View style={styles.arrowContainer}>
+                <Icon name="chevron-forward" size={24} color="#e67e22" />
+              </View>
+            </TouchableOpacity>
+
+            {userRole === "admin" && (
+              <TouchableOpacity style={styles.optionCard} onPress={() => navigation.navigate("RegisterScreen")}>
+                <View style={[styles.iconContainer, { backgroundColor: "#3498db" }]}>
+                  <Icon name="person-add-outline" size={40} color="white" />
+                </View>
+                <Text style={styles.optionTitle}>Cadastrar Usuários</Text>
+                <Text style={styles.optionDescription}>Adicionar novos usuários ao sistema</Text>
+                <View style={styles.arrowContainer}>
+                  <Icon name="chevron-forward" size={24} color="#3498db" />
+                </View>
+              </TouchableOpacity>
+            )}
+          </View>
+        </ScrollView>
       </View>
 
       <TouchableOpacity style={styles.sairButton} onPress={handleLogout}>
@@ -78,6 +123,7 @@ const styles = StyleSheet.create({
   titleSection: {
     alignItems: "center",
     marginBottom: 30, // Reduzido de 60 para 30
+    marginTop: 20, // Adicionado espaço extra após o banner
   },
   mainTitle: {
     fontSize: 24,
@@ -146,5 +192,26 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 16,
     fontWeight: "bold",
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 20,
+  },
+  offlineBanner: {
+    backgroundColor: "#e74c3c",
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 25,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  offlineBannerText: {
+    color: "white",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  offlineIcon: {
+    marginRight: 8,
   },
 })

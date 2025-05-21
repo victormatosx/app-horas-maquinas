@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
-import { View, TextInput, TouchableOpacity, Text } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import styles from '../styles/StyleLogin';
+"use client"
+
+import { useState } from "react"
+import { View, Text, TextInput, TouchableOpacity } from "react-native"
+import { useNavigation } from "@react-navigation/native"
+import styles from "../styles/StyleLogin"
 
 export default function LoginForm({ onLogin }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const navigation = useNavigation();
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const navigation = useNavigation()
 
-  const handleLogin = () => { 
-    onLogin(email, password);
-  };
+  const handleLogin = () => {
+    onLogin(email, password)
+  }
 
   return (
     <View style={styles.formContainer}>
@@ -35,9 +37,6 @@ export default function LoginForm({ onLogin }) {
       <TouchableOpacity style={styles.button} onPress={handleLogin}>
         <Text style={styles.buttonText}>Entrar</Text>
       </TouchableOpacity>
-      <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-        <Text style={styles.registerLink}>Não tem conta? Crie uma aqui!</Text>
-      </TouchableOpacity>
     </View>
-  );
+  )
 }

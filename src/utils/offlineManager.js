@@ -3,32 +3,42 @@ import NetInfo from "@react-native-community/netinfo"
 import { database } from "../config/firebaseConfig"
 import { ref, set, push, query, orderByChild, equalTo, get, update } from "firebase/database"
 
-const OFFLINE_STORAGE_KEY = "@offline_data"
+// Chaves para armazenamento local
+const OFFLINE_APONTAMENTOS_KEY = "@offline_apontamentos"
+const OFFLINE_ABASTECIMENTOS_KEY = "@offline_abastecimentos"
+const OFFLINE_PERCURSOS_KEY = "@offline_percursos"
+const CACHED_MAQUINARIOS_KEY = "@cached_maquinarios"
+const CACHED_IMPLEMENTOS_KEY = "@cached_implementos"
+const CACHED_VEICULOS_KEY = "@cached_veiculos"
+const CACHED_DIRECIONADORES_KEY = "@cached_direcionadores"
+const CACHED_USERS_KEY = "@cached_users"
+const CACHED_HORIMETROS_KEY = "@cached_horimetros"
 
-// Modify the saveOfflineData function to prevent duplicates
-export const saveOfflineData = async (data) => {
+// Função para salvar dados offline evitando duplicatas
+export const saveOfflineData = async (data, storageKey = OFFLINE_APONTAMENTOS_KEY) => {
   try {
-    const existingData = await AsyncStorage.getItem(OFFLINE_STORAGE_KEY)
+    const existingData = await AsyncStorage.getItem(storageKey)
     const offlineData = existingData ? JSON.parse(existingData) : []
 
-    // Check if an entry with the same localId already exists
+    // Verificar se já existe um item com o mesmo localId
     const isDuplicate = offlineData.some((item) => item.localId === data.localId)
 
     if (!isDuplicate) {
       offlineData.push(data)
-      await AsyncStorage.setItem(OFFLINE_STORAGE_KEY, JSON.stringify(offlineData))
-      console.log("Offline data saved successfully:", data.localId)
+      await AsyncStorage.setItem(storageKey, JSON.stringify(offlineData))
+      console.log(`Dados offline salvos com sucesso em ${storageKey}:`, data.localId)
     } else {
-      console.log("Duplicate offline data detected, not saving:", data.localId)
+      console.log(`Dados duplicados detectados em ${storageKey}, não salvando:`, data.localId)
     }
   } catch (error) {
-    console.error("Error saving offline data:", error)
+    console.error(`Erro ao salvar dados offline em ${storageKey}:`, error)
   }
 }
 
-export const syncOfflineData = async () => {
+// Função para sincronizar apontamentos offline
+export const syncOfflineApontamentos = async () => {
   try {
-    const offlineData = await AsyncStorage.getItem(OFFLINE_STORAGE_KEY)
+    const offlineData = await AsyncStorage.getItem(OFFLINE_APONTAMENTOS_KEY)
     if (offlineData) {
       const parsedData = JSON.parse(offlineData)
       const remainingData = []
@@ -43,8 +53,37 @@ export const syncOfflineData = async () => {
 
           if (!existingEntrySnapshot.exists()) {
             const newEntryRef = push(apontamentosRef)
-            await set(newEntryRef, { ...apontamentoData, localId, status: "synced" })
+            // Garantir que operacoesMecanizadas esteja incluído nos dados
+            await set(newEntryRef, {
+              ...apontamentoData,
+              localId,
+              status: "synced",
+              // Garantir que operacoesMecanizadas seja incluído mesmo se for undefined
+              operacoesMecanizadas: apontamentoData.operacoesMecanizadas || [],
+            })
             console.log("Apontamento sincronizado com sucesso:", localId)
+
+            // Se houver horímetros, atualizá-los no Firebase
+            if (apontamentoData.operacoesMecanizadas && apontamentoData.operacoesMecanizadas.length > 0) {
+              const horimetrosRef = ref(database, `propriedades/${propriedade}/horimetros`)
+              const horimetrosSnapshot = await get(horimetrosRef)
+              const horimetrosData = horimetrosSnapshot.val() || {}
+
+              // Atualizar horímetros com os valores mais recentes
+              const updatedHorimetros = { ...horimetrosData }
+
+              apontamentoData.operacoesMecanizadas.forEach((op) => {
+                // Extrair o ID do bem do formato "ID - Nome"
+                const bemId = op.bem.split(" - ")[0]
+                if (op.horaFinal) {
+                  updatedHorimetros[bemId] = op.horaFinal
+                }
+              })
+
+              // Atualizar horímetros no Firebase
+              await update(horimetrosRef, updatedHorimetros)
+              console.log("Horímetros atualizados com sucesso")
+            }
           } else {
             const existingEntry = Object.values(existingEntrySnapshot.val())[0]
             if (existingEntry.status === "pending") {
@@ -58,28 +97,160 @@ export const syncOfflineData = async () => {
             }
           }
         } catch (error) {
-          console.error("Error syncing individual offline data:", error)
+          console.error("Erro ao sincronizar apontamento individual:", error)
           remainingData.push(data)
         }
       }
 
       if (remainingData.length > 0) {
-        await AsyncStorage.setItem(OFFLINE_STORAGE_KEY, JSON.stringify(remainingData))
+        await AsyncStorage.setItem(OFFLINE_APONTAMENTOS_KEY, JSON.stringify(remainingData))
       } else {
-        await AsyncStorage.removeItem(OFFLINE_STORAGE_KEY)
+        await AsyncStorage.removeItem(OFFLINE_APONTAMENTOS_KEY)
       }
     }
   } catch (error) {
-    console.error("Error syncing offline data:", error)
+    console.error("Erro ao sincronizar apontamentos offline:", error)
   }
 }
 
-// Modify the checkConnectivityAndSync function to use a lock mechanism
+// Função para sincronizar abastecimentos offline
+export const syncOfflineAbastecimentos = async () => {
+  try {
+    const offlineData = await AsyncStorage.getItem(OFFLINE_ABASTECIMENTOS_KEY)
+    if (offlineData) {
+      const parsedData = JSON.parse(offlineData)
+      const remainingData = []
+
+      for (const data of parsedData) {
+        try {
+          const { propriedade, localId, ...abastecimentoData } = data
+
+          // Verificar se é abastecimento de veículo ou máquina
+          const nodePath =
+            data.tipoEquipamento === "veiculo"
+              ? `propriedades/${propriedade}/abastecimentoVeiculos`
+              : `propriedades/${propriedade}/abastecimentos`
+
+          const abastecimentosRef = ref(database, nodePath)
+          const existingEntryQuery = query(abastecimentosRef, orderByChild("localId"), equalTo(localId))
+          const existingEntrySnapshot = await get(existingEntryQuery)
+
+          if (!existingEntrySnapshot.exists()) {
+            const newEntryRef = push(abastecimentosRef)
+            await set(newEntryRef, { ...abastecimentoData, localId, status: "synced" })
+            console.log("Abastecimento sincronizado com sucesso:", localId)
+          } else {
+            const existingEntry = Object.values(existingEntrySnapshot.val())[0]
+            if (existingEntry.status === "pending") {
+              const existingEntryKey = Object.keys(existingEntrySnapshot.val())[0]
+              await update(ref(database, `${nodePath}/${existingEntryKey}`), {
+                status: "synced",
+              })
+              console.log("Status do abastecimento atualizado:", localId)
+            } else {
+              console.log("Abastecimento já sincronizado, ignorando:", localId)
+            }
+          }
+        } catch (error) {
+          console.error("Erro ao sincronizar abastecimento individual:", error)
+          remainingData.push(data)
+        }
+      }
+
+      if (remainingData.length > 0) {
+        await AsyncStorage.setItem(OFFLINE_ABASTECIMENTOS_KEY, JSON.stringify(remainingData))
+      } else {
+        await AsyncStorage.removeItem(OFFLINE_ABASTECIMENTOS_KEY)
+      }
+    }
+  } catch (error) {
+    console.error("Erro ao sincronizar abastecimentos offline:", error)
+  }
+}
+
+// Função para sincronizar percursos offline
+export const syncOfflinePercursos = async () => {
+  try {
+    const offlineData = await AsyncStorage.getItem(OFFLINE_PERCURSOS_KEY)
+    if (offlineData) {
+      const parsedData = JSON.parse(offlineData)
+      const remainingData = []
+
+      for (const data of parsedData) {
+        try {
+          const { propriedade, localId, ...percursoData } = data
+
+          const percursosRef = ref(database, `propriedades/${propriedade}/percursos`)
+          const existingEntryQuery = query(percursosRef, orderByChild("localId"), equalTo(localId))
+          const existingEntrySnapshot = await get(existingEntryQuery)
+
+          if (!existingEntrySnapshot.exists()) {
+            const newEntryRef = push(percursosRef)
+            await set(newEntryRef, { ...percursoData, localId, status: "synced" })
+            console.log("Percurso sincronizado com sucesso:", localId)
+          } else {
+            const existingEntry = Object.values(existingEntrySnapshot.val())[0]
+            if (existingEntry.status === "pending") {
+              const existingEntryKey = Object.keys(existingEntrySnapshot.val())[0]
+              await update(ref(database, `propriedades/${propriedade}/percursos/${existingEntryKey}`), {
+                status: "synced",
+              })
+              console.log("Status do percurso atualizado:", localId)
+            } else {
+              console.log("Percurso já sincronizado, ignorando:", localId)
+            }
+          }
+        } catch (error) {
+          console.error("Erro ao sincronizar percurso individual:", error)
+          remainingData.push(data)
+        }
+      }
+
+      if (remainingData.length > 0) {
+        await AsyncStorage.setItem(OFFLINE_PERCURSOS_KEY, JSON.stringify(remainingData))
+      } else {
+        await AsyncStorage.removeItem(OFFLINE_PERCURSOS_KEY)
+      }
+    }
+  } catch (error) {
+    console.error("Erro ao sincronizar percursos offline:", error)
+  }
+}
+
+// Função para salvar dados em cache
+export const cacheFirebaseData = async (data, cacheKey) => {
+  try {
+    await AsyncStorage.setItem(cacheKey, JSON.stringify(data))
+    console.log(`Dados em cache salvos com sucesso em ${cacheKey}`)
+  } catch (error) {
+    console.error(`Erro ao salvar dados em cache em ${cacheKey}:`, error)
+  }
+}
+
+// Função para obter dados em cache
+export const getCachedData = async (cacheKey) => {
+  try {
+    const cachedData = await AsyncStorage.getItem(cacheKey)
+    return cachedData ? JSON.parse(cachedData) : null
+  } catch (error) {
+    console.error(`Erro ao obter dados em cache de ${cacheKey}:`, error)
+    return null
+  }
+}
+
+// Função para sincronizar todos os dados offline
+export const syncAllOfflineData = async () => {
+  await syncOfflineApontamentos()
+  await syncOfflineAbastecimentos()
+  await syncOfflinePercursos()
+}
+
+// Função para verificar conectividade e sincronizar
 let isSyncingInProgress = false
 
 export const checkConnectivityAndSync = async () => {
   if (isSyncingInProgress) {
-    console.log("Sync already in progress, skipping")
+    console.log("Sincronização já em andamento, pulando")
     return
   }
 
@@ -87,10 +258,19 @@ export const checkConnectivityAndSync = async () => {
     isSyncingInProgress = true
     const netInfo = await NetInfo.fetch()
     if (netInfo.isConnected) {
-      await syncOfflineData()
+      await syncAllOfflineData()
     }
   } finally {
     isSyncingInProgress = false
   }
 }
 
+// Exportar chaves para uso em outros componentes
+export const CACHE_KEYS = {
+  MAQUINARIOS: CACHED_MAQUINARIOS_KEY,
+  IMPLEMENTOS: CACHED_IMPLEMENTOS_KEY,
+  VEICULOS: CACHED_VEICULOS_KEY,
+  DIRECIONADORES: CACHED_DIRECIONADORES_KEY,
+  USERS: CACHED_USERS_KEY,
+  HORIMETROS: CACHED_HORIMETROS_KEY,
+}

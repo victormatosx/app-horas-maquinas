@@ -16,12 +16,12 @@ import {
 } from "react-native"
 import DateTimePickerModal from "react-native-modal-datetime-picker"
 import { database } from "../config/firebaseConfig"
-import { ref, push, set, onValue, query, orderByChild, equalTo, get, update, remove } from "firebase/database"
+import { ref, push, set, onValue, query, orderByChild, equalTo, get, update } from "firebase/database"
 import { X, Trash2, ChevronDown } from "lucide-react-native"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import NetInfo from "@react-native-community/netinfo"
 import { saveOfflineData, checkConnectivityAndSync } from "../utils/offlineManager"
-import { BENS, IMPLEMENTOS, ATIVIDADES, PRODUTOS, DIRECIONADOR, TANQUEDIESEL, CULTURA } from "./assets"
+import { ATIVIDADES, PRODUTOS, TANQUEDIESEL, CULTURA } from "./assets"
 import { auth } from "../config/firebaseConfig"
 import { onAuthStateChanged } from "firebase/auth"
 
@@ -29,6 +29,11 @@ const USER_TOKEN_KEY = "@user_token"
 const USER_PROPRIEDADE_KEY = "@user_propriedade"
 const OFFLINE_STORAGE_KEY = "@offline_apontamentos"
 const PREVIOUS_HORIMETROS_KEY = "@previous_horimetros"
+const CACHED_MAQUINARIOS_KEY = "@cached_maquinarios"
+const CACHED_IMPLEMENTOS_KEY = "@cached_implementos"
+const CACHED_DIRECIONADORES_KEY = "@cached_direcionadores"
+const CACHED_HORIMETROS_KEY = "@cached_horimetros"
+const FICHA_CONTROLE_KEY = "@ficha_controle_numero" // Nova chave para armazenar o número da ficha
 
 const initialFormData = {
   fichaControle: "",
@@ -50,8 +55,6 @@ export default function FormScreen() {
   const [previousHorimetros, setPreviousHorimetros] = useState({})
   const [selectedOperacoesMecanizadas, setSelectedOperacoesMecanizadas] = useState([])
   const [isDatePickerVisible, setDatePickerVisible] = useState(false)
-  const [bens, setBens] = useState([])
-  const [bensImplementos, setBensImplementos] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
   const [userId, setUserId] = useState("")
@@ -64,6 +67,13 @@ export default function FormScreen() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
   const [isHorimetrosLoading, setIsHorimetrosLoading] = useState(true)
+  // Estado para armazenar a lista de direcionadores do Firebase
+  const [direcionadores, setDirecionadores] = useState([])
+  // Novos estados para armazenar maquinários e implementos do Firebase
+  const [maquinarios, setMaquinarios] = useState([])
+  const [implementos, setImplementos] = useState([])
+  // Novo estado para controlar o número da ficha de controle
+  const [fichaControleNumero, setFichaControleNumero] = useState(40000)
 
   const isMounted = useRef(true)
 
@@ -73,20 +83,258 @@ export default function FormScreen() {
   }, [formData])
 
   const resetForm = useCallback(() => {
+    // Incrementar o número da ficha de controle ao resetar o formulário
+    const novoNumero = fichaControleNumero + 1
+    setFichaControleNumero(novoNumero)
+
+    // Salvar o novo número no AsyncStorage
+    AsyncStorage.setItem(FICHA_CONTROLE_KEY, novoNumero.toString()).catch((error) =>
+      console.error("Erro ao salvar número da ficha:", error),
+    )
+
+    // Resetar o formulário sem preencher automaticamente a ficha de controle
     setFormData(initialFormData)
+
     setOperacaoMecanizadaData({
       bem: "",
       implemento: "",
       horaFinal: "",
     })
     setSelectedOperacoesMecanizadas([])
-  }, [])
+  }, [fichaControleNumero])
 
   useEffect(() => {
     return () => {
       isMounted.current = false
     }
   }, [])
+
+  // Carregar o último número da ficha de controle do AsyncStorage
+  useEffect(() => {
+    const carregarNumeroFicha = async () => {
+      try {
+        const numeroSalvo = await AsyncStorage.getItem(FICHA_CONTROLE_KEY)
+        if (numeroSalvo) {
+          const numero = Number.parseInt(numeroSalvo, 10)
+          // Apenas armazenar o último número usado, sem preencher o campo
+          setFichaControleNumero(numero)
+        } else {
+          // Se não existir número salvo, definir o padrão 40000 apenas para controle interno
+          setFichaControleNumero(40000)
+        }
+      } catch (error) {
+        console.error("Erro ao carregar número da ficha:", error)
+        // Em caso de erro, definir o padrão 40000 apenas para controle interno
+        setFichaControleNumero(40000)
+      }
+    }
+
+    carregarNumeroFicha()
+  }, [])
+
+  // useEffect para buscar direcionadores do Firebase
+  useEffect(() => {
+    if (!userPropriedade) return
+
+    const loadDirecionadoresFromFirebase = () => {
+      try {
+        const direcionadoresRef = ref(database, `propriedades/${userPropriedade}/direcionadores`)
+
+        // Configurar listener para atualizações em tempo real
+        const unsubscribe = onValue(
+          direcionadoresRef,
+          (snapshot) => {
+            if (isMounted.current) {
+              const data = snapshot.val() || {}
+
+              // Transformar os dados do Firebase em um array no formato esperado pelo componente
+              const direcionadoresArray = Object.entries(data).map(([key, value]) => ({
+                id: value.id || key,
+                name: value.direcionador || "Direcionador sem nome",
+                culturaAssociada: value.culturaAssociada || "",
+              }))
+
+              setDirecionadores(direcionadoresArray)
+
+              // Salvar direcionadores no cache para uso offline
+              AsyncStorage.setItem(CACHED_DIRECIONADORES_KEY, JSON.stringify(direcionadoresArray)).catch((error) =>
+                console.error("Erro ao salvar direcionadores no cache:", error),
+              )
+            }
+          },
+          (error) => {
+            console.error("Erro ao carregar direcionadores do Firebase:", error)
+
+            // Em caso de erro, tentar carregar do cache
+            loadCachedDirecionadores()
+          },
+        )
+
+        return unsubscribe
+      } catch (error) {
+        console.error("Erro ao configurar listener para direcionadores:", error)
+
+        // Em caso de erro, tentar carregar do cache
+        loadCachedDirecionadores()
+      }
+    }
+
+    // Função para carregar direcionadores do cache
+    const loadCachedDirecionadores = async () => {
+      try {
+        const cachedData = await AsyncStorage.getItem(CACHED_DIRECIONADORES_KEY)
+        if (cachedData) {
+          const direcionadoresArray = JSON.parse(cachedData)
+          setDirecionadores(direcionadoresArray)
+          console.log("Direcionadores carregados do cache")
+        }
+      } catch (error) {
+        console.error("Erro ao carregar direcionadores do cache:", error)
+      }
+    }
+
+    const unsubscribe = loadDirecionadoresFromFirebase()
+
+    return () => {
+      if (unsubscribe) unsubscribe()
+    }
+  }, [userPropriedade])
+
+  // Novo useEffect para buscar maquinários do Firebase
+  useEffect(() => {
+    if (!userPropriedade) return
+
+    const loadMaquinariosFromFirebase = () => {
+      try {
+        const maquinariosRef = ref(database, `propriedades/${userPropriedade}/maquinarios`)
+
+        // Configurar listener para atualizações em tempo real
+        const unsubscribe = onValue(
+          maquinariosRef,
+          (snapshot) => {
+            if (isMounted.current) {
+              const data = snapshot.val() || {}
+
+              // Transformar os dados do Firebase em um array no formato esperado pelo componente
+              const maquinariosArray = Object.entries(data).map(([key, value]) => ({
+                id: value.id || key,
+                name: `${value.id} - ${value.nome}`, // Formato "ID - NOME"
+                rawName: value.nome || "Máquina sem nome", // Manter o nome original para uso posterior
+              }))
+
+              setMaquinarios(maquinariosArray)
+
+              // Salvar maquinários no cache para uso offline
+              AsyncStorage.setItem(CACHED_MAQUINARIOS_KEY, JSON.stringify(maquinariosArray)).catch((error) =>
+                console.error("Erro ao salvar maquinários no cache:", error),
+              )
+            }
+          },
+          (error) => {
+            console.error("Erro ao carregar maquinários do Firebase:", error)
+
+            // Em caso de erro, tentar carregar do cache
+            loadCachedMaquinarios()
+          },
+        )
+
+        return unsubscribe
+      } catch (error) {
+        console.error("Erro ao configurar listener para maquinários:", error)
+
+        // Em caso de erro, tentar carregar do cache
+        loadCachedMaquinarios()
+      }
+    }
+
+    // Função para carregar maquinários do cache
+    const loadCachedMaquinarios = async () => {
+      try {
+        const cachedData = await AsyncStorage.getItem(CACHED_MAQUINARIOS_KEY)
+        if (cachedData) {
+          const maquinariosArray = JSON.parse(cachedData)
+          setMaquinarios(maquinariosArray)
+          console.log("Maquinários carregados do cache")
+        }
+      } catch (error) {
+        console.error("Erro ao carregar maquinários do cache:", error)
+      }
+    }
+
+    const unsubscribe = loadMaquinariosFromFirebase()
+
+    return () => {
+      if (unsubscribe) unsubscribe()
+    }
+  }, [userPropriedade])
+
+  // Novo useEffect para buscar implementos do Firebase
+  useEffect(() => {
+    if (!userPropriedade) return
+
+    const loadImplementosFromFirebase = () => {
+      try {
+        const implementosRef = ref(database, `propriedades/${userPropriedade}/implementos`)
+
+        // Configurar listener para atualizações em tempo real
+        const unsubscribe = onValue(
+          implementosRef,
+          (snapshot) => {
+            if (isMounted.current) {
+              const data = snapshot.val() || {}
+
+              // Transformar os dados do Firebase em um array no formato esperado pelo componente
+              const implementosArray = Object.entries(data).map(([key, value]) => ({
+                id: value.id || key,
+                name: `${value.id} - ${value.nome}`, // Formato "ID - NOME"
+                rawName: value.nome || "Implemento sem nome", // Manter o nome original para uso posterior
+              }))
+
+              setImplementos(implementosArray)
+
+              // Salvar implementos no cache para uso offline
+              AsyncStorage.setItem(CACHED_IMPLEMENTOS_KEY, JSON.stringify(implementosArray)).catch((error) =>
+                console.error("Erro ao salvar implementos no cache:", error),
+              )
+            }
+          },
+          (error) => {
+            console.error("Erro ao carregar implementos do Firebase:", error)
+
+            // Em caso de erro, tentar carregar do cache
+            loadCachedImplementos()
+          },
+        )
+
+        return unsubscribe
+      } catch (error) {
+        console.error("Erro ao configurar listener para implementos:", error)
+
+        // Em caso de erro, tentar carregar do cache
+        loadCachedImplementos()
+      }
+    }
+
+    // Função para carregar implementos do cache
+    const loadCachedImplementos = async () => {
+      try {
+        const cachedData = await AsyncStorage.getItem(CACHED_IMPLEMENTOS_KEY)
+        if (cachedData) {
+          const implementosArray = JSON.parse(cachedData)
+          setImplementos(implementosArray)
+          console.log("Implementos carregados do cache")
+        }
+      } catch (error) {
+        console.error("Erro ao carregar implementos do cache:", error)
+      }
+    }
+
+    const unsubscribe = loadImplementosFromFirebase()
+
+    return () => {
+      if (unsubscribe) unsubscribe()
+    }
+  }, [userPropriedade])
 
   // Carregar horímetros do Firebase em vez do AsyncStorage
   useEffect(() => {
@@ -104,6 +352,17 @@ export default function FormScreen() {
             if (isMounted.current) {
               const data = snapshot.val() || {}
               setPreviousHorimetros(data)
+
+              // Salvar horímetros no cache para uso offline
+              AsyncStorage.setItem(PREVIOUS_HORIMETROS_KEY, JSON.stringify(data)).catch((error) =>
+                console.error("Erro ao salvar horímetros no cache:", error),
+              )
+
+              // Também salvar na chave padrão do offlineManager
+              AsyncStorage.setItem(CACHED_HORIMETROS_KEY, JSON.stringify(data)).catch((error) =>
+                console.error("Erro ao salvar horímetros no cache padrão:", error),
+              )
+
               setIsHorimetrosLoading(false)
             }
           },
@@ -128,9 +387,18 @@ export default function FormScreen() {
 
     const loadLocalHorimetros = async () => {
       try {
+        // Tentar carregar primeiro da chave específica
         const storedHorimetros = await AsyncStorage.getItem(PREVIOUS_HORIMETROS_KEY)
         if (storedHorimetros) {
           setPreviousHorimetros(JSON.parse(storedHorimetros))
+          return
+        }
+
+        // Se não encontrar, tentar da chave padrão do offlineManager
+        const cachedHorimetros = await AsyncStorage.getItem(CACHED_HORIMETROS_KEY)
+        if (cachedHorimetros) {
+          setPreviousHorimetros(JSON.parse(cachedHorimetros))
+          console.log("Horímetros carregados do cache padrão")
         }
       } catch (error) {
         console.error("Erro ao carregar horímetros locais:", error)
@@ -156,6 +424,13 @@ export default function FormScreen() {
         const propriedade = await AsyncStorage.getItem(USER_PROPRIEDADE_KEY)
         setUserId(id)
         setUserPropriedade(propriedade)
+
+        // Verificar conectividade
+        const netInfo = await NetInfo.fetch()
+        if (!netInfo.isConnected) {
+          // Se estiver offline, carregar dados do cache
+          loadCachedData()
+        }
       } catch (error) {
         console.error("Error loading user data:", error)
       }
@@ -165,55 +440,51 @@ export default function FormScreen() {
     return () => unsubscribeAuth()
   }, [])
 
+  // Função para carregar todos os dados do cache quando offline
+  const loadCachedData = async () => {
+    try {
+      // Carregar maquinários
+      const cachedMaquinarios = await AsyncStorage.getItem(CACHED_MAQUINARIOS_KEY)
+      if (cachedMaquinarios) {
+        setMaquinarios(JSON.parse(cachedMaquinarios))
+        console.log("Maquinários carregados do cache")
+      }
+
+      // Carregar implementos
+      const cachedImplementos = await AsyncStorage.getItem(CACHED_IMPLEMENTOS_KEY)
+      if (cachedImplementos) {
+        setImplementos(JSON.parse(cachedImplementos))
+        console.log("Implementos carregados do cache")
+      }
+
+      // Carregar direcionadores
+      const cachedDirecionadores = await AsyncStorage.getItem(CACHED_DIRECIONADORES_KEY)
+      if (cachedDirecionadores) {
+        setDirecionadores(JSON.parse(cachedDirecionadores))
+        console.log("Direcionadores carregados do cache")
+      }
+
+      // Carregar horímetros
+      const cachedHorimetros = await AsyncStorage.getItem(CACHED_HORIMETROS_KEY)
+      if (cachedHorimetros) {
+        setPreviousHorimetros(JSON.parse(cachedHorimetros))
+        console.log("Horímetros carregados do cache")
+      }
+
+      setIsLoading(false)
+    } catch (error) {
+      console.error("Erro ao carregar dados do cache:", error)
+      setIsLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (!isAuthInitialized || !isAuthenticated) {
       return
     }
 
-    const fetchData = async (path, setterFunction) => {
-      try {
-        const dbRef = ref(database, path)
-        onValue(
-          dbRef,
-          (snapshot) => {
-            if (isMounted.current) {
-              const data = snapshot.val()
-              setterFunction(data || {})
-            }
-          },
-          (error) => {
-            console.error(`Error fetching ${path}:`, error)
-            if (isMounted.current) {
-              setError(`Failed to load ${path}. Please try again.`)
-            }
-          },
-        )
-      } catch (error) {
-        console.error(`Error setting up listener for ${path}:`, error)
-        if (isMounted.current) {
-          setError(`Failed to set up listener for ${path}. Please try again.`)
-        }
-      }
-    }
-
-    Promise.all([
-      fetchData("bens-implementos", (data) => {
-        setBens(data || {})
-        setBensImplementos(data || {})
-      }),
-    ])
-      .then(() => {
-        if (isMounted.current) {
-          setIsLoading(false)
-        }
-      })
-      .catch((error) => {
-        console.error("Error in Promise.all:", error)
-        if (isMounted.current) {
-          setError("Failed to load all data. Please try again.")
-          setIsLoading(false)
-        }
-      })
+    // Não precisamos mais buscar bens-implementos, pois agora estamos buscando diretamente do Firebase
+    setIsLoading(false)
   }, [isAuthInitialized, isAuthenticated])
 
   useEffect(() => {
@@ -239,27 +510,38 @@ export default function FormScreen() {
     setDatePickerVisible(false)
   }, [])
 
-  const handleChange = useCallback((name, value) => {
-    if (name === "direcionador") {
-      const selectedDirecionador = DIRECIONADOR.find((d) => d.id === value)
-      let cultura = ""
+  const handleChange = useCallback(
+    (name, value) => {
+      if (name === "direcionador") {
+        // Buscar o direcionador selecionado na lista do Firebase
+        const selectedDirecionador = direcionadores.find((d) => d.id === value)
 
-      if (selectedDirecionador) {
-        const direcionadorName = selectedDirecionador.name.toLowerCase()
-        if (direcionadorName.includes("alh")) {
-          cultura = "alho"
-        } else if (direcionadorName.includes("ceb")) {
-          cultura = "cebola"
-        } else if (direcionadorName.includes("sorgo")) {
-          cultura = "sorgo"
+        // Se encontrou o direcionador, usar a culturaAssociada dele
+        if (selectedDirecionador && selectedDirecionador.culturaAssociada) {
+          // Encontrar o ID da cultura correspondente
+          const culturaId =
+            CULTURA.find((c) => c.name.toLowerCase() === selectedDirecionador.culturaAssociada.toLowerCase())?.id || ""
+
+          return setFormData((prev) => ({
+            ...prev,
+            [name]: value,
+            cultura: culturaId,
+          }))
         }
+
+        // Se não encontrou ou não tem culturaAssociada, apenas atualiza o direcionador
+        return setFormData((prev) => ({ ...prev, [name]: value }))
       }
 
-      return setFormData((prev) => ({ ...prev, [name]: value, cultura }))
-    }
+      // Se for o campo fichaControle e for um número válido, atualizar o estado fichaControleNumero
+      if (name === "fichaControle" && !isNaN(Number.parseInt(value, 10))) {
+        setFichaControleNumero(Number.parseInt(value, 10))
+      }
 
-    return setFormData((prev) => ({ ...prev, [name]: value }))
-  }, [])
+      return setFormData((prev) => ({ ...prev, [name]: value }))
+    },
+    [direcionadores],
+  )
 
   const handleOperacaoMecanizadaChange = useCallback(
     (name, value) => {
@@ -350,7 +632,11 @@ export default function FormScreen() {
     [previousHorimetros, userPropriedade],
   )
 
-  // Função simplificada para remover horímetros do Firebase
+  // Modificar a função removeSelectedOperacaoMecanizada para sempre restaurar o valor anterior
+  // em vez de excluir completamente o registro quando não há outras operações
+
+  // Localizar a função removeSelectedOperacaoMecanizada e substituí-la pela versão abaixo:
+
   const removeSelectedOperacaoMecanizada = useCallback(
     async (id) => {
       try {
@@ -365,47 +651,26 @@ export default function FormScreen() {
         // Remover da lista local primeiro
         setSelectedOperacoesMecanizadas((prev) => prev.filter((item) => item.id !== id))
 
-        // Verificar se existem outras operações para o mesmo bem
-        const outrasOperacoesDoMesmoBem = selectedOperacoesMecanizadas.filter(
-          (item) => item.id !== id && item.bem === operacaoParaRemover.bem,
-        )
-
         // Referência para o nó específico do horímetro no Firebase
         const horimetroRef = ref(database, `propriedades/${userPropriedade}/horimetros/${operacaoParaRemover.bem}`)
 
-        if (outrasOperacoesDoMesmoBem.length === 0) {
-          // Se não houver outras operações, remover o horímetro completamente
-          await remove(horimetroRef)
+        // Sempre restaurar o valor anterior, independentemente de haver outras operações
+        const valorAnterior = operacaoParaRemover.horaInicial
 
-          // Atualizar o estado local
-          const updatedHorimetros = { ...previousHorimetros }
-          delete updatedHorimetros[operacaoParaRemover.bem]
-          setPreviousHorimetros(updatedHorimetros)
+        // Atualizar o Firebase com o valor anterior
+        await set(horimetroRef, valorAnterior)
 
-          // Atualizar o AsyncStorage
-          await AsyncStorage.setItem(PREVIOUS_HORIMETROS_KEY, JSON.stringify(updatedHorimetros))
-
-          console.log(`Horímetro para o bem ${operacaoParaRemover.bem} removido com sucesso`)
-        } else {
-          // Se houver outras operações, encontrar o valor anterior
-          // Usamos o horaInicial da operação que está sendo removida como valor a restaurar
-          const valorAnterior = operacaoParaRemover.horaInicial
-
-          // Atualizar o Firebase com o valor anterior
-          await set(horimetroRef, valorAnterior)
-
-          // Atualizar o estado local
-          const updatedHorimetros = {
-            ...previousHorimetros,
-            [operacaoParaRemover.bem]: valorAnterior,
-          }
-          setPreviousHorimetros(updatedHorimetros)
-
-          // Atualizar o AsyncStorage
-          await AsyncStorage.setItem(PREVIOUS_HORIMETROS_KEY, JSON.stringify(updatedHorimetros))
-
-          console.log(`Horímetro para o bem ${operacaoParaRemover.bem} restaurado para ${valorAnterior}`)
+        // Atualizar o estado local
+        const updatedHorimetros = {
+          ...previousHorimetros,
+          [operacaoParaRemover.bem]: valorAnterior,
         }
+        setPreviousHorimetros(updatedHorimetros)
+
+        // Atualizar o AsyncStorage
+        await AsyncStorage.setItem(PREVIOUS_HORIMETROS_KEY, JSON.stringify(updatedHorimetros))
+
+        console.log(`Horímetro para o bem ${operacaoParaRemover.bem} restaurado para ${valorAnterior}`)
       } catch (error) {
         console.error("Erro ao remover/atualizar horímetro:", error)
         Alert.alert("Erro", "Não foi possível remover o horímetro. Tente novamente.")
@@ -437,17 +702,35 @@ export default function FormScreen() {
     if (isFormValid()) {
       try {
         const localId = Date.now().toString()
+
+        // Encontrar o direcionador selecionado
+        const selectedDirecionador = direcionadores.find((d) => d.id === formData.direcionador)
+
+        // Converter a data do formato DD/MM/YYYY para um timestamp
+        let timestamp = Date.now()
+        if (formData.data) {
+          const [day, month, year] = formData.data.split("/")
+          const dateObj = new Date(year, month - 1, day)
+          timestamp = dateObj.getTime()
+        }
+
         // Modify the handleSubmit function to include operacoesMecanizadas in the apontamentoData
         const apontamentoData = {
           ...formData,
           atividade: ATIVIDADES.find((a) => a.id === formData.atividade)?.name || formData.atividade,
-          direcionador: DIRECIONADOR.find((d) => d.id === formData.direcionador)?.name || formData.direcionador,
-          cultura: CULTURA.find((c) => c.id === formData.cultura)?.name || formData.cultura,
-          timestamp: Date.now(),
+          // Usar o nome do direcionador do Firebase
+          direcionador: selectedDirecionador?.name || formData.direcionador,
+          // Usar a culturaAssociada do direcionador selecionado
+          cultura:
+            selectedDirecionador?.culturaAssociada ||
+            CULTURA.find((c) => c.id === formData.cultura)?.name ||
+            formData.cultura,
+          timestamp: timestamp,
           operacoesMecanizadas: selectedOperacoesMecanizadas.map((op) => ({
             ...op,
-            bem: BENS.find((b) => b.id === op.bem)?.name || op.bem,
-            implemento: IMPLEMENTOS.find((i) => i.id === op.implemento)?.name || op.implemento,
+            // Usar os nomes dos maquinários e implementos do Firebase
+            bem: maquinarios.find((b) => b.id === op.bem)?.name || op.bem,
+            implemento: implementos.find((i) => i.id === op.implemento)?.name || op.implemento,
           })),
           userId: userId,
           propriedade: userPropriedade,
@@ -490,16 +773,33 @@ export default function FormScreen() {
           const isDuplicate = offlineData.some((item) => item.localId === localId)
 
           if (!isDuplicate) {
+            // Encontrar o direcionador selecionado
+            const selectedDirecionador = direcionadores.find((d) => d.id === formData.direcionador)
+
+            // Converter a data do formato DD/MM/YYYY para um timestamp
+            let timestamp = Date.now()
+            if (formData.data) {
+              const [day, month, year] = formData.data.split("/")
+              const dateObj = new Date(year, month - 1, day)
+              timestamp = dateObj.getTime()
+            }
+
             const apontamentoData = {
               ...formData,
               atividade: ATIVIDADES.find((a) => a.id === formData.atividade)?.name || formData.atividade,
-              direcionador: DIRECIONADOR.find((d) => d.id === formData.direcionador)?.name || formData.direcionador,
-              cultura: CULTURA.find((c) => c.id === formData.cultura)?.name || formData.cultura,
-              timestamp: Date.now(),
+              // Usar o nome do direcionador do Firebase
+              direcionador: selectedDirecionador?.name || formData.direcionador,
+              // Usar a culturaAssociada do direcionador selecionado
+              cultura:
+                selectedDirecionador?.culturaAssociada ||
+                CULTURA.find((c) => c.id === formData.cultura)?.name ||
+                formData.cultura,
+              timestamp: timestamp,
               operacoesMecanizadas: selectedOperacoesMecanizadas.map((op) => ({
                 ...op,
-                bem: BENS.find((b) => b.id === op.bem)?.name || op.bem,
-                implemento: IMPLEMENTOS.find((i) => i.id === op.implemento)?.name || op.implemento,
+                // Usar os nomes dos maquinários e implementos do Firebase
+                bem: maquinarios.find((b) => b.id === op.bem)?.name || op.bem,
+                implemento: implementos.find((i) => i.id === op.implemento)?.name || op.implemento,
               })),
               userId: userId,
               propriedade: userPropriedade,
@@ -515,7 +815,18 @@ export default function FormScreen() {
     } else {
       Alert.alert("Atenção", "Preencha todos os campos obrigatórios!")
     }
-  }, [formData, userId, userPropriedade, sendDataToFirebase, isFormValid, resetForm, selectedOperacoesMecanizadas])
+  }, [
+    formData,
+    userId,
+    userPropriedade,
+    sendDataToFirebase,
+    isFormValid,
+    resetForm,
+    selectedOperacoesMecanizadas,
+    direcionadores,
+    maquinarios,
+    implementos,
+  ])
 
   const renderInputField = useCallback(
     (label, name, value, onChange, keyboardType = "default", editable = true) => (
@@ -600,24 +911,26 @@ export default function FormScreen() {
 
   const Separator = useCallback(() => <View style={styles.separator} />, [])
 
-  const openListModal = useCallback((type) => {
-    setListModalType(type)
-    setListModalData(
-      type === "produto"
-        ? PRODUTOS
-        : type === "tanqueDiesel"
-          ? TANQUEDIESEL
-          : type === "direcionador"
-            ? DIRECIONADOR
-            : type === "bem"
-              ? BENS
-              : type === "implemento"
-                ? IMPLEMENTOS
-                : ATIVIDADES,
-    )
-    setSearchQuery("")
-    setListModalVisible(true)
-  }, [])
+  const openListModal = useCallback(
+    (type) => {
+      setListModalType(type)
+
+      // Selecionar a lista correta com base no tipo
+      if (type === "direcionador") {
+        setListModalData(direcionadores)
+      } else if (type === "bem") {
+        setListModalData(maquinarios)
+      } else if (type === "implemento") {
+        setListModalData(implementos)
+      } else {
+        setListModalData(type === "produto" ? PRODUTOS : type === "tanqueDiesel" ? TANQUEDIESEL : ATIVIDADES)
+      }
+
+      setSearchQuery("")
+      setListModalVisible(true)
+    },
+    [direcionadores, maquinarios, implementos],
+  )
 
   const filteredListData = useMemo(() => {
     if (!searchQuery) return listModalData
@@ -684,8 +997,9 @@ export default function FormScreen() {
               style={styles.flatList}
               data={filteredListData}
               renderItem={renderListItem}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item, index) => `${listModalType}-${item.id}-${index}`}
               ItemSeparatorComponent={Separator}
+              showsVerticalScrollIndicator={false}
             />
           </View>
         </SafeAreaView>
@@ -721,7 +1035,7 @@ export default function FormScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
-        {renderInputField("Ficha de Controle", "fichaControle", formData.fichaControle, handleChange)}
+        {renderInputField("Ficha de Controle (número da máquina)", "fichaControle", formData.fichaControle, handleChange)}
         <Separator />
         {renderDatePickerField("Data", "data")}
         <Separator />
@@ -731,13 +1045,17 @@ export default function FormScreen() {
           onPress={() => openListModal("direcionador")}
           accessibilityLabel="Selecionar Direcionador"
         >
-          <Text>{DIRECIONADOR.find((d) => d.id === formData.direcionador)?.name || "Selecione o Direcionador"}</Text>
+          <Text>{direcionadores.find((d) => d.id === formData.direcionador)?.name || "Selecione o Direcionador"}</Text>
           <ChevronDown size={20} color="#2a9d8f" />
         </TouchableOpacity>
         <Separator />
         <Text style={styles.label}>Cultura</Text>
         <View style={[styles.input, styles.disabledInput]}>
-          <Text>{CULTURA.find((c) => c.id === formData.cultura)?.name || "Será definida pelo direcionador"}</Text>
+          <Text>
+            {formData.direcionador
+              ? direcionadores.find((d) => d.id === formData.direcionador)?.culturaAssociada || "Não definida"
+              : "Será definida pelo direcionador"}
+          </Text>
         </View>
         <Separator />
         <Text style={styles.label}>Atividade</Text>
@@ -789,7 +1107,7 @@ export default function FormScreen() {
             onPress={() => openListModal("bem")}
             accessibilityLabel="Selecionar Bem"
           >
-            <Text>{BENS.find((b) => b.id === operacaoMecanizadaData.bem)?.name || "Selecione o Bem"}</Text>
+            <Text>{maquinarios.find((b) => b.id === operacaoMecanizadaData.bem)?.name || "Selecione o Bem"}</Text>
             <ChevronDown size={20} color="#2a9d8f" />
           </TouchableOpacity>
 
@@ -809,7 +1127,7 @@ export default function FormScreen() {
             accessibilityLabel="Selecionar Implemento"
           >
             <Text>
-              {IMPLEMENTOS.find((i) => i.id === operacaoMecanizadaData.implemento)?.name || "Selecione o Implemento"}
+              {implementos.find((i) => i.id === operacaoMecanizadaData.implemento)?.name || "Selecione o Implemento"}
             </Text>
             <ChevronDown size={20} color="#2a9d8f" />
           </TouchableOpacity>
@@ -841,9 +1159,9 @@ export default function FormScreen() {
               {selectedOperacoesMecanizadas.map((item) => (
                 <View key={item.id} style={styles.selectedItem}>
                   <View>
-                    <Text style={styles.selectedItemTitle}>{BENS.find((b) => b.id === item.bem)?.name}</Text>
+                    <Text style={styles.selectedItemTitle}>{maquinarios.find((b) => b.id === item.bem)?.name}</Text>
                     <Text style={styles.selectedItemSubtitle}>
-                      {IMPLEMENTOS.find((i) => i.id === item.implemento)?.name}
+                      {implementos.find((i) => i.id === item.implemento)?.name}
                     </Text>
                     <Text>
                       Horas: {item.horaInicial} → {item.horaFinal} = {item.totalHoras}

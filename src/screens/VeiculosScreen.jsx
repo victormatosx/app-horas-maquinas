@@ -15,18 +15,28 @@ import {
   ScrollView,
   TextInput,
 } from "react-native"
+import { Picker } from "@react-native-picker/picker"
 import { useNavigation } from "@react-navigation/native"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import Icon from "react-native-vector-icons/Ionicons"
 import { auth, database } from "../config/firebaseConfig"
 import { signOut } from "firebase/auth"
-import { ref, onValue, off, push, set as dbSet } from "firebase/database"
+import { ref, onValue, off, push, set as dbSet, query, orderByChild, equalTo } from "firebase/database"
 import NetInfo from "@react-native-community/netinfo"
-import { PRODUTOS, TANQUEDIESEL, VEICULOS } from "./assets"
+import { PRODUTOS, TANQUEDIESEL } from "./assets"
+import DateTimePicker from "@react-native-community/datetimepicker"
+import {
+  saveOfflineData,
+  checkConnectivityAndSync,
+  cacheFirebaseData,
+  getCachedData,
+  CACHE_KEYS,
+} from "../utils/offlineManager"
 
 const USER_TOKEN_KEY = "@user_token"
 const USER_ROLE_KEY = "@user_role"
 const USER_PROPRIEDADE_KEY = "@user_propriedade"
+const OFFLINE_ABASTECIMENTOS_KEY = "@offline_abastecimentos"
 
 export default function VeiculosScreen() {
   const [abastecimentos, setAbastecimentos] = useState([])
@@ -45,13 +55,25 @@ export default function VeiculosScreen() {
     horimetro: "",
     tanqueDiesel: "",
     placa: "",
+    observacao: "",
   })
   const [listModalVisible, setListModalVisible] = useState(false)
   const [listModalType, setListModalType] = useState("")
   const [listModalData, setListModalData] = useState([])
   const [searchQuery, setSearchQuery] = useState("")
   const [usersMap, setUsersMap] = useState({})
+  const [veiculos, setVeiculos] = useState([])
+  const [isConnected, setIsConnected] = useState(true)
   const navigation = useNavigation()
+
+  // Filtro states
+  const [filterModalVisible, setFilterModalVisible] = useState(false)
+  const [dateFilter, setDateFilter] = useState(null)
+  const [typeFilter, setTypeFilter] = useState(null)
+  const [sortOrder, setSortOrder] = useState("desc")
+  const [filtroUsuario, setFiltroUsuario] = useState(null)
+  const [propertyUsers, setPropertyUsers] = useState([])
+  const [showDatePicker, setShowDatePicker] = useState(false)
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -65,54 +87,249 @@ export default function VeiculosScreen() {
     loadUserData()
   }, [])
 
+  // Monitorar o estado da conexão
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      setIsConnected(state.isConnected)
+      if (state.isConnected) {
+        checkConnectivityAndSync()
+      }
+    })
+
+    return () => unsubscribe()
+  }, [])
+
+  // Carregar veículos do Firebase ou do cache
   useEffect(() => {
     if (!userPropriedade) return
 
+    const loadVeiculos = async () => {
+      setIsLoading(true)
+
+      try {
+        const veiculosRef = ref(database, `propriedades/${userPropriedade}/veiculos`)
+
+        // Tentar carregar do Firebase primeiro
+        if (isConnected) {
+          const veiculosListener = onValue(
+            veiculosRef,
+            (snapshot) => {
+              const data = snapshot.val()
+              if (data) {
+                const veiculosArray = Object.entries(data).map(([key, value]) => ({
+                  id: key,
+                  modelo: value.modelo,
+                  placa: value.placa,
+                }))
+                setVeiculos(veiculosArray)
+
+                // Salvar em cache para uso offline
+                cacheFirebaseData(veiculosArray, CACHE_KEYS.VEICULOS)
+              } else {
+                setVeiculos([])
+              }
+              setIsLoading(false)
+            },
+            (error) => {
+              console.error("Erro ao carregar veículos do Firebase:", error)
+              loadCachedVeiculos()
+            },
+          )
+
+          return () => {
+            off(veiculosRef, "value", veiculosListener)
+          }
+        } else {
+          // Se estiver offline, carregar do cache
+          loadCachedVeiculos()
+        }
+      } catch (error) {
+        console.error("Erro ao configurar listener para veículos:", error)
+        loadCachedVeiculos()
+      }
+    }
+
+    const loadCachedVeiculos = async () => {
+      const cachedVeiculos = await getCachedData(CACHE_KEYS.VEICULOS)
+      if (cachedVeiculos) {
+        setVeiculos(cachedVeiculos)
+        console.log("Veículos carregados do cache")
+      } else {
+        setVeiculos([])
+        console.log("Nenhum veículo em cache")
+      }
+      setIsLoading(false)
+    }
+
+    loadVeiculos()
+  }, [userPropriedade, isConnected])
+
+  // Carregar abastecimentos e percursos do Firebase ou do cache
+  useEffect(() => {
+    if (!userPropriedade || !userRole || !userId) return
+
     setIsLoading(true)
 
-    // Carregar abastecimentos
-    const abastecimentosRef = ref(database, `propriedades/${userPropriedade}/abastecimentoVeiculos`)
-    const abastecimentosListener = onValue(abastecimentosRef, (snapshot) => {
-      const data = snapshot.val()
-      if (data) {
-        const abastecimentosArray = Object.entries(data).map(([key, value]) => ({
-          id: key,
-          ...value,
-          tipo: "abastecimento",
-        }))
-        // Filtrar apenas abastecimentos de veículos (não de máquinas)
-        const veiculosAbastecimentos = abastecimentosArray.filter(
-          (item) => !item.tipoEquipamento || item.tipoEquipamento === "veiculo",
-        )
-        setAbastecimentos(veiculosAbastecimentos)
-      } else {
-        setAbastecimentos([])
-      }
-      setIsLoading(false)
-    })
+    const loadData = async () => {
+      try {
+        // Carregar abastecimentos
+        const abastecimentosRef = ref(database, `propriedades/${userPropriedade}/abastecimentoVeiculos`)
+        let abastecimentosQuery
 
-    // Carregar percursos
-    const percursosRef = ref(database, `propriedades/${userPropriedade}/percursos`)
-    const percursosListener = onValue(percursosRef, (snapshot) => {
-      const data = snapshot.val()
-      if (data) {
-        const percursosArray = Object.entries(data).map(([key, value]) => ({
-          id: key,
-          ...value,
-          tipo: "percurso",
-        }))
-        setPercursos(percursosArray)
-      } else {
-        setPercursos([])
-      }
-      setIsLoading(false)
-    })
+        if (userRole === "user") {
+          abastecimentosQuery = query(abastecimentosRef, orderByChild("userId"), equalTo(userId))
+        } else if (userRole === "manager") {
+          abastecimentosQuery = abastecimentosRef
+        }
 
-    return () => {
-      off(abastecimentosRef, "value", abastecimentosListener)
-      off(percursosRef, "value", percursosListener)
+        // Carregar percursos
+        const percursosRef = ref(database, `propriedades/${userPropriedade}/percursos`)
+        let percursosQuery
+
+        if (userRole === "user") {
+          percursosQuery = query(percursosRef, orderByChild("userId"), equalTo(userId))
+        } else if (userRole === "manager") {
+          percursosQuery = percursosRef
+        }
+
+        if (userRole === "user" || userRole === "manager") {
+          if (isConnected) {
+            // Carregar do Firebase se estiver conectado
+            const abastecimentosListener = onValue(
+              abastecimentosQuery,
+              (snapshot) => {
+                const data = snapshot.val()
+                if (data) {
+                  const abastecimentosArray = Object.entries(data).map(([key, value]) => ({
+                    id: key,
+                    ...value,
+                    tipo: "abastecimento",
+                  }))
+                  // Filtrar apenas abastecimentos de veículos
+                  const veiculosAbastecimentos = abastecimentosArray.filter(
+                    (item) => !item.tipoEquipamento || item.tipoEquipamento === "veiculo",
+                  )
+                  setAbastecimentos(veiculosAbastecimentos)
+
+                  // Salvar em cache para uso offline
+                  cacheFirebaseData(veiculosAbastecimentos, "cached_abastecimentos_veiculos")
+                } else {
+                  setAbastecimentos([])
+                }
+                setIsLoading(false)
+              },
+              (error) => {
+                console.error("Erro ao carregar abastecimentos:", error)
+                loadCachedData()
+              },
+            )
+
+            const percursosListener = onValue(
+              percursosQuery,
+              (snapshot) => {
+                const data = snapshot.val()
+                if (data) {
+                  const percursosArray = Object.entries(data).map(([key, value]) => ({
+                    id: key,
+                    ...value,
+                    tipo: "percurso",
+                  }))
+                  setPercursos(percursosArray)
+
+                  // Salvar em cache para uso offline
+                  cacheFirebaseData(percursosArray, "cached_percursos")
+                } else {
+                  setPercursos([])
+                }
+                setIsLoading(false)
+              },
+              (error) => {
+                console.error("Erro ao carregar percursos:", error)
+                loadCachedData()
+              },
+            )
+
+            return () => {
+              off(abastecimentosQuery, "value", abastecimentosListener)
+              off(percursosQuery, "value", percursosListener)
+            }
+          } else {
+            // Carregar do cache se estiver offline
+            loadCachedData()
+          }
+        } else {
+          setIsLoading(false)
+        }
+      } catch (error) {
+        console.error("Erro ao configurar listeners:", error)
+        loadCachedData()
+      }
     }
-  }, [userPropriedade])
+
+    const loadCachedData = async () => {
+      try {
+        const cachedAbastecimentos = await getCachedData("cached_abastecimentos_veiculos")
+        const cachedPercursos = await getCachedData("cached_percursos")
+
+        if (cachedAbastecimentos) {
+          setAbastecimentos(cachedAbastecimentos)
+          console.log("Abastecimentos carregados do cache")
+        }
+
+        if (cachedPercursos) {
+          setPercursos(cachedPercursos)
+          console.log("Percursos carregados do cache")
+        }
+
+        setIsLoading(false)
+      } catch (error) {
+        console.error("Erro ao carregar dados do cache:", error)
+        setIsLoading(false)
+      }
+    }
+
+    loadData()
+  }, [userPropriedade, userRole, userId, isConnected])
+
+  // Carregar usuários da propriedade para o filtro (para gerentes)
+  useEffect(() => {
+    if (userRole === "manager" && userPropriedade) {
+      const loadUsers = async () => {
+        try {
+          if (isConnected) {
+            const usersRef = ref(database, `propriedades/${userPropriedade}/users`)
+            onValue(usersRef, (snapshot) => {
+              const data = snapshot.val()
+              if (data) {
+                const usersArray = Object.entries(data).map(([key, value]) => ({
+                  id: key,
+                  ...value,
+                }))
+                setPropertyUsers(usersArray)
+
+                // Salvar em cache para uso offline
+                cacheFirebaseData(usersArray, CACHE_KEYS.USERS)
+              }
+            })
+          } else {
+            // Carregar do cache se estiver offline
+            const cachedUsers = await getCachedData(CACHE_KEYS.USERS)
+            if (cachedUsers) {
+              setPropertyUsers(cachedUsers)
+            }
+          }
+        } catch (error) {
+          console.error("Erro ao carregar usuários:", error)
+          const cachedUsers = await getCachedData(CACHE_KEYS.USERS)
+          if (cachedUsers) {
+            setPropertyUsers(cachedUsers)
+          }
+        }
+      }
+
+      loadUsers()
+    }
+  }, [userRole, userPropriedade, isConnected])
 
   // Combinar e ordenar abastecimentos e percursos por timestamp
   useEffect(() => {
@@ -120,26 +337,100 @@ export default function VeiculosScreen() {
     setCombinedData(combined)
   }, [abastecimentos, percursos])
 
+  // Carregar mapa de usuários
   useEffect(() => {
     if (!userPropriedade) return
 
-    const usersRef = ref(database, `propriedades/${userPropriedade}/users`)
-    return onValue(usersRef, (snapshot) => {
-      const data = snapshot.val()
-      if (data) {
-        const usersMapping = {}
-        Object.entries(data).forEach(([key, value]) => {
-          usersMapping[key] = value.nome
-        })
-        setUsersMap(usersMapping)
+    const loadUsersMap = async () => {
+      try {
+        if (isConnected) {
+          const usersRef = ref(database, `propriedades/${userPropriedade}/users`)
+          return onValue(usersRef, (snapshot) => {
+            const data = snapshot.val()
+            if (data) {
+              const usersMapping = {}
+              Object.entries(data).forEach(([key, value]) => {
+                usersMapping[key] = value.nome
+              })
+              setUsersMap(usersMapping)
+
+              // Salvar em cache para uso offline
+              cacheFirebaseData(usersMapping, "cached_users_map")
+            }
+          })
+        } else {
+          // Carregar do cache se estiver offline
+          const cachedUsersMap = await getCachedData("cached_users_map")
+          if (cachedUsersMap) {
+            setUsersMap(cachedUsersMap)
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao carregar mapa de usuários:", error)
+        const cachedUsersMap = await getCachedData("cached_users_map")
+        if (cachedUsersMap) {
+          setUsersMap(cachedUsersMap)
+        }
       }
-    })
-  }, [userPropriedade])
+    }
+
+    loadUsersMap()
+  }, [userPropriedade, isConnected])
 
   const handleShowDetails = (item) => {
     setSelectedApontamento(item)
     setModalVisible(true)
   }
+
+  // Função para ordenar por timestamp
+  const sortByTimestamp = (array) => {
+    return [...array].sort((a, b) => {
+      return sortOrder === "desc" ? b.timestamp - a.timestamp : a.timestamp - b.timestamp
+    })
+  }
+
+  // Função para lidar com a mudança de data no DatePicker
+  const handleDateChange = (event, selectedDate) => {
+    setShowDatePicker(false)
+    if (selectedDate) {
+      setDateFilter(selectedDate)
+    }
+  }
+
+  // Função para limpar todos os filtros
+  const clearFilters = () => {
+    setDateFilter(null)
+    setTypeFilter(null)
+    setFiltroUsuario(null)
+  }
+
+  // Dados filtrados com base nos critérios selecionados
+  const filteredData = useMemo(() => {
+    let filtered = [...combinedData]
+
+    if (userRole === "manager" && filtroUsuario) {
+      filtered = filtered.filter((item) => item.userId === filtroUsuario)
+    }
+
+    if (dateFilter) {
+      filtered = filtered.filter((item) => {
+        const itemDate = new Date(item.timestamp)
+        const filterDate = new Date(dateFilter)
+
+        return (
+          itemDate.getDate() === filterDate.getDate() &&
+          itemDate.getMonth() === filterDate.getMonth() &&
+          itemDate.getFullYear() === filterDate.getFullYear()
+        )
+      })
+    }
+
+    if (typeFilter) {
+      filtered = filtered.filter((item) => item.tipo === typeFilter)
+    }
+
+    return sortByTimestamp(filtered)
+  }, [combinedData, userRole, filtroUsuario, dateFilter, typeFilter, sortOrder])
 
   const renderApontamento = ({ item }) => {
     if (item.tipo === "abastecimento") {
@@ -206,21 +497,38 @@ export default function VeiculosScreen() {
 
   const openListModal = (type) => {
     setListModalType(type)
-    setListModalData(type === "produto" ? PRODUTOS : TANQUEDIESEL)
+    if (type === "produto") {
+      setListModalData(PRODUTOS)
+    } else if (type === "tanqueDiesel") {
+      setListModalData(TANQUEDIESEL)
+    } else if (type === "veiculo") {
+      setListModalData(veiculos) // Usar os veículos carregados do Firebase
+    }
     setSearchQuery("")
     setListModalVisible(true)
   }
 
   const filteredListData = useMemo(() => {
     if (!searchQuery) return listModalData
+    if (listModalType === "veiculo") {
+      return listModalData.filter(
+        (item) =>
+          item.modelo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.placa?.toLowerCase().includes(searchQuery.toLowerCase()),
+      )
+    }
     return listModalData.filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
-  }, [listModalData, searchQuery])
+  }, [listModalData, searchQuery, listModalType])
 
   const renderListItem = ({ item }) => (
     <TouchableOpacity
       style={styles.listItem}
       onPress={() => {
-        handleAbastecimentoChange(listModalType, item.id)
+        if (listModalType === "veiculo") {
+          handleAbastecimentoChange("placa", item.id)
+        } else {
+          handleAbastecimentoChange(listModalType, item.id)
+        }
         setListModalVisible(false)
       }}
     >
@@ -230,31 +538,30 @@ export default function VeiculosScreen() {
 
   const Separator = () => <View style={styles.separator} />
 
-  const renderInputField = (label, name, value, onChange, keyboardType = "default", editable = true) => (
+  const renderInputField = (
+    label,
+    name,
+    value,
+    onChange,
+    keyboardType = "default",
+    editable = true,
+    multiline = false,
+  ) => (
     <View>
       <Text style={styles.label}>{label}</Text>
       <TextInput
-        style={[styles.input, !editable && styles.disabledInput]}
+        style={[styles.input, !editable && styles.disabledInput, multiline && styles.multilineInput]}
         value={value}
         onChangeText={(text) => onChange(name, text)}
         placeholder={label}
         keyboardType={keyboardType}
         editable={editable}
+        multiline={multiline}
+        numberOfLines={multiline ? 3 : 1}
         accessibilityLabel={label}
       />
     </View>
   )
-
-  const saveOfflineData = async (data) => {
-    try {
-      const offlineData = await AsyncStorage.getItem("offlineAbastecimentos")
-      const parsedData = offlineData ? JSON.parse(offlineData) : []
-      parsedData.push(data)
-      await AsyncStorage.setItem("offlineAbastecimentos", JSON.stringify(parsedData))
-    } catch (error) {
-      console.error("Erro ao salvar dados offline:", error)
-    }
-  }
 
   const handleSubmitAbastecimento = async () => {
     if (
@@ -270,6 +577,8 @@ export default function VeiculosScreen() {
 
     try {
       const localId = Date.now().toString()
+      const selectedVeiculo = veiculos.find((v) => v.id === abastecimentoData.placa)
+
       const abastecimentoInfo = {
         ...abastecimentoData,
         produto: PRODUTOS.find((p) => p.id === abastecimentoData.produto)?.name || abastecimentoData.produto,
@@ -281,13 +590,12 @@ export default function VeiculosScreen() {
         localId: localId,
         status: "pending",
         tipo: "abastecimento",
-        veiculo: VEICULOS.find((v) => v.id === abastecimentoData.placa)?.modelo || "",
-        placa: VEICULOS.find((v) => v.id === abastecimentoData.placa)?.placa || abastecimentoData.placa,
+        veiculo: selectedVeiculo?.modelo || "",
+        placa: selectedVeiculo?.placa || abastecimentoData.placa,
         tipoEquipamento: "veiculo", // Marcando explicitamente como veículo
       }
 
-      const netInfo = await NetInfo.fetch()
-      if (netInfo.isConnected) {
+      if (isConnected) {
         // Alterado para usar o nó abastecimentoVeiculos
         const abastecimentosRef = ref(database, `propriedades/${userPropriedade}/abastecimentoVeiculos`)
         const newEntryRef = push(abastecimentosRef)
@@ -300,10 +608,21 @@ export default function VeiculosScreen() {
           horimetro: "",
           tanqueDiesel: "",
           placa: "",
+          observacao: "", // Resetando o campo de observação
         })
       } else {
         // Salvar offline para sincronização posterior
-        await saveOfflineData(abastecimentoInfo)
+        await saveOfflineData(abastecimentoInfo, OFFLINE_ABASTECIMENTOS_KEY)
+
+        // Adicionar ao estado local para exibição imediata
+        setAbastecimentos((prev) => [
+          {
+            id: `local-${localId}`,
+            ...abastecimentoInfo,
+          },
+          ...prev,
+        ])
+
         Alert.alert("Modo Offline", "Dados salvos localmente e serão sincronizados quando houver conexão.")
         setAbastecimentoModalVisible(false)
         setAbastecimentoData({
@@ -312,6 +631,7 @@ export default function VeiculosScreen() {
           horimetro: "",
           tanqueDiesel: "",
           placa: "",
+          observacao: "", // Resetando o campo de observação
         })
       }
     } catch (error) {
@@ -346,9 +666,133 @@ export default function VeiculosScreen() {
               renderItem={renderListItem}
               keyExtractor={(item) => item.id}
               ItemSeparatorComponent={Separator}
+              showsVerticalScrollIndicator={false}
             />
           </View>
         </SafeAreaView>
+      </Modal>
+    )
+  }
+
+  // Renderizar o modal de filtro
+  const renderFilterModal = () => {
+    return (
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={filterModalVisible}
+        onRequestClose={() => setFilterModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.filterModalContent}>
+            <View style={styles.filterModalHeader}>
+              <Text style={styles.filterModalTitle}>Filtros</Text>
+              <TouchableOpacity
+                onPress={() => setFilterModalVisible(false)}
+                hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+              >
+                <Icon name="close" size={22} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.filterScrollView} showsVerticalScrollIndicator={false}>
+              {userRole === "manager" && (
+                <View style={styles.filterSection}>
+                  <Text style={styles.filterLabel}>Usuário</Text>
+                  <View style={styles.pickerContainer}>
+                    <Picker
+                      selectedValue={filtroUsuario}
+                      onValueChange={(itemValue) => setFiltroUsuario(itemValue)}
+                      style={styles.filterPicker}
+                    >
+                      <Picker.Item label="Todos os usuários" value={null} />
+                      {propertyUsers.map((user) => (
+                        <Picker.Item key={user.id} label={user.nome} value={user.id} />
+                      ))}
+                    </Picker>
+                  </View>
+                </View>
+              )}
+
+              <View style={styles.filterSection}>
+                <Text style={styles.filterLabel}>Ordenação</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={sortOrder}
+                    onValueChange={(itemValue) => setSortOrder(itemValue)}
+                    style={styles.filterPicker}
+                  >
+                    <Picker.Item label="Mais recente" value="desc" />
+                    <Picker.Item label="Mais antigo" value="asc" />
+                  </Picker>
+                </View>
+              </View>
+
+              <View style={styles.filterSection}>
+                <Text style={styles.filterLabel}>Data</Text>
+                <TouchableOpacity
+                  style={styles.datePickerButton}
+                  onPress={() => setShowDatePicker(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.datePickerText}>
+                    {dateFilter ? dateFilter.toLocaleDateString("pt-BR") : "Selecionar data"}
+                  </Text>
+                  <Icon name="calendar" size={18} color="#FF8C00" />
+                </TouchableOpacity>
+                {dateFilter && (
+                  <TouchableOpacity
+                    style={styles.clearDateButton}
+                    onPress={() => setDateFilter(null)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.clearDateButtonText}>Limpar data</Text>
+                    <Icon name="close-circle-outline" size={16} color="#e74c3c" />
+                  </TouchableOpacity>
+                )}
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={dateFilter || new Date()}
+                    mode="date"
+                    display="default"
+                    onChange={handleDateChange}
+                  />
+                )}
+              </View>
+
+              <View style={styles.filterSection}>
+                <Text style={styles.filterLabel}>Tipo</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={typeFilter}
+                    onValueChange={(itemValue) => setTypeFilter(itemValue)}
+                    style={styles.filterPicker}
+                  >
+                    <Picker.Item label="Todos" value={null} />
+                    <Picker.Item label="Percursos" value="percurso" />
+                    <Picker.Item label="Abastecimentos" value="abastecimento" />
+                  </Picker>
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.filterButtonsContainer}>
+              <TouchableOpacity style={styles.clearFilterButton} onPress={clearFilters} activeOpacity={0.7}>
+                <Icon name="trash-outline" size={18} color="white" style={{ marginRight: 5 }} />
+                <Text style={styles.clearFilterButtonText}>Limpar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.applyFilterButton}
+                onPress={() => setFilterModalVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Icon name="checkmark-outline" size={18} color="white" style={{ marginRight: 5 }} />
+                <Text style={styles.applyFilterButtonText}>Aplicar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     )
   }
@@ -399,10 +843,17 @@ export default function VeiculosScreen() {
 
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.navigate("Opening")} style={styles.backButton}>
-          <Icon name="arrow-back" size={24} color="#2a9d8f" />
+          <Icon name="arrow-back" size={24} color="#FF8C00" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Veículos</Text>
-        <View style={{ width: 24 }} />
+        <TouchableOpacity
+          style={styles.filterButtonSmall}
+          onPress={() => setFilterModalVisible(true)}
+          activeOpacity={0.7}
+        >
+          <Icon name="funnel-outline" size={20} color="#FF8C00" />
+          {(dateFilter || typeFilter || filtroUsuario) && <View style={styles.filterBadge} />}
+        </TouchableOpacity>
       </View>
 
       <View style={styles.container}>
@@ -428,7 +879,7 @@ export default function VeiculosScreen() {
             </View>
 
             <FlatList
-              data={combinedData}
+              data={filteredData}
               renderItem={renderApontamento}
               keyExtractor={(item) => `${item.tipo}-${item.id}`}
               contentContainerStyle={styles.apontamentosList}
@@ -457,7 +908,12 @@ export default function VeiculosScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
+              <Text
+                style={[
+                  styles.modalTitle,
+                  { color: selectedApontamento?.tipo === "abastecimento" ? "#FF8C00" : "#2a9d8f" },
+                ]}
+              >
                 Detalhes do {selectedApontamento?.tipo === "abastecimento" ? "Abastecimento" : "Percurso"}
               </Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
@@ -466,14 +922,20 @@ export default function VeiculosScreen() {
             </View>
 
             {selectedApontamento && (
-              <ScrollView style={styles.detailsContainer}>
+              <ScrollView style={styles.detailsContainer} showsVerticalScrollIndicator={false}>
                 {selectedApontamento.tipo === "abastecimento"
                   ? renderAbastecimentoDetails(selectedApontamento)
                   : renderPercursoDetails(selectedApontamento)}
               </ScrollView>
             )}
 
-            <TouchableOpacity style={styles.closeButton} onPress={() => setModalVisible(false)}>
+            <TouchableOpacity
+              style={[
+                styles.closeButton,
+                { backgroundColor: selectedApontamento?.tipo === "abastecimento" ? "#FF8C00" : "#2a9d8f" },
+              ]}
+              onPress={() => setModalVisible(false)}
+            >
               <Text style={styles.closeButtonText}>Fechar</Text>
             </TouchableOpacity>
           </View>
@@ -495,21 +957,16 @@ export default function VeiculosScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.abastecimentoForm}>
+            <ScrollView style={styles.abastecimentoForm} showsVerticalScrollIndicator={false}>
               <Text style={styles.label}>Veículo</Text>
               <TouchableOpacity
                 style={styles.input}
-                onPress={() => {
-                  setListModalType("veiculo")
-                  setListModalData(VEICULOS)
-                  setSearchQuery("")
-                  setListModalVisible(true)
-                }}
+                onPress={() => openListModal("veiculo")}
                 accessibilityLabel="Selecionar Veículo"
               >
                 <Text>
-                  {VEICULOS.find((v) => v.id === abastecimentoData.placa)?.modelo
-                    ? `${VEICULOS.find((v) => v.id === abastecimentoData.placa)?.modelo} (${VEICULOS.find((v) => v.id === abastecimentoData.placa)?.placa})`
+                  {veiculos.find((v) => v.id === abastecimentoData.placa)?.modelo
+                    ? `${veiculos.find((v) => v.id === abastecimentoData.placa)?.modelo} (${veiculos.find((v) => v.id === abastecimentoData.placa)?.placa})`
                     : "Selecione o Veículo"}
                 </Text>
                 <Icon name="chevron-down" size={20} color="#FF8C00" />
@@ -554,6 +1011,17 @@ export default function VeiculosScreen() {
                 handleAbastecimentoChange,
                 "numeric",
               )}
+
+              {/* Campo de observação adicionado abaixo do hodômetro */}
+              {renderInputField(
+                "Observação",
+                "observacao",
+                abastecimentoData.observacao,
+                handleAbastecimentoChange,
+                "default",
+                true,
+                true,
+              )}
             </ScrollView>
 
             <TouchableOpacity
@@ -567,6 +1035,7 @@ export default function VeiculosScreen() {
       </Modal>
 
       {renderListModal()}
+      {renderFilterModal()}
     </SafeAreaView>
   )
 }
@@ -588,7 +1057,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   headerTitle: {
-    color: "#2a9d8f",
+    color: "#FF8C00",
     fontSize: 20,
     fontWeight: "bold",
   },
@@ -619,7 +1088,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
   },
-
   apontamentosList: {
     paddingBottom: 20,
   },
@@ -761,6 +1229,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#F5F5F5",
     color: "#666666",
   },
+  multilineInput: {
+    height: 100,
+    textAlignVertical: "top",
+    paddingTop: 12,
+  },
   label: {
     fontSize: 14,
     marginBottom: 8,
@@ -853,4 +1326,131 @@ const styles = StyleSheet.create({
     color: "#666",
     textAlign: "center",
   },
+  // Estilos para o botão de filtro e modal
+  filterButtonSmall: {
+    backgroundColor: "white",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.22,
+    shadowRadius: 2.22,
+  },
+  filterBadge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#e74c3c",
+  },
+  filterModalContent: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    width: "90%",
+    maxHeight: "80%",
+    padding: 0,
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    overflow: "hidden",
+  },
+  filterModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  filterModalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#FF8C00",
+  },
+  filterScrollView: {
+    padding: 20,
+  },
+  filterSection: {
+    marginBottom: 20,
+  },
+  filterLabel: {
+    fontSize: 15,
+    fontWeight: "600",
+    marginBottom: 10,
+    color: "#555",
+  },
+  pickerContainer: {
+    backgroundColor: "#f8f8f8",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    overflow: "hidden",
+  },
+  filterPicker: {
+    height: 50,
+  },
+  datePickerButton: {
+    backgroundColor: "#f8f8f8",
+    padding: 15,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  datePickerText: {
+    color: "#333",
+  },
+  clearDateButton: {
+    marginTop: 10,
+    padding: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  clearDateButtonText: {
+    color: "#e74c3c",
+    fontWeight: "500",
+    marginRight: 5,
+  },
+  filterButtonsContainer: {
+    flexDirection: "row",
+    borderTopWidth: 1,
+    borderTopColor: "#f0f0f0",
+  },
+  clearFilterButton: {
+    backgroundColor: "#95a5a6",
+    padding: 15,
+    alignItems: "center",
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "center",
+  },
+  clearFilterButtonText: {
+    color: "white",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  applyFilterButton: {
+    backgroundColor: "#FF8C00",
+    padding: 15,
+    alignItems: "center",
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "center",
+  },
+  applyFilterButtonText: {
+    color: "white",
+    fontSize: 15,
+    fontWeight: "600",
+  }
 })

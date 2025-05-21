@@ -170,6 +170,7 @@ export const TANQUEDIESEL = [
   { id: "17", name: "Tanque Diesel Formoso" },
   { id: "3", name: "Tanque Diesel Matrice Sede" },
   { id: "12", name: "Tanque Diesel Nascente do Rio Verde" },
+  { id: "19", name: "Tanque Diesel Fazenda Sato" },
   { id: "1", name: "Posto Externo" },
 ]
 
