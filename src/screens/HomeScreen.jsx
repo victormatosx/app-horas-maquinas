@@ -22,16 +22,20 @@ import Icon from "react-native-vector-icons/Ionicons"
 import { database, auth } from "../config/firebaseConfig"
 import { ref, onValue, off, query, orderByChild, equalTo, push, set as dbSet } from "firebase/database"
 import { signOut } from "firebase/auth"
-import {
-  checkConnectivityAndSync,
-  saveOfflineData,
-  cacheFirebaseData,
-  getCachedData,
-  CACHE_KEYS,
-} from "../utils/offlineManager"
-import { PRODUTOS, TANQUEDIESEL, IMPLEMENTOS } from "./assets"
+import { checkConnectivityAndSync, saveOfflineData, cacheFirebaseData, getCachedData } from "../utils/offlineManager"
+import { PRODUTOS, IMPLEMENTOS } from "./assets"
 import NetInfo from "@react-native-community/netinfo"
 import DateTimePicker from "@react-native-community/datetimepicker"
+
+// Definir chaves de cache localmente se não estiverem disponíveis no offlineManager
+const LOCAL_CACHE_KEYS = {
+  MAQUINARIOS: "@cached_maquinarios",
+  TANQUES: "@cached_tanques",
+  USERS: "@cached_users",
+  APONTAMENTOS: "@cached_apontamentos",
+  ABASTECIMENTOS: "@cached_abastecimentos",
+  USERS_MAP: "@cached_users_map",
+}
 
 const USER_TOKEN_KEY = "@user_token"
 const USER_ROLE_KEY = "@user_role"
@@ -71,7 +75,16 @@ export default function HomeScreen() {
   const [typeFilter, setTypeFilter] = useState(null)
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [maquinas, setMaquinas] = useState([])
+  const [tanques, setTanques] = useState([])
   const [isConnected, setIsConnected] = useState(true)
+
+  const validateCacheKey = (key) => {
+    if (!key || typeof key !== "string") {
+      console.warn("Invalid cache key:", key)
+      return false
+    }
+    return true
+  }
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -118,7 +131,9 @@ export default function HomeScreen() {
               setMaquinas(maquinasArray)
 
               // Salvar em cache para uso offline
-              cacheFirebaseData(maquinasArray, CACHE_KEYS.MAQUINARIOS)
+              if (LOCAL_CACHE_KEYS.MAQUINARIOS) {
+                cacheFirebaseData(maquinasArray, LOCAL_CACHE_KEYS.MAQUINARIOS)
+              }
             } else {
               setMaquinas([])
             }
@@ -129,7 +144,7 @@ export default function HomeScreen() {
           }
         } else {
           // Carregar do cache se estiver offline
-          const cachedMaquinarios = await getCachedData(CACHE_KEYS.MAQUINARIOS)
+          const cachedMaquinarios = await getCachedData(LOCAL_CACHE_KEYS.MAQUINARIOS)
           if (cachedMaquinarios) {
             setMaquinas(cachedMaquinarios)
             console.log("Maquinários carregados do cache")
@@ -139,7 +154,7 @@ export default function HomeScreen() {
         }
       } catch (error) {
         console.error("Erro ao configurar listener para maquinários:", error)
-        const cachedMaquinarios = await getCachedData(CACHE_KEYS.MAQUINARIOS)
+        const cachedMaquinarios = await getCachedData(LOCAL_CACHE_KEYS.MAQUINARIOS)
         if (cachedMaquinarios) {
           setMaquinas(cachedMaquinarios)
         }
@@ -147,6 +162,59 @@ export default function HomeScreen() {
     }
 
     loadMaquinarios()
+  }, [userPropriedade, isConnected])
+
+  // Carregar tanques do Firebase ou do cache
+  useEffect(() => {
+    if (!userPropriedade) return
+
+    const loadTanques = async () => {
+      try {
+        if (isConnected) {
+          const tanquesRef = ref(database, `propriedades/${userPropriedade}/tanques`)
+
+          const tanquesListener = onValue(tanquesRef, (snapshot) => {
+            const data = snapshot.val()
+            if (data) {
+              const tanquesArray = Object.entries(data).map(([key, value]) => ({
+                id: value.id || key,
+                name: value.nome || "Tanque sem nome",
+                rawName: value.nome || "Tanque sem nome",
+              }))
+              setTanques(tanquesArray)
+
+              // Salvar em cache para uso offline
+              if (LOCAL_CACHE_KEYS.TANQUES) {
+                cacheFirebaseData(tanquesArray, LOCAL_CACHE_KEYS.TANQUES)
+              }
+            } else {
+              setTanques([])
+            }
+          })
+
+          return () => {
+            off(tanquesRef, "value", tanquesListener)
+          }
+        } else {
+          // Carregar do cache se estiver offline
+          const cachedTanques = await getCachedData(LOCAL_CACHE_KEYS.TANQUES)
+          if (cachedTanques) {
+            setTanques(cachedTanques)
+            console.log("Tanques carregados do cache")
+          } else {
+            setTanques([])
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao configurar listener para tanques:", error)
+        const cachedTanques = await getCachedData(LOCAL_CACHE_KEYS.TANQUES)
+        if (cachedTanques) {
+          setTanques(cachedTanques)
+        }
+      }
+    }
+
+    loadTanques()
   }, [userPropriedade, isConnected])
 
   // Carregar apontamentos e abastecimentos
@@ -190,7 +258,7 @@ export default function HomeScreen() {
                 sortApontamentos(apontamentosArray)
 
                 // Salvar em cache para uso offline
-                cacheFirebaseData(apontamentosArray, "cached_apontamentos")
+                cacheFirebaseData(apontamentosArray, LOCAL_CACHE_KEYS.APONTAMENTOS)
 
                 const uniqueResponsaveis = [...new Set(apontamentosArray.map((item) => item.responsavel))]
                 setResponsaveis(uniqueResponsaveis)
@@ -211,7 +279,7 @@ export default function HomeScreen() {
                 setAbastecimentos(sortByTimestamp(abastecimentosArray))
 
                 // Salvar em cache para uso offline
-                cacheFirebaseData(abastecimentosArray, "cached_abastecimentos")
+                cacheFirebaseData(abastecimentosArray, LOCAL_CACHE_KEYS.ABASTECIMENTOS)
               } else {
                 setAbastecimentos([])
               }
@@ -237,8 +305,8 @@ export default function HomeScreen() {
 
     const loadCachedData = async () => {
       try {
-        const cachedApontamentos = await getCachedData("cached_apontamentos")
-        const cachedAbastecimentos = await getCachedData("cached_abastecimentos")
+        const cachedApontamentos = await getCachedData(LOCAL_CACHE_KEYS.APONTAMENTOS)
+        const cachedAbastecimentos = await getCachedData(LOCAL_CACHE_KEYS.ABASTECIMENTOS)
 
         if (cachedApontamentos) {
           setApontamentos(cachedApontamentos)
@@ -279,19 +347,21 @@ export default function HomeScreen() {
                 setPropertyUsers(usersArray)
 
                 // Salvar em cache para uso offline
-                cacheFirebaseData(usersArray, CACHE_KEYS.USERS)
+                if (LOCAL_CACHE_KEYS.USERS) {
+                  cacheFirebaseData(usersArray, LOCAL_CACHE_KEYS.USERS)
+                }
               }
             })
           } else {
             // Carregar do cache se estiver offline
-            const cachedUsers = await getCachedData(CACHE_KEYS.USERS)
+            const cachedUsers = await getCachedData(LOCAL_CACHE_KEYS.USERS)
             if (cachedUsers) {
               setPropertyUsers(cachedUsers)
             }
           }
         } catch (error) {
           console.error("Erro ao carregar usuários:", error)
-          const cachedUsers = await getCachedData(CACHE_KEYS.USERS)
+          const cachedUsers = await getCachedData(LOCAL_CACHE_KEYS.USERS)
           if (cachedUsers) {
             setPropertyUsers(cachedUsers)
           }
@@ -320,19 +390,19 @@ export default function HomeScreen() {
               setUsersMap(usersMapping)
 
               // Salvar em cache para uso offline
-              cacheFirebaseData(usersMapping, "cached_users_map")
+              cacheFirebaseData(usersMapping, LOCAL_CACHE_KEYS.USERS_MAP)
             }
           })
         } else {
           // Carregar do cache se estiver offline
-          const cachedUsersMap = await getCachedData("cached_users_map")
+          const cachedUsersMap = await getCachedData(LOCAL_CACHE_KEYS.USERS_MAP)
           if (cachedUsersMap) {
             setUsersMap(cachedUsersMap)
           }
         }
       } catch (error) {
         console.error("Erro ao carregar mapa de usuários:", error)
-        const cachedUsersMap = await getCachedData("cached_users_map")
+        const cachedUsersMap = await getCachedData(LOCAL_CACHE_KEYS.USERS_MAP)
         if (cachedUsersMap) {
           setUsersMap(cachedUsersMap)
         }
@@ -489,7 +559,7 @@ export default function HomeScreen() {
     if (type === "produto") {
       setListModalData(PRODUTOS)
     } else if (type === "tanqueDiesel") {
-      setListModalData(TANQUEDIESEL)
+      setListModalData(tanques)
     } else if (type === "bem") {
       setListModalData(maquinas)
     } else if (type === "implemento") {
@@ -548,12 +618,12 @@ export default function HomeScreen() {
     try {
       const localId = Date.now().toString()
       const selectedMaquina = maquinas.find((b) => b.id === abastecimentoData.bem)
+      const selectedTanque = tanques.find((t) => t.id === abastecimentoData.tanqueDiesel)
 
       const abastecimentoInfo = {
         ...abastecimentoData,
         produto: PRODUTOS.find((p) => p.id === abastecimentoData.produto)?.name || abastecimentoData.produto,
-        tanqueDiesel:
-          TANQUEDIESEL.find((t) => t.id === abastecimentoData.tanqueDiesel)?.name || abastecimentoData.tanqueDiesel,
+        tanqueDiesel: selectedTanque ? selectedTanque.name : abastecimentoData.tanqueDiesel,
         bem: selectedMaquina ? selectedMaquina.name : abastecimentoData.bem,
         timestamp: Date.now(),
         userId: userId,
@@ -1007,7 +1077,7 @@ export default function HomeScreen() {
                 accessibilityLabel="Selecionar Tanque"
               >
                 <Text>
-                  {TANQUEDIESEL.find((t) => t.id === abastecimentoData.tanqueDiesel)?.name || "Selecione o Tanque"}
+                  {tanques.find((t) => t.id === abastecimentoData.tanqueDiesel)?.name || "Selecione o Tanque"}
                 </Text>
                 <Icon name="chevron-down" size={20} color="#e67e22" />
               </TouchableOpacity>
@@ -1530,5 +1600,42 @@ const styles = StyleSheet.create({
   },
   filterButtonsContainer: {
     flexDirection: "row",
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingTop: 50,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+  },
+  clearFilterButton: {
+    flex: 1,
+    backgroundColor: "#e74c3c",
+    padding: 15,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 5,
+  },
+  clearFilterButtonText: {
+    color: "white",
+    fontWeight: "600",
+  },
+  applyFilterButton: {
+    flex: 1,
+    backgroundColor: "#2a9d8f",
+    padding: 15,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: 5,
+  },
+  applyFilterButtonText: {
+    color: "white",
+    fontWeight: "600",
   },
 })

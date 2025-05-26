@@ -21,7 +21,7 @@ import { X, Trash2, ChevronDown } from "lucide-react-native"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import NetInfo from "@react-native-community/netinfo"
 import { saveOfflineData, checkConnectivityAndSync } from "../utils/offlineManager"
-import { ATIVIDADES, PRODUTOS, TANQUEDIESEL, CULTURA } from "./assets"
+import { PRODUTOS, TANQUEDIESEL, CULTURA } from "./assets"
 import { auth } from "../config/firebaseConfig"
 import { onAuthStateChanged } from "firebase/auth"
 
@@ -33,23 +33,26 @@ const CACHED_MAQUINARIOS_KEY = "@cached_maquinarios"
 const CACHED_IMPLEMENTOS_KEY = "@cached_implementos"
 const CACHED_DIRECIONADORES_KEY = "@cached_direcionadores"
 const CACHED_HORIMETROS_KEY = "@cached_horimetros"
-const FICHA_CONTROLE_KEY = "@ficha_controle_numero" // Nova chave para armazenar o número da ficha
+const CACHED_ATIVIDADES_KEY = "@cached_atividades"
+const FICHA_CONTROLE_KEY = "@ficha_controle_numero"
 
 const initialFormData = {
   fichaControle: "",
   data: "",
-  direcionador: "",
+  direcionador: "", // Mantido para compatibilidade
+  direcionadores: [], // Novo array para armazenar múltiplos direcionadores
   cultura: "",
   atividade: "",
   observacao: "",
 }
 
-export default function FormScreen() {
+export default function FormScreen({ navigation }) {
   const [formData, setFormData] = useState(initialFormData)
   const [operacaoMecanizadaModalVisible, setOperacaoMecanizadaModalVisible] = useState(false)
   const [operacaoMecanizadaData, setOperacaoMecanizadaData] = useState({
     bem: "",
-    implemento: "",
+    implemento: "", // Mantido para compatibilidade
+    implementos: [], // Novo array para múltiplos implementos
     horaFinal: "",
   })
   const [previousHorimetros, setPreviousHorimetros] = useState({})
@@ -74,6 +77,12 @@ export default function FormScreen() {
   const [implementos, setImplementos] = useState([])
   // Novo estado para controlar o número da ficha de controle
   const [fichaControleNumero, setFichaControleNumero] = useState(40000)
+  // Adicionar um novo estado para armazenar os direcionadores selecionados
+  const [selectedDirecionadores, setSelectedDirecionadores] = useState([])
+  // Novo estado para armazenar os implementos selecionados na operação mecanizada atual
+  const [selectedImplementos, setSelectedImplementos] = useState([])
+  // Novo estado para armazenar as atividades do Firebase
+  const [atividades, setAtividades] = useState([])
 
   const isMounted = useRef(true)
 
@@ -82,6 +91,7 @@ export default function FormScreen() {
     return requiredFields.every((field) => formData[field] && formData[field].trim() !== "")
   }, [formData])
 
+  // Modificar o resetForm para limpar também os direcionadores
   const resetForm = useCallback(() => {
     // Incrementar o número da ficha de controle ao resetar o formulário
     const novoNumero = fichaControleNumero + 1
@@ -94,12 +104,15 @@ export default function FormScreen() {
 
     // Resetar o formulário sem preencher automaticamente a ficha de controle
     setFormData(initialFormData)
+    setSelectedDirecionadores([]) // Limpar direcionadores selecionados
 
     setOperacaoMecanizadaData({
       bem: "",
       implemento: "",
+      implementos: [],
       horaFinal: "",
     })
+    setSelectedImplementos([])
     setSelectedOperacoesMecanizadas([])
   }, [fichaControleNumero])
 
@@ -131,6 +144,73 @@ export default function FormScreen() {
 
     carregarNumeroFicha()
   }, [])
+
+  // Novo useEffect para buscar atividades do Firebase
+  useEffect(() => {
+    if (!userPropriedade) return
+
+    const loadAtividadesFromFirebase = () => {
+      try {
+        const atividadesRef = ref(database, `propriedades/${userPropriedade}/atividades`)
+
+        // Configurar listener para atualizações em tempo real
+        const unsubscribe = onValue(
+          atividadesRef,
+          (snapshot) => {
+            if (isMounted.current) {
+              const data = snapshot.val() || {}
+
+              // Transformar os dados do Firebase em um array no formato esperado pelo componente
+              const atividadesArray = Object.entries(data).map(([key, value]) => ({
+                id: value.id || key,
+                name: value.atividade || "Atividade sem nome",
+              }))
+
+              setAtividades(atividadesArray)
+
+              // Salvar atividades no cache para uso offline
+              AsyncStorage.setItem(CACHED_ATIVIDADES_KEY, JSON.stringify(atividadesArray)).catch((error) =>
+                console.error("Erro ao salvar atividades no cache:", error),
+              )
+            }
+          },
+          (error) => {
+            console.error("Erro ao carregar atividades do Firebase:", error)
+
+            // Em caso de erro, tentar carregar do cache
+            loadCachedAtividades()
+          },
+        )
+
+        return unsubscribe
+      } catch (error) {
+        console.error("Erro ao configurar listener para atividades:", error)
+
+        // Em caso de erro, tentar carregar do cache
+        loadCachedAtividades()
+      }
+    }
+
+    // Função para carregar atividades do cache
+    const loadCachedAtividades = async () => {
+      try {
+        const cachedData = await AsyncStorage.getItem(CACHED_ATIVIDADES_KEY)
+        if (cachedData) {
+          const atividadesArray = JSON.parse(cachedData)
+          setAtividades(atividadesArray)
+          console.log("Atividades carregadas do cache")
+        }
+      } catch (error) {
+        console.error("Erro ao carregar atividades do cache:", error)
+      }
+    }
+
+    const unsubscribe = loadAtividadesFromFirebase()
+
+    return () => {
+      if (unsubscribe) unsubscribe()
+    }
+  }, [userPropriedade])
 
   // useEffect para buscar direcionadores do Firebase
   useEffect(() => {
@@ -464,6 +544,13 @@ export default function FormScreen() {
         console.log("Direcionadores carregados do cache")
       }
 
+      // Carregar atividades
+      const cachedAtividades = await AsyncStorage.getItem(CACHED_ATIVIDADES_KEY)
+      if (cachedAtividades) {
+        setAtividades(JSON.parse(cachedAtividades))
+        console.log("Atividades carregadas do cache")
+      }
+
       // Carregar horímetros
       const cachedHorimetros = await AsyncStorage.getItem(CACHED_HORIMETROS_KEY)
       if (cachedHorimetros) {
@@ -510,27 +597,35 @@ export default function FormScreen() {
     setDatePickerVisible(false)
   }, [])
 
+  // Modificar a função handleChange para o caso do direcionador
   const handleChange = useCallback(
     (name, value) => {
       if (name === "direcionador") {
         // Buscar o direcionador selecionado na lista do Firebase
         const selectedDirecionador = direcionadores.find((d) => d.id === value)
 
-        // Se encontrou o direcionador, usar a culturaAssociada dele
-        if (selectedDirecionador && selectedDirecionador.culturaAssociada) {
-          // Encontrar o ID da cultura correspondente
-          const culturaId =
-            CULTURA.find((c) => c.name.toLowerCase() === selectedDirecionador.culturaAssociada.toLowerCase())?.id || ""
+        // Verificar se o direcionador já está selecionado
+        const isDirecionadorAlreadySelected = selectedDirecionadores.some((d) => d.id === value)
 
+        if (!isDirecionadorAlreadySelected && selectedDirecionador) {
+          // Adicionar à lista de direcionadores selecionados
+          setSelectedDirecionadores((prev) => [...prev, selectedDirecionador])
+
+          // Atualizar o formData
           return setFormData((prev) => ({
             ...prev,
-            [name]: value,
-            cultura: culturaId,
+            direcionador: value, // Manter para compatibilidade
+            direcionadores: [...prev.direcionadores, value], // Adicionar ao array
+            // Se for o primeiro direcionador, usar sua cultura associada
+            cultura:
+              prev.direcionadores.length === 0 && selectedDirecionador.culturaAssociada
+                ? CULTURA.find((c) => c.name.toLowerCase() === selectedDirecionador.culturaAssociada.toLowerCase())
+                    ?.id || prev.cultura
+                : prev.cultura,
           }))
         }
 
-        // Se não encontrou ou não tem culturaAssociada, apenas atualiza o direcionador
-        return setFormData((prev) => ({ ...prev, [name]: value }))
+        return // Se já estiver selecionado, não faz nada
       }
 
       // Se for o campo fichaControle e for um número válido, atualizar o estado fichaControleNumero
@@ -540,11 +635,33 @@ export default function FormScreen() {
 
       return setFormData((prev) => ({ ...prev, [name]: value }))
     },
-    [direcionadores],
+    [direcionadores, selectedDirecionadores],
   )
 
+  // Modificar a função handleOperacaoMecanizadaChange para o caso do implemento
   const handleOperacaoMecanizadaChange = useCallback(
     (name, value) => {
+      if (name === "implemento") {
+        // Buscar o implemento selecionado
+        const selectedImplemento = implementos.find((i) => i.id === value)
+
+        // Verificar se o implemento já está selecionado
+        const isImplementoAlreadySelected = selectedImplementos.some((i) => i.id === value)
+
+        if (!isImplementoAlreadySelected && selectedImplemento) {
+          // Adicionar à lista de implementos selecionados
+          setSelectedImplementos((prev) => [...prev, selectedImplemento])
+
+          // Atualizar o operacaoMecanizadaData
+          setOperacaoMecanizadaData((prev) => ({
+            ...prev,
+            implemento: value, // Manter para compatibilidade
+            implementos: [...prev.implementos, value], // Adicionar ao array
+          }))
+        }
+        return
+      }
+
       setOperacaoMecanizadaData((prev) => {
         // Se o campo alterado for "bem", resetamos o horaFinal
         if (name === "bem") {
@@ -555,8 +672,25 @@ export default function FormScreen() {
         return { ...prev, [name]: value }
       })
     },
-    [previousHorimetros],
+    [implementos, selectedImplementos],
   )
+
+  // Adicionar função para remover um implemento
+  const removeImplemento = useCallback((implementoId) => {
+    // Remover do array de IDs no operacaoMecanizadaData
+    setOperacaoMecanizadaData((prev) => ({
+      ...prev,
+      implementos: prev.implementos.filter((id) => id !== implementoId),
+      // Se for o implemento principal, atualizar para o próximo da lista ou vazio
+      implemento:
+        prev.implemento === implementoId
+          ? prev.implementos.filter((id) => id !== implementoId)[0] || ""
+          : prev.implemento,
+    }))
+
+    // Remover da lista de objetos selecionados
+    setSelectedImplementos((prev) => prev.filter((i) => i.id !== implementoId))
+  }, [])
 
   // Função para salvar os horímetros atualizados no Firebase
   const saveHorimetrosToFirebase = async (updatedHorimetros) => {
@@ -585,8 +719,15 @@ export default function FormScreen() {
     }
   }
 
+  // Modificar a função addSelectedOperacaoMecanizada para incluir múltiplos implementos
   const addSelectedOperacaoMecanizada = useCallback(
     async (operacao) => {
+      // Verificar se há pelo menos um implemento selecionado
+      if (selectedImplementos.length === 0) {
+        Alert.alert("Atenção", "Selecione pelo menos um implemento.")
+        return
+      }
+
       // Obter o horímetro anterior para este bem
       const horaInicial = previousHorimetros[operacao.bem] || "0.00"
 
@@ -595,7 +736,7 @@ export default function FormScreen() {
       const horaInicialNum = Number.parseFloat(horaInicial) || 0
       const totalHoras = horaFinal > horaInicialNum ? (horaFinal - horaInicialNum).toFixed(2) : "0.00"
 
-      // Adicionar à lista de operações selecionadas
+      // Adicionar à lista de operações selecionadas com todos os implementos
       setSelectedOperacoesMecanizadas((prev) => [
         ...prev,
         {
@@ -603,6 +744,11 @@ export default function FormScreen() {
           id: Date.now(),
           horaInicial,
           totalHoras,
+          // Incluir todos os implementos selecionados
+          implementos: selectedImplementos.map((i) => ({
+            id: i.id,
+            name: i.name,
+          })),
         },
       ])
 
@@ -626,10 +772,12 @@ export default function FormScreen() {
       setOperacaoMecanizadaData({
         bem: "",
         implemento: "",
+        implementos: [],
         horaFinal: "",
       })
+      setSelectedImplementos([])
     },
-    [previousHorimetros, userPropriedade],
+    [previousHorimetros, userPropriedade, selectedImplementos],
   )
 
   // Modificar a função removeSelectedOperacaoMecanizada para sempre restaurar o valor anterior
@@ -698,13 +846,38 @@ export default function FormScreen() {
     [userPropriedade],
   )
 
+  // Adicionar função para remover um direcionador
+  const removeDirecionador = useCallback((direcionadorId) => {
+    // Remover do array de IDs no formData
+    setFormData((prev) => ({
+      ...prev,
+      direcionadores: prev.direcionadores.filter((id) => id !== direcionadorId),
+      // Se for o direcionador principal, atualizar para o próximo da lista ou vazio
+      direcionador:
+        prev.direcionador === direcionadorId
+          ? prev.direcionadores.filter((id) => id !== direcionadorId)[0] || ""
+          : prev.direcionador,
+    }))
+
+    // Remover da lista de objetos selecionados
+    setSelectedDirecionadores((prev) => prev.filter((d) => d.id !== direcionadorId))
+  }, [])
+
+  // Modificar o handleSubmit para incluir todos os direcionadores e usar atividades do Firebase
   const handleSubmit = useCallback(async () => {
     if (isFormValid()) {
       try {
         const localId = Date.now().toString()
 
-        // Encontrar o direcionador selecionado
-        const selectedDirecionador = direcionadores.find((d) => d.id === formData.direcionador)
+        // Obter todos os direcionadores selecionados
+        const direcionadoresSelecionados = selectedDirecionadores.map((d) => ({
+          id: d.id,
+          name: d.name,
+          culturaAssociada: d.culturaAssociada,
+        }))
+
+        // Usar o primeiro direcionador como principal para compatibilidade
+        const primaryDirecionador = direcionadoresSelecionados.length > 0 ? direcionadoresSelecionados[0] : null
 
         // Converter a data do formato DD/MM/YYYY para um timestamp
         let timestamp = Date.now()
@@ -714,23 +887,29 @@ export default function FormScreen() {
           timestamp = dateObj.getTime()
         }
 
-        // Modify the handleSubmit function to include operacoesMecanizadas in the apontamentoData
+        // Buscar a atividade selecionada do Firebase
+        const selectedAtividade = atividades.find((a) => a.id === formData.atividade)
+
+        // Preparar os dados do apontamento
         const apontamentoData = {
           ...formData,
-          atividade: ATIVIDADES.find((a) => a.id === formData.atividade)?.name || formData.atividade,
-          // Usar o nome do direcionador do Firebase
-          direcionador: selectedDirecionador?.name || formData.direcionador,
-          // Usar a culturaAssociada do direcionador selecionado
+          // Usar o nome da atividade do Firebase
+          atividade: selectedAtividade?.name || formData.atividade,
+          // Usar o nome do direcionador principal do Firebase para compatibilidade
+          direcionador: primaryDirecionador?.name || formData.direcionador,
+          // Incluir todos os direcionadores selecionados
+          direcionadores: direcionadoresSelecionados,
+          // Usar a culturaAssociada do direcionador principal selecionado
           cultura:
-            selectedDirecionador?.culturaAssociada ||
+            primaryDirecionador?.culturaAssociada ||
             CULTURA.find((c) => c.id === formData.cultura)?.name ||
             formData.cultura,
           timestamp: timestamp,
           operacoesMecanizadas: selectedOperacoesMecanizadas.map((op) => ({
             ...op,
-            // Usar os nomes dos maquinários e implementos do Firebase
+            // Usar os nomes dos maquinários do Firebase
             bem: maquinarios.find((b) => b.id === op.bem)?.name || op.bem,
-            implemento: implementos.find((i) => i.id === op.implemento)?.name || op.implemento,
+            // Manter os implementos como estão, pois já estão no formato correto
           })),
           userId: userId,
           propriedade: userPropriedade,
@@ -742,8 +921,18 @@ export default function FormScreen() {
         if (netInfo.isConnected) {
           const sent = await sendDataToFirebase(apontamentoData)
           if (sent) {
-            Alert.alert("Sucesso", "Dados enviados com sucesso!")
-            resetForm()
+            Alert.alert("Sucesso", "Dados enviados com sucesso!", [
+              {
+                text: "OK",
+                onPress: () => {
+                  resetForm()
+                  // Navegar para a HomeScreen após o envio bem-sucedido
+                  if (navigation) {
+                    navigation.navigate("Home")
+                  }
+                },
+              },
+            ])
           } else {
             Alert.alert("Atenção", "Este apontamento já foi enviado anteriormente.")
           }
@@ -755,8 +944,18 @@ export default function FormScreen() {
 
           if (!isDuplicate) {
             await saveOfflineData(apontamentoData)
-            Alert.alert("Modo Offline", "Dados salvos localmente e serão sincronizados quando houver conexão.")
-            resetForm()
+            Alert.alert("Modo Offline", "Dados salvos localmente e serão sincronizados quando houver conexão.", [
+              {
+                text: "OK",
+                onPress: () => {
+                  resetForm()
+                  // Navegar para a HomeScreen mesmo no modo offline
+                  if (navigation) {
+                    navigation.navigate("Home")
+                  }
+                },
+              },
+            ])
           } else {
             Alert.alert("Atenção", "Este apontamento já foi salvo localmente.")
           }
@@ -773,8 +972,15 @@ export default function FormScreen() {
           const isDuplicate = offlineData.some((item) => item.localId === localId)
 
           if (!isDuplicate) {
-            // Encontrar o direcionador selecionado
-            const selectedDirecionador = direcionadores.find((d) => d.id === formData.direcionador)
+            // Obter todos os direcionadores selecionados
+            const direcionadoresSelecionados = selectedDirecionadores.map((d) => ({
+              id: d.id,
+              name: d.name,
+              culturaAssociada: d.culturaAssociada,
+            }))
+
+            // Usar o primeiro direcionador como principal para compatibilidade
+            const primaryDirecionador = direcionadoresSelecionados.length > 0 ? direcionadoresSelecionados[0] : null
 
             // Converter a data do formato DD/MM/YYYY para um timestamp
             let timestamp = Date.now()
@@ -784,22 +990,28 @@ export default function FormScreen() {
               timestamp = dateObj.getTime()
             }
 
+            // Buscar a atividade selecionada do Firebase
+            const selectedAtividade = atividades.find((a) => a.id === formData.atividade)
+
             const apontamentoData = {
               ...formData,
-              atividade: ATIVIDADES.find((a) => a.id === formData.atividade)?.name || formData.atividade,
-              // Usar o nome do direcionador do Firebase
-              direcionador: selectedDirecionador?.name || formData.direcionador,
-              // Usar a culturaAssociada do direcionador selecionado
+              // Usar o nome da atividade do Firebase
+              atividade: selectedAtividade?.name || formData.atividade,
+              // Usar o nome do direcionador principal do Firebase
+              direcionador: primaryDirecionador?.name || formData.direcionador,
+              // Incluir todos os direcionadores selecionados
+              direcionadores: direcionadoresSelecionados,
+              // Usar a culturaAssociada do direcionador principal selecionado
               cultura:
-                selectedDirecionador?.culturaAssociada ||
+                primaryDirecionador?.culturaAssociada ||
                 CULTURA.find((c) => c.id === formData.cultura)?.name ||
                 formData.cultura,
               timestamp: timestamp,
               operacoesMecanizadas: selectedOperacoesMecanizadas.map((op) => ({
                 ...op,
-                // Usar os nomes dos maquinários e implementos do Firebase
+                // Usar os nomes dos maquinários do Firebase
                 bem: maquinarios.find((b) => b.id === op.bem)?.name || op.bem,
-                implemento: implementos.find((i) => i.id === op.implemento)?.name || op.implemento,
+                // Manter os implementos como estão, pois já estão no formato correto
               })),
               userId: userId,
               propriedade: userPropriedade,
@@ -825,8 +1037,55 @@ export default function FormScreen() {
     selectedOperacoesMecanizadas,
     direcionadores,
     maquinarios,
-    implementos,
+    selectedDirecionadores,
+    navigation,
+    atividades, // Adicionar atividades às dependências
   ])
+
+  // Modificar o renderListItem para o caso do direcionador e implemento
+  const renderListItem = useCallback(
+    ({ item }) => (
+      <TouchableOpacity
+        style={styles.listItem}
+        onPress={() => {
+          if (listModalType === "atividade") {
+            handleChange(listModalType, item.id)
+          } else if (listModalType === "produto" || listModalType === "tanqueDiesel") {
+            handleOperacaoMecanizadaChange(listModalType, item.id)
+          } else if (listModalType === "bem") {
+            handleOperacaoMecanizadaChange(listModalType, item.id)
+            // Limpar implementos ao selecionar um novo bem
+            setSelectedImplementos([])
+            setOperacaoMecanizadaData((prev) => ({
+              ...prev,
+              implemento: "",
+              implementos: [],
+            }))
+          } else if (listModalType === "implemento") {
+            // Verificar se já está selecionado
+            const isAlreadySelected = selectedImplementos.some((i) => i.id === item.id)
+            if (!isAlreadySelected) {
+              handleOperacaoMecanizadaChange(listModalType, item.id)
+            } else {
+              Alert.alert("Atenção", "Este implemento já foi selecionado.")
+            }
+          } else if (listModalType === "direcionador") {
+            // Verificar se já está selecionado
+            const isAlreadySelected = selectedDirecionadores.some((d) => d.id === item.id)
+            if (!isAlreadySelected) {
+              handleChange(listModalType, item.id)
+            } else {
+              Alert.alert("Atenção", "Este direcionador já foi selecionado.")
+            }
+          }
+          setListModalVisible(false)
+        }}
+      >
+        <Text>{item.name}</Text>
+      </TouchableOpacity>
+    ),
+    [listModalType, handleChange, handleOperacaoMecanizadaChange, selectedDirecionadores, selectedImplementos],
+  )
 
   const renderInputField = useCallback(
     (label, name, value, onChange, keyboardType = "default", editable = true) => (
@@ -922,14 +1181,17 @@ export default function FormScreen() {
         setListModalData(maquinarios)
       } else if (type === "implemento") {
         setListModalData(implementos)
+      } else if (type === "atividade") {
+        // Usar atividades do Firebase em vez do arquivo assets.jsx
+        setListModalData(atividades)
       } else {
-        setListModalData(type === "produto" ? PRODUTOS : type === "tanqueDiesel" ? TANQUEDIESEL : ATIVIDADES)
+        setListModalData(type === "produto" ? PRODUTOS : TANQUEDIESEL)
       }
 
       setSearchQuery("")
       setListModalVisible(true)
     },
-    [direcionadores, maquinarios, implementos],
+    [direcionadores, maquinarios, implementos, atividades], // Adicionar atividades às dependências
   )
 
   const filteredListData = useMemo(() => {
@@ -937,28 +1199,7 @@ export default function FormScreen() {
     return listModalData.filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
   }, [listModalData, searchQuery])
 
-  const renderListItem = useCallback(
-    ({ item }) => (
-      <TouchableOpacity
-        style={styles.listItem}
-        onPress={() => {
-          if (listModalType === "atividade") {
-            handleChange(listModalType, item.id)
-          } else if (listModalType === "produto" || listModalType === "tanqueDiesel") {
-            handleOperacaoMecanizadaChange(listModalType, item.id)
-          } else if (listModalType === "bem" || listModalType === "implemento") {
-            handleOperacaoMecanizadaChange(listModalType, item.id)
-          } else if (listModalType === "direcionador") {
-            handleChange(listModalType, item.id)
-          }
-          setListModalVisible(false)
-        }}
-      >
-        <Text>{item.name}</Text>
-      </TouchableOpacity>
-    ),
-    [listModalType, handleChange, handleOperacaoMecanizadaChange],
-  )
+  // Modificar o renderListItem para o caso do direcionador
 
   const renderListModal = useCallback(() => {
     return (
@@ -1017,7 +1258,7 @@ export default function FormScreen() {
   }
 
   if (!isAuthenticated) {
-    navigation.replace("Login")
+    // navigation.replace("Login")
     return null
   }
 
@@ -1032,28 +1273,69 @@ export default function FormScreen() {
     )
   }
 
+  // Substituir a seção de direcionador no return do componente
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
-        {renderInputField("Ficha de Controle (número da máquina)", "fichaControle", formData.fichaControle, handleChange)}
+        {renderInputField(
+          "Ficha de Controle (número da máquina)",
+          "fichaControle",
+          formData.fichaControle,
+          handleChange,
+        )}
         <Separator />
         {renderDatePickerField("Data", "data")}
         <Separator />
-        <Text style={styles.label}>Direcionador</Text>
+        <Text style={styles.label}>Direcionadores</Text>
         <TouchableOpacity
           style={styles.input}
           onPress={() => openListModal("direcionador")}
           accessibilityLabel="Selecionar Direcionador"
         >
-          <Text>{direcionadores.find((d) => d.id === formData.direcionador)?.name || "Selecione o Direcionador"}</Text>
+          <Text>
+            {selectedDirecionadores.length > 0
+              ? `${selectedDirecionadores.length} direcionador(es) selecionado(s)`
+              : "Selecione um ou mais direcionadores"}
+          </Text>
           <ChevronDown size={20} color="#2a9d8f" />
         </TouchableOpacity>
+
+        {/* Lista de direcionadores selecionados */}
+        {selectedDirecionadores.length > 0 && (
+          <View style={styles.selectedDirecionadoresContainer}>
+            {selectedDirecionadores.map((direcionador) => (
+              <View key={direcionador.id} style={styles.selectedItem}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.selectedItemTitle}>{direcionador.name}</Text>
+                  {direcionador.culturaAssociada && (
+                    <Text style={styles.selectedItemSubtitle}>Cultura: {direcionador.culturaAssociada}</Text>
+                  )}
+                </View>
+                <TouchableOpacity onPress={() => removeDirecionador(direcionador.id)}>
+                  <Trash2 size={20} color="#FF0000" />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
+
         <Separator />
+        {/* Modificar a exibição da cultura para mostrar todas as culturas dos direcionadores selecionados */}
         <Text style={styles.label}>Cultura</Text>
         <View style={[styles.input, styles.disabledInput]}>
           <Text>
-            {formData.direcionador
-              ? direcionadores.find((d) => d.id === formData.direcionador)?.culturaAssociada || "Não definida"
+            {selectedDirecionadores.length > 0
+              ? (() => {
+                  // Coletar todas as culturas únicas dos direcionadores selecionados
+                  const culturas = selectedDirecionadores
+                    .map((d) => d.culturaAssociada)
+                    .filter((cultura) => cultura && cultura.trim() !== "")
+
+                  // Remover duplicatas e juntar com vírgula
+                  const culturasUnicas = [...new Set(culturas)]
+
+                  return culturasUnicas.length > 0 ? culturasUnicas.join(", ") : "Não definida"
+                })()
               : "Será definida pelo direcionador"}
           </Text>
         </View>
@@ -1064,7 +1346,7 @@ export default function FormScreen() {
           onPress={() => openListModal("atividade")}
           accessibilityLabel="Selecionar Atividade"
         >
-          <Text>{ATIVIDADES.find((a) => a.id === formData.atividade)?.name || "Selecione a Atividade"}</Text>
+          <Text>{atividades.find((a) => a.id === formData.atividade)?.name || "Selecione a Atividade"}</Text>
           <ChevronDown size={20} color="#2a9d8f" />
         </TouchableOpacity>
         <Separator />
@@ -1089,6 +1371,7 @@ export default function FormScreen() {
           <Text style={styles.buttonTextEnviar}>ENVIAR</Text>
         </TouchableOpacity>
       </ScrollView>
+
       <DateTimePickerModal
         isVisible={isDatePickerVisible}
         mode="date"
@@ -1120,17 +1403,33 @@ export default function FormScreen() {
             </View>
           )}
 
-          <Text style={styles.label}>Implemento</Text>
+          <Text style={styles.label}>Implementos</Text>
           <TouchableOpacity
             style={styles.input}
             onPress={() => openListModal("implemento")}
             accessibilityLabel="Selecionar Implemento"
           >
             <Text>
-              {implementos.find((i) => i.id === operacaoMecanizadaData.implemento)?.name || "Selecione o Implemento"}
+              {selectedImplementos.length > 0
+                ? `${selectedImplementos.length} implemento(s) selecionado(s)`
+                : "Selecione um ou mais implementos"}
             </Text>
             <ChevronDown size={20} color="#2a9d8f" />
           </TouchableOpacity>
+
+          {/* Lista de implementos selecionados */}
+          {selectedImplementos.length > 0 && (
+            <View style={styles.selectedImplementosContainer}>
+              {selectedImplementos.map((implemento) => (
+                <View key={implemento.id} style={styles.selectedItem}>
+                  <Text style={styles.selectedItemTitle}>{implemento.name}</Text>
+                  <TouchableOpacity onPress={() => removeImplemento(implemento.id)}>
+                    <Trash2 size={20} color="#FF0000" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
 
           {renderInputField(
             "Horímetro Atual",
@@ -1160,8 +1459,12 @@ export default function FormScreen() {
                 <View key={item.id} style={styles.selectedItem}>
                   <View>
                     <Text style={styles.selectedItemTitle}>{maquinarios.find((b) => b.id === item.bem)?.name}</Text>
+                    {/* Mostrar todos os implementos da operação */}
                     <Text style={styles.selectedItemSubtitle}>
-                      {implementos.find((i) => i.id === item.implemento)?.name}
+                      Implementos:{" "}
+                      {item.implementos
+                        ? item.implementos.map((imp) => imp.name).join(", ")
+                        : implementos.find((i) => i.id === item.implemento)?.name || ""}
                     </Text>
                     <Text>
                       Horas: {item.horaInicial} → {item.horaFinal} = {item.totalHoras}
@@ -1179,14 +1482,14 @@ export default function FormScreen() {
             style={[
               styles.button,
               (!operacaoMecanizadaData.bem ||
-                !operacaoMecanizadaData.implemento ||
+                selectedImplementos.length === 0 ||
                 !operacaoMecanizadaData.horaFinal ||
                 Number.parseFloat(operacaoMecanizadaData.horaFinal) <=
                   Number.parseFloat(previousHorimetros[operacaoMecanizadaData.bem] || "0.00")) &&
                 styles.disabledButton,
             ]}
             onPress={() => {
-              if (operacaoMecanizadaData.bem && operacaoMecanizadaData.implemento && operacaoMecanizadaData.horaFinal) {
+              if (operacaoMecanizadaData.bem && selectedImplementos.length > 0 && operacaoMecanizadaData.horaFinal) {
                 const horaAnterior = Number.parseFloat(previousHorimetros[operacaoMecanizadaData.bem] || "0.00")
                 const horaAtual = Number.parseFloat(operacaoMecanizadaData.horaFinal)
 
@@ -1200,11 +1503,13 @@ export default function FormScreen() {
                   addSelectedOperacaoMecanizada(operacaoMecanizadaData)
                   setOperacaoMecanizadaModalVisible(false)
                 }
+              } else if (selectedImplementos.length === 0) {
+                Alert.alert("Atenção", "Selecione pelo menos um implemento.")
               }
             }}
             disabled={
               !operacaoMecanizadaData.bem ||
-              !operacaoMecanizadaData.implemento ||
+              selectedImplementos.length === 0 ||
               !operacaoMecanizadaData.horaFinal ||
               Number.parseFloat(operacaoMecanizadaData.horaFinal) <=
                 Number.parseFloat(previousHorimetros[operacaoMecanizadaData.bem] || "0.00")
@@ -1220,6 +1525,7 @@ export default function FormScreen() {
   )
 }
 
+// Adicionar novos estilos para os direcionadores selecionados
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1416,5 +1722,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#2a9d8f",
     fontWeight: "bold",
+  },
+  selectedDirecionadoresContainer: {
+    marginBottom: 16,
+  },
+  selectedImplementosContainer: {
+    marginBottom: 16,
   },
 })

@@ -23,15 +23,19 @@ import { auth, database } from "../config/firebaseConfig"
 import { signOut } from "firebase/auth"
 import { ref, onValue, off, push, set as dbSet, query, orderByChild, equalTo } from "firebase/database"
 import NetInfo from "@react-native-community/netinfo"
-import { PRODUTOS, TANQUEDIESEL } from "./assets"
+import { PRODUTOS } from "./assets"
 import DateTimePicker from "@react-native-community/datetimepicker"
-import {
-  saveOfflineData,
-  checkConnectivityAndSync,
-  cacheFirebaseData,
-  getCachedData,
-  CACHE_KEYS,
-} from "../utils/offlineManager"
+import { saveOfflineData, checkConnectivityAndSync, cacheFirebaseData, getCachedData } from "../utils/offlineManager"
+
+// Definir chaves de cache localmente
+const LOCAL_CACHE_KEYS = {
+  VEICULOS: "@cached_veiculos",
+  TANQUES: "@cached_tanques",
+  USERS: "@cached_users",
+  ABASTECIMENTOS_VEICULOS: "@cached_abastecimentos_veiculos",
+  PERCURSOS: "@cached_percursos",
+  USERS_MAP: "@cached_users_map",
+}
 
 const USER_TOKEN_KEY = "@user_token"
 const USER_ROLE_KEY = "@user_role"
@@ -63,6 +67,7 @@ export default function VeiculosScreen() {
   const [searchQuery, setSearchQuery] = useState("")
   const [usersMap, setUsersMap] = useState({})
   const [veiculos, setVeiculos] = useState([])
+  const [tanques, setTanques] = useState([])
   const [isConnected, setIsConnected] = useState(true)
   const navigation = useNavigation()
 
@@ -124,7 +129,7 @@ export default function VeiculosScreen() {
                 setVeiculos(veiculosArray)
 
                 // Salvar em cache para uso offline
-                cacheFirebaseData(veiculosArray, CACHE_KEYS.VEICULOS)
+                cacheFirebaseData(veiculosArray, LOCAL_CACHE_KEYS.VEICULOS)
               } else {
                 setVeiculos([])
               }
@@ -150,7 +155,7 @@ export default function VeiculosScreen() {
     }
 
     const loadCachedVeiculos = async () => {
-      const cachedVeiculos = await getCachedData(CACHE_KEYS.VEICULOS)
+      const cachedVeiculos = await getCachedData(LOCAL_CACHE_KEYS.VEICULOS)
       if (cachedVeiculos) {
         setVeiculos(cachedVeiculos)
         console.log("Veículos carregados do cache")
@@ -162,6 +167,57 @@ export default function VeiculosScreen() {
     }
 
     loadVeiculos()
+  }, [userPropriedade, isConnected])
+
+  // Carregar tanques do Firebase ou do cache
+  useEffect(() => {
+    if (!userPropriedade) return
+
+    const loadTanques = async () => {
+      try {
+        if (isConnected) {
+          const tanquesRef = ref(database, `propriedades/${userPropriedade}/tanques`)
+
+          const tanquesListener = onValue(tanquesRef, (snapshot) => {
+            const data = snapshot.val()
+            if (data) {
+              const tanquesArray = Object.entries(data).map(([key, value]) => ({
+                id: value.id || key,
+                name: value.nome || "Tanque sem nome",
+                rawName: value.nome || "Tanque sem nome",
+              }))
+              setTanques(tanquesArray)
+
+              // Salvar em cache para uso offline
+              cacheFirebaseData(tanquesArray, LOCAL_CACHE_KEYS.TANQUES)
+            } else {
+              setTanques([])
+            }
+          })
+
+          return () => {
+            off(tanquesRef, "value", tanquesListener)
+          }
+        } else {
+          // Carregar do cache se estiver offline
+          const cachedTanques = await getCachedData(LOCAL_CACHE_KEYS.TANQUES)
+          if (cachedTanques) {
+            setTanques(cachedTanques)
+            console.log("Tanques carregados do cache")
+          } else {
+            setTanques([])
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao configurar listener para tanques:", error)
+        const cachedTanques = await getCachedData(LOCAL_CACHE_KEYS.TANQUES)
+        if (cachedTanques) {
+          setTanques(cachedTanques)
+        }
+      }
+    }
+
+    loadTanques()
   }, [userPropriedade, isConnected])
 
   // Carregar abastecimentos e percursos do Firebase ou do cache
@@ -212,7 +268,7 @@ export default function VeiculosScreen() {
                   setAbastecimentos(veiculosAbastecimentos)
 
                   // Salvar em cache para uso offline
-                  cacheFirebaseData(veiculosAbastecimentos, "cached_abastecimentos_veiculos")
+                  cacheFirebaseData(veiculosAbastecimentos, LOCAL_CACHE_KEYS.ABASTECIMENTOS_VEICULOS)
                 } else {
                   setAbastecimentos([])
                 }
@@ -237,7 +293,7 @@ export default function VeiculosScreen() {
                   setPercursos(percursosArray)
 
                   // Salvar em cache para uso offline
-                  cacheFirebaseData(percursosArray, "cached_percursos")
+                  cacheFirebaseData(percursosArray, LOCAL_CACHE_KEYS.PERCURSOS)
                 } else {
                   setPercursos([])
                 }
@@ -268,8 +324,8 @@ export default function VeiculosScreen() {
 
     const loadCachedData = async () => {
       try {
-        const cachedAbastecimentos = await getCachedData("cached_abastecimentos_veiculos")
-        const cachedPercursos = await getCachedData("cached_percursos")
+        const cachedAbastecimentos = await getCachedData(LOCAL_CACHE_KEYS.ABASTECIMENTOS_VEICULOS)
+        const cachedPercursos = await getCachedData(LOCAL_CACHE_KEYS.PERCURSOS)
 
         if (cachedAbastecimentos) {
           setAbastecimentos(cachedAbastecimentos)
@@ -308,19 +364,19 @@ export default function VeiculosScreen() {
                 setPropertyUsers(usersArray)
 
                 // Salvar em cache para uso offline
-                cacheFirebaseData(usersArray, CACHE_KEYS.USERS)
+                cacheFirebaseData(usersArray, LOCAL_CACHE_KEYS.USERS)
               }
             })
           } else {
             // Carregar do cache se estiver offline
-            const cachedUsers = await getCachedData(CACHE_KEYS.USERS)
+            const cachedUsers = await getCachedData(LOCAL_CACHE_KEYS.USERS)
             if (cachedUsers) {
               setPropertyUsers(cachedUsers)
             }
           }
         } catch (error) {
           console.error("Erro ao carregar usuários:", error)
-          const cachedUsers = await getCachedData(CACHE_KEYS.USERS)
+          const cachedUsers = await getCachedData(LOCAL_CACHE_KEYS.USERS)
           if (cachedUsers) {
             setPropertyUsers(cachedUsers)
           }
@@ -355,19 +411,19 @@ export default function VeiculosScreen() {
               setUsersMap(usersMapping)
 
               // Salvar em cache para uso offline
-              cacheFirebaseData(usersMapping, "cached_users_map")
+              cacheFirebaseData(usersMapping, LOCAL_CACHE_KEYS.USERS_MAP)
             }
           })
         } else {
           // Carregar do cache se estiver offline
-          const cachedUsersMap = await getCachedData("cached_users_map")
+          const cachedUsersMap = await getCachedData(LOCAL_CACHE_KEYS.USERS_MAP)
           if (cachedUsersMap) {
             setUsersMap(cachedUsersMap)
           }
         }
       } catch (error) {
         console.error("Erro ao carregar mapa de usuários:", error)
-        const cachedUsersMap = await getCachedData("cached_users_map")
+        const cachedUsersMap = await getCachedData(LOCAL_CACHE_KEYS.USERS_MAP)
         if (cachedUsersMap) {
           setUsersMap(cachedUsersMap)
         }
@@ -500,7 +556,7 @@ export default function VeiculosScreen() {
     if (type === "produto") {
       setListModalData(PRODUTOS)
     } else if (type === "tanqueDiesel") {
-      setListModalData(TANQUEDIESEL)
+      setListModalData(tanques)
     } else if (type === "veiculo") {
       setListModalData(veiculos) // Usar os veículos carregados do Firebase
     }
@@ -578,12 +634,12 @@ export default function VeiculosScreen() {
     try {
       const localId = Date.now().toString()
       const selectedVeiculo = veiculos.find((v) => v.id === abastecimentoData.placa)
+      const selectedTanque = tanques.find((t) => t.id === abastecimentoData.tanqueDiesel)
 
       const abastecimentoInfo = {
         ...abastecimentoData,
         produto: PRODUTOS.find((p) => p.id === abastecimentoData.produto)?.name || abastecimentoData.produto,
-        tanqueDiesel:
-          TANQUEDIESEL.find((t) => t.id === abastecimentoData.tanqueDiesel)?.name || abastecimentoData.tanqueDiesel,
+        tanqueDiesel: selectedTanque ? selectedTanque.name : abastecimentoData.tanqueDiesel,
         timestamp: Date.now(),
         userId: userId,
         propriedade: userPropriedade,
@@ -991,7 +1047,7 @@ export default function VeiculosScreen() {
                 accessibilityLabel="Selecionar Tanque"
               >
                 <Text>
-                  {TANQUEDIESEL.find((t) => t.id === abastecimentoData.tanqueDiesel)?.name || "Selecione o Tanque"}
+                  {tanques.find((t) => t.id === abastecimentoData.tanqueDiesel)?.name || "Selecione o Tanque"}
                 </Text>
                 <Icon name="chevron-down" size={20} color="#FF8C00" />
               </TouchableOpacity>
@@ -1452,5 +1508,5 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 15,
     fontWeight: "600",
-  }
+  },
 })
