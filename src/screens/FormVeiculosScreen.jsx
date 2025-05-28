@@ -32,7 +32,7 @@ import { onAuthStateChanged } from "firebase/auth"
 import Icon from "react-native-vector-icons/Ionicons"
 import { useNavigation, useRoute } from "@react-navigation/native"
 
-// Define colors locally instead of importing from App.jsx
+
 const COLORS = {
   background: "#f0f0f0",
   text: "#333333",
@@ -48,8 +48,8 @@ const OFFLINE_PERCURSOS_KEY = "@offline_percursos"
 
 const initialFormData = {
   placa: "",
-  placaId: "", // Adicionado para armazenar o ID do veículo
-  veiculo: "", // Adicionado para armazenar o nome do veículo
+  placaId: "",
+  veiculo: "",
   data: "",
   kmAtual: "",
   objetivo: "",
@@ -71,20 +71,20 @@ export default function FormVeiculosScreen() {
   const [isSyncing, setIsSyncing] = useState(false)
   const [veiculos, setVeiculos] = useState([])
   const [isConnected, setIsConnected] = useState(true)
-  const [selectedDate, setSelectedDate] = useState(new Date()) // Inicializado com a data atual
+  const [selectedDate, setSelectedDate] = useState(new Date()) 
 
   const navigation = useNavigation()
   const route = useRoute()
   const isMounted = useRef(true)
 
   const isFormValid = useCallback(() => {
-    const requiredFields = ["placaId", "data", "kmAtual", "objetivo"] // Alterado para verificar placaId
+    const requiredFields = ["placaId", "data", "kmAtual", "objetivo"]
     return requiredFields.every((field) => formData[field] && formData[field].trim() !== "")
   }, [formData])
 
   const resetForm = useCallback(() => {
     setFormData(initialFormData)
-    setSelectedDate(new Date()) // Reset para a data atual
+    setSelectedDate(new Date()) 
   }, [])
 
   useEffect(() => {
@@ -93,7 +93,7 @@ export default function FormVeiculosScreen() {
     }
   }, [])
 
-  // Monitorar o estado da conexão
+
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
       setIsConnected(state.isConnected)
@@ -106,14 +106,14 @@ export default function FormVeiculosScreen() {
   }, [])
 
   useEffect(() => {
-    // Check if we have a vehicle from route params
+
     if (route.params?.veiculo) {
       const veiculo = route.params.veiculo
       setFormData((prev) => ({
         ...prev,
-        placaId: veiculo.id, // Armazena o ID
-        placa: veiculo.placa, // Armazena a placa
-        veiculo: `${veiculo.modelo} (${veiculo.placa})`, // Armazena o nome completo
+        placaId: veiculo.id,
+        placa: veiculo.placa, 
+        veiculo: `${veiculo.modelo} (${veiculo.placa})`, 
       }))
     }
   }, [route.params])
@@ -139,7 +139,7 @@ export default function FormVeiculosScreen() {
     return () => unsubscribeAuth()
   }, [])
 
-  // Carregar veículos do Firebase ou do cache
+
   useEffect(() => {
     if (!isAuthInitialized || !isAuthenticated || !userPropriedade) {
       return
@@ -165,7 +165,7 @@ export default function FormVeiculosScreen() {
                   }))
                   setVeiculos(veiculosArray)
 
-                  // Salvar em cache para uso offline
+             
                   cacheFirebaseData(veiculosArray, CACHE_KEYS.VEICULOS)
                 } else {
                   setVeiculos([])
@@ -184,7 +184,7 @@ export default function FormVeiculosScreen() {
             off(veiculosRef, "value", veiculosListener)
           }
         } else {
-          // Carregar do cache se estiver offline
+       
           loadCachedVeiculos()
         }
       } catch (error) {
@@ -224,7 +224,7 @@ export default function FormVeiculosScreen() {
           setIsSyncing(false)
         }
       }
-    }, 300000) // Check every 5 minutes
+    }, 300000) 
 
     return () => clearInterval(syncInterval)
   }, [isSyncing, isConnected])
@@ -246,7 +246,7 @@ export default function FormVeiculosScreen() {
       setDatePickerVisible(false)
     } catch (error) {
       console.error("Erro ao confirmar data:", error)
-      // Fechar o picker mesmo em caso de erro para evitar que o app trave
+  
       setDatePickerVisible(false)
     }
   }, [])
@@ -278,7 +278,7 @@ export default function FormVeiculosScreen() {
         const localId = Date.now().toString()
         const kmAtual = Number.parseFloat(formData.kmAtual)
 
-        // Converter a data do formato DD/MM/YYYY para um timestamp
+  
         let timestamp = Date.now()
         if (formData.data) {
           const [day, month, year] = formData.data.split("/")
@@ -306,7 +306,7 @@ export default function FormVeiculosScreen() {
             Alert.alert("Atenção", "Este percurso já foi enviado anteriormente.")
           }
         } else {
-          // Check if we already have this localId saved offline
+      
           const existingData = await AsyncStorage.getItem(OFFLINE_PERCURSOS_KEY)
           const offlineData = existingData ? JSON.parse(existingData) : []
           const isDuplicate = offlineData.some((item) => item.localId === localId)
@@ -325,7 +325,7 @@ export default function FormVeiculosScreen() {
         Alert.alert("Erro", "Ocorreu um erro ao enviar os dados. Os dados foram salvos localmente.")
 
         try {
-          // Check if we already have this localId saved offline before saving
+    
           const localId = Date.now().toString()
           const existingData = await AsyncStorage.getItem(OFFLINE_PERCURSOS_KEY)
           const offlineData = existingData ? JSON.parse(existingData) : []
@@ -334,7 +334,7 @@ export default function FormVeiculosScreen() {
           if (!isDuplicate) {
             const kmAtual = Number.parseFloat(formData.kmAtual)
 
-            // Converter a data do formato DD/MM/YYYY para um timestamp
+    
             let timestamp = Date.now()
             if (formData.data) {
               const [day, month, year] = formData.data.split("/")
@@ -424,10 +424,10 @@ export default function FormVeiculosScreen() {
         style={styles.listItem}
         onPress={() => {
           if (listModalType === "placa") {
-            // Encontrar o veículo completo pelo ID
+       
             const selectedVehicle = veiculos.find((v) => v.id === item.id)
             if (selectedVehicle) {
-              // Atualizar o formData com o ID, a placa e o nome completo do veículo
+      
               handleChange("placaId", item.id)
               handleChange("placa", selectedVehicle.placa)
               handleChange("veiculo", item.name)
@@ -548,8 +548,8 @@ export default function FormVeiculosScreen() {
         mode="date"
         onConfirm={handleDateConfirm}
         onCancel={() => setDatePickerVisible(false)}
-        date={selectedDate || new Date()} // Garantir que sempre tenha uma data válida
-        maximumDate={new Date()} // Limitar a data máxima para hoje
+        date={selectedDate || new Date()} 
+        maximumDate={new Date()} 
       />
 
       {renderListModal()}

@@ -25,7 +25,6 @@ export default function OpeningScreen() {
     }
     loadUserRole()
 
-    // Monitorar o estado da conexão
     const unsubscribe = NetInfo.addEventListener((state) => {
       setIsConnected(state.isConnected)
     })
@@ -60,32 +59,55 @@ export default function OpeningScreen() {
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           <View style={styles.titleSection}>
             <Text style={styles.mainTitle}>Painel Principal</Text>
-            <Text style={styles.subtitle}>Selecione uma área para continuar</Text>
+            <Text style={styles.subtitle}>
+              {userRole === "seller" ? "Área de vendas" : "Selecione uma área para continuar"}
+            </Text>
           </View>
 
           <View style={styles.optionsContainer}>
-            <TouchableOpacity style={styles.optionCard} onPress={() => navigation.navigate("Home")}>
-              <View style={[styles.iconContainer, { backgroundColor: "#2a9d8f" }]}>
-                <MaterialCommunityIcons name="tractor" size={40} color="white" />
-              </View>
-              <Text style={styles.optionTitle}>Máquinas</Text>
-              <Text style={styles.optionDescription}>Gerenciar apontamentos e abastecimentos</Text>
-              <View style={styles.arrowContainer}>
-                <Icon name="chevron-forward" size={24} color="#2a9d8f" />
-              </View>
-            </TouchableOpacity>
+            {/* Máquinas - Ocultar para seller */}
+            {userRole !== "seller" && (
+              <TouchableOpacity style={styles.optionCard} onPress={() => navigation.navigate("Home")}>
+                <View style={[styles.iconContainer, { backgroundColor: "#2a9d8f" }]}>
+                  <MaterialCommunityIcons name="tractor" size={40} color="white" />
+                </View>
+                <Text style={styles.optionTitle}>Máquinas</Text>
+                <Text style={styles.optionDescription}>Gerenciar apontamentos e abastecimentos</Text>
+                <View style={styles.arrowContainer}>
+                  <Icon name="chevron-forward" size={24} color="#2a9d8f" />
+                </View>
+              </TouchableOpacity>
+            )}
 
-            <TouchableOpacity style={styles.optionCard} onPress={() => navigation.navigate("Veiculos")}>
-              <View style={[styles.iconContainer, { backgroundColor: "#e67e22" }]}>
-                <Icon name="car-outline" size={40} color="white" />
-              </View>
-              <Text style={styles.optionTitle}>Veículos</Text>
-              <Text style={styles.optionDescription}>Gerenciar frota e registros de uso</Text>
-              <View style={styles.arrowContainer}>
-                <Icon name="chevron-forward" size={24} color="#e67e22" />
-              </View>
-            </TouchableOpacity>
+            {/* Veículos - Ocultar para seller */}
+            {userRole !== "seller" && (
+              <TouchableOpacity style={styles.optionCard} onPress={() => navigation.navigate("Veiculos")}>
+                <View style={[styles.iconContainer, { backgroundColor: "#e67e22" }]}>
+                  <Icon name="car-outline" size={40} color="white" />
+                </View>
+                <Text style={styles.optionTitle}>Veículos</Text>
+                <Text style={styles.optionDescription}>Gerenciar frota e registros de uso</Text>
+                <View style={styles.arrowContainer}>
+                  <Icon name="chevron-forward" size={24} color="#e67e22" />
+                </View>
+              </TouchableOpacity>
+            )}
 
+            {/* Vendas - Mostrar para admin e seller */}
+            {(userRole === "admin" || userRole === "seller") && (
+              <TouchableOpacity style={styles.optionCard} onPress={() => navigation.navigate("SalesScreen")}>
+                <View style={[styles.iconContainer, { backgroundColor: "#9b59b6" }]}>
+                  <MaterialCommunityIcons name="chart-line" size={40} color="white" />
+                </View>
+                <Text style={styles.optionTitle}>Vendas</Text>
+                <Text style={styles.optionDescription}>Gerenciar vendas e relatórios comerciais</Text>
+                <View style={styles.arrowContainer}>
+                  <Icon name="chevron-forward" size={24} color="#9b59b6" />
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {/* Cadastrar Usuários - Apenas para admin */}
             {userRole === "admin" && (
               <TouchableOpacity style={styles.optionCard} onPress={() => navigation.navigate("RegisterScreen")}>
                 <View style={[styles.iconContainer, { backgroundColor: "#3498db" }]}>
@@ -97,6 +119,19 @@ export default function OpeningScreen() {
                   <Icon name="chevron-forward" size={24} color="#3498db" />
                 </View>
               </TouchableOpacity>
+            )}
+
+            {/* Mensagem especial para seller */}
+            {userRole === "seller" && (
+              <View style={styles.sellerWelcomeCard}>
+                <View style={styles.sellerIconContainer}>
+                  <MaterialCommunityIcons name="account-tie" size={50} color="#9b59b6" />
+                </View>
+                <Text style={styles.sellerWelcomeTitle}>Bem-vindo, Vendedor!</Text>
+                <Text style={styles.sellerWelcomeText}>
+                  Você tem acesso ao módulo de vendas. Gerencie suas vendas, clientes e relatórios comerciais.
+                </Text>
+              </View>
             )}
           </View>
         </ScrollView>
@@ -118,12 +153,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    paddingTop: 60, // Mantido em 60 conforme solicitado anteriormente
+    paddingTop: 60,
   },
   titleSection: {
     alignItems: "center",
-    marginBottom: 30, // Reduzido de 60 para 30
-    marginTop: 20, // Adicionado espaço extra após o banner
+    marginBottom: 30,
+    marginTop: 20,
   },
   mainTitle: {
     fontSize: 24,
@@ -138,7 +173,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   optionsContainer: {
-    marginTop: 10, // Reduzido de 20 para 10
+    marginTop: 10,
   },
   optionCard: {
     backgroundColor: "white",
@@ -213,5 +248,35 @@ const styles = StyleSheet.create({
   },
   offlineIcon: {
     marginRight: 8,
+  },
+  sellerWelcomeCard: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    padding: 25,
+    marginTop: 20,
+    alignItems: "center",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    borderLeftWidth: 4,
+    borderLeftColor: "#9b59b6",
+  },
+  sellerIconContainer: {
+    marginBottom: 15,
+  },
+  sellerWelcomeTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  sellerWelcomeText: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    lineHeight: 20,
   },
 })

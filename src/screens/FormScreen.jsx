@@ -39,8 +39,8 @@ const FICHA_CONTROLE_KEY = "@ficha_controle_numero"
 const initialFormData = {
   fichaControle: "",
   data: "",
-  direcionador: "", // Mantido para compatibilidade
-  direcionadores: [], // Novo array para armazenar múltiplos direcionadores
+  direcionador: "",
+  direcionadores: [], 
   cultura: "",
   atividade: "",
   observacao: "",
@@ -51,8 +51,8 @@ export default function FormScreen({ navigation }) {
   const [operacaoMecanizadaModalVisible, setOperacaoMecanizadaModalVisible] = useState(false)
   const [operacaoMecanizadaData, setOperacaoMecanizadaData] = useState({
     bem: "",
-    implemento: "", // Mantido para compatibilidade
-    implementos: [], // Novo array para múltiplos implementos
+    implemento: "", 
+    implementos: [], 
     horaFinal: "",
   })
   const [previousHorimetros, setPreviousHorimetros] = useState({})
@@ -70,18 +70,18 @@ export default function FormScreen({ navigation }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
   const [isHorimetrosLoading, setIsHorimetrosLoading] = useState(true)
-  // Estado para armazenar a lista de direcionadores do Firebase
+
   const [direcionadores, setDirecionadores] = useState([])
-  // Novos estados para armazenar maquinários e implementos do Firebase
+
   const [maquinarios, setMaquinarios] = useState([])
   const [implementos, setImplementos] = useState([])
-  // Novo estado para controlar o número da ficha de controle
+
   const [fichaControleNumero, setFichaControleNumero] = useState(40000)
-  // Adicionar um novo estado para armazenar os direcionadores selecionados
+
   const [selectedDirecionadores, setSelectedDirecionadores] = useState([])
-  // Novo estado para armazenar os implementos selecionados na operação mecanizada atual
+
   const [selectedImplementos, setSelectedImplementos] = useState([])
-  // Novo estado para armazenar as atividades do Firebase
+
   const [atividades, setAtividades] = useState([])
 
   const isMounted = useRef(true)
@@ -91,20 +91,16 @@ export default function FormScreen({ navigation }) {
     return requiredFields.every((field) => formData[field] && formData[field].trim() !== "")
   }, [formData])
 
-  // Modificar o resetForm para limpar também os direcionadores
   const resetForm = useCallback(() => {
-    // Incrementar o número da ficha de controle ao resetar o formulário
     const novoNumero = fichaControleNumero + 1
     setFichaControleNumero(novoNumero)
 
-    // Salvar o novo número no AsyncStorage
     AsyncStorage.setItem(FICHA_CONTROLE_KEY, novoNumero.toString()).catch((error) =>
       console.error("Erro ao salvar número da ficha:", error),
     )
 
-    // Resetar o formulário sem preencher automaticamente a ficha de controle
     setFormData(initialFormData)
-    setSelectedDirecionadores([]) // Limpar direcionadores selecionados
+    setSelectedDirecionadores([]) 
 
     setOperacaoMecanizadaData({
       bem: "",
@@ -122,22 +118,22 @@ export default function FormScreen({ navigation }) {
     }
   }, [])
 
-  // Carregar o último número da ficha de controle do AsyncStorage
+
   useEffect(() => {
     const carregarNumeroFicha = async () => {
       try {
         const numeroSalvo = await AsyncStorage.getItem(FICHA_CONTROLE_KEY)
         if (numeroSalvo) {
           const numero = Number.parseInt(numeroSalvo, 10)
-          // Apenas armazenar o último número usado, sem preencher o campo
+
           setFichaControleNumero(numero)
         } else {
-          // Se não existir número salvo, definir o padrão 40000 apenas para controle interno
+   
           setFichaControleNumero(40000)
         }
       } catch (error) {
         console.error("Erro ao carregar número da ficha:", error)
-        // Em caso de erro, definir o padrão 40000 apenas para controle interno
+    
         setFichaControleNumero(40000)
       }
     }
@@ -145,7 +141,7 @@ export default function FormScreen({ navigation }) {
     carregarNumeroFicha()
   }, [])
 
-  // Novo useEffect para buscar atividades do Firebase
+
   useEffect(() => {
     if (!userPropriedade) return
 
@@ -153,14 +149,14 @@ export default function FormScreen({ navigation }) {
       try {
         const atividadesRef = ref(database, `propriedades/${userPropriedade}/atividades`)
 
-        // Configurar listener para atualizações em tempo real
+
         const unsubscribe = onValue(
           atividadesRef,
           (snapshot) => {
             if (isMounted.current) {
               const data = snapshot.val() || {}
 
-              // Transformar os dados do Firebase em um array no formato esperado pelo componente
+           
               const atividadesArray = Object.entries(data).map(([key, value]) => ({
                 id: value.id || key,
                 name: value.atividade || "Atividade sem nome",
@@ -168,7 +164,6 @@ export default function FormScreen({ navigation }) {
 
               setAtividades(atividadesArray)
 
-              // Salvar atividades no cache para uso offline
               AsyncStorage.setItem(CACHED_ATIVIDADES_KEY, JSON.stringify(atividadesArray)).catch((error) =>
                 console.error("Erro ao salvar atividades no cache:", error),
               )
@@ -177,7 +172,7 @@ export default function FormScreen({ navigation }) {
           (error) => {
             console.error("Erro ao carregar atividades do Firebase:", error)
 
-            // Em caso de erro, tentar carregar do cache
+       
             loadCachedAtividades()
           },
         )
@@ -186,12 +181,12 @@ export default function FormScreen({ navigation }) {
       } catch (error) {
         console.error("Erro ao configurar listener para atividades:", error)
 
-        // Em caso de erro, tentar carregar do cache
+      
         loadCachedAtividades()
       }
     }
 
-    // Função para carregar atividades do cache
+  
     const loadCachedAtividades = async () => {
       try {
         const cachedData = await AsyncStorage.getItem(CACHED_ATIVIDADES_KEY)
@@ -212,7 +207,7 @@ export default function FormScreen({ navigation }) {
     }
   }, [userPropriedade])
 
-  // useEffect para buscar direcionadores do Firebase
+
   useEffect(() => {
     if (!userPropriedade) return
 
@@ -220,14 +215,14 @@ export default function FormScreen({ navigation }) {
       try {
         const direcionadoresRef = ref(database, `propriedades/${userPropriedade}/direcionadores`)
 
-        // Configurar listener para atualizações em tempo real
+   
         const unsubscribe = onValue(
           direcionadoresRef,
           (snapshot) => {
             if (isMounted.current) {
               const data = snapshot.val() || {}
 
-              // Transformar os dados do Firebase em um array no formato esperado pelo componente
+            
               const direcionadoresArray = Object.entries(data).map(([key, value]) => ({
                 id: value.id || key,
                 name: value.direcionador || "Direcionador sem nome",
@@ -236,7 +231,7 @@ export default function FormScreen({ navigation }) {
 
               setDirecionadores(direcionadoresArray)
 
-              // Salvar direcionadores no cache para uso offline
+             
               AsyncStorage.setItem(CACHED_DIRECIONADORES_KEY, JSON.stringify(direcionadoresArray)).catch((error) =>
                 console.error("Erro ao salvar direcionadores no cache:", error),
               )
@@ -245,7 +240,7 @@ export default function FormScreen({ navigation }) {
           (error) => {
             console.error("Erro ao carregar direcionadores do Firebase:", error)
 
-            // Em caso de erro, tentar carregar do cache
+           
             loadCachedDirecionadores()
           },
         )
@@ -254,12 +249,12 @@ export default function FormScreen({ navigation }) {
       } catch (error) {
         console.error("Erro ao configurar listener para direcionadores:", error)
 
-        // Em caso de erro, tentar carregar do cache
+       
         loadCachedDirecionadores()
       }
     }
 
-    // Função para carregar direcionadores do cache
+    
     const loadCachedDirecionadores = async () => {
       try {
         const cachedData = await AsyncStorage.getItem(CACHED_DIRECIONADORES_KEY)
@@ -280,7 +275,7 @@ export default function FormScreen({ navigation }) {
     }
   }, [userPropriedade])
 
-  // Novo useEffect para buscar maquinários do Firebase
+
   useEffect(() => {
     if (!userPropriedade) return
 
@@ -288,23 +283,23 @@ export default function FormScreen({ navigation }) {
       try {
         const maquinariosRef = ref(database, `propriedades/${userPropriedade}/maquinarios`)
 
-        // Configurar listener para atualizações em tempo real
+       
         const unsubscribe = onValue(
           maquinariosRef,
           (snapshot) => {
             if (isMounted.current) {
               const data = snapshot.val() || {}
 
-              // Transformar os dados do Firebase em um array no formato esperado pelo componente
+              
               const maquinariosArray = Object.entries(data).map(([key, value]) => ({
                 id: value.id || key,
-                name: `${value.id} - ${value.nome}`, // Formato "ID - NOME"
-                rawName: value.nome || "Máquina sem nome", // Manter o nome original para uso posterior
+                name: `${value.id} - ${value.nome}`,
+                rawName: value.nome || "Máquina sem nome", 
               }))
 
               setMaquinarios(maquinariosArray)
 
-              // Salvar maquinários no cache para uso offline
+           
               AsyncStorage.setItem(CACHED_MAQUINARIOS_KEY, JSON.stringify(maquinariosArray)).catch((error) =>
                 console.error("Erro ao salvar maquinários no cache:", error),
               )
@@ -313,7 +308,7 @@ export default function FormScreen({ navigation }) {
           (error) => {
             console.error("Erro ao carregar maquinários do Firebase:", error)
 
-            // Em caso de erro, tentar carregar do cache
+           
             loadCachedMaquinarios()
           },
         )
@@ -322,12 +317,12 @@ export default function FormScreen({ navigation }) {
       } catch (error) {
         console.error("Erro ao configurar listener para maquinários:", error)
 
-        // Em caso de erro, tentar carregar do cache
+        
         loadCachedMaquinarios()
       }
     }
 
-    // Função para carregar maquinários do cache
+   
     const loadCachedMaquinarios = async () => {
       try {
         const cachedData = await AsyncStorage.getItem(CACHED_MAQUINARIOS_KEY)
@@ -348,7 +343,7 @@ export default function FormScreen({ navigation }) {
     }
   }, [userPropriedade])
 
-  // Novo useEffect para buscar implementos do Firebase
+  
   useEffect(() => {
     if (!userPropriedade) return
 
@@ -356,23 +351,23 @@ export default function FormScreen({ navigation }) {
       try {
         const implementosRef = ref(database, `propriedades/${userPropriedade}/implementos`)
 
-        // Configurar listener para atualizações em tempo real
+       
         const unsubscribe = onValue(
           implementosRef,
           (snapshot) => {
             if (isMounted.current) {
               const data = snapshot.val() || {}
 
-              // Transformar os dados do Firebase em um array no formato esperado pelo componente
+             
               const implementosArray = Object.entries(data).map(([key, value]) => ({
                 id: value.id || key,
-                name: `${value.id} - ${value.nome}`, // Formato "ID - NOME"
-                rawName: value.nome || "Implemento sem nome", // Manter o nome original para uso posterior
+                name: `${value.id} - ${value.nome}`, 
+                rawName: value.nome || "Implemento sem nome", 
               }))
 
               setImplementos(implementosArray)
 
-              // Salvar implementos no cache para uso offline
+        
               AsyncStorage.setItem(CACHED_IMPLEMENTOS_KEY, JSON.stringify(implementosArray)).catch((error) =>
                 console.error("Erro ao salvar implementos no cache:", error),
               )
@@ -381,7 +376,7 @@ export default function FormScreen({ navigation }) {
           (error) => {
             console.error("Erro ao carregar implementos do Firebase:", error)
 
-            // Em caso de erro, tentar carregar do cache
+       
             loadCachedImplementos()
           },
         )
@@ -390,12 +385,12 @@ export default function FormScreen({ navigation }) {
       } catch (error) {
         console.error("Erro ao configurar listener para implementos:", error)
 
-        // Em caso de erro, tentar carregar do cache
+     
         loadCachedImplementos()
       }
     }
 
-    // Função para carregar implementos do cache
+
     const loadCachedImplementos = async () => {
       try {
         const cachedData = await AsyncStorage.getItem(CACHED_IMPLEMENTOS_KEY)
@@ -416,7 +411,7 @@ export default function FormScreen({ navigation }) {
     }
   }, [userPropriedade])
 
-  // Carregar horímetros do Firebase em vez do AsyncStorage
+  
   useEffect(() => {
     if (!userPropriedade) return
 
@@ -425,7 +420,7 @@ export default function FormScreen({ navigation }) {
         setIsHorimetrosLoading(true)
         const horimetrosRef = ref(database, `propriedades/${userPropriedade}/horimetros`)
 
-        // Configurar listener para atualizações em tempo real
+     
         const unsubscribe = onValue(
           horimetrosRef,
           (snapshot) => {
@@ -433,12 +428,12 @@ export default function FormScreen({ navigation }) {
               const data = snapshot.val() || {}
               setPreviousHorimetros(data)
 
-              // Salvar horímetros no cache para uso offline
+      
               AsyncStorage.setItem(PREVIOUS_HORIMETROS_KEY, JSON.stringify(data)).catch((error) =>
                 console.error("Erro ao salvar horímetros no cache:", error),
               )
 
-              // Também salvar na chave padrão do offlineManager
+          
               AsyncStorage.setItem(CACHED_HORIMETROS_KEY, JSON.stringify(data)).catch((error) =>
                 console.error("Erro ao salvar horímetros no cache padrão:", error),
               )
@@ -450,7 +445,7 @@ export default function FormScreen({ navigation }) {
             console.error("Erro ao carregar horímetros do Firebase:", error)
             setIsHorimetrosLoading(false)
 
-            // Fallback para dados locais em caso de erro
+         
             loadLocalHorimetros()
           },
         )
@@ -460,14 +455,14 @@ export default function FormScreen({ navigation }) {
         console.error("Erro ao configurar listener para horímetros:", error)
         setIsHorimetrosLoading(false)
 
-        // Fallback para dados locais em caso de erro
+     
         loadLocalHorimetros()
       }
     }
 
     const loadLocalHorimetros = async () => {
       try {
-        // Tentar carregar primeiro da chave específica
+      
         const storedHorimetros = await AsyncStorage.getItem(PREVIOUS_HORIMETROS_KEY)
         if (storedHorimetros) {
           setPreviousHorimetros(JSON.parse(storedHorimetros))
@@ -570,7 +565,7 @@ export default function FormScreen({ navigation }) {
       return
     }
 
-    // Não precisamos mais buscar bens-implementos, pois agora estamos buscando diretamente do Firebase
+  
     setIsLoading(false)
   }, [isAuthInitialized, isAuthenticated])
 
@@ -584,7 +579,7 @@ export default function FormScreen({ navigation }) {
           setIsSyncing(false)
         }
       }
-    }, 300000) // Check every 5 minutes
+    }, 300000) 
 
     return () => clearInterval(syncInterval)
   }, [isSyncing])
@@ -597,26 +592,25 @@ export default function FormScreen({ navigation }) {
     setDatePickerVisible(false)
   }, [])
 
-  // Modificar a função handleChange para o caso do direcionador
+
   const handleChange = useCallback(
     (name, value) => {
       if (name === "direcionador") {
-        // Buscar o direcionador selecionado na lista do Firebase
+      
         const selectedDirecionador = direcionadores.find((d) => d.id === value)
 
-        // Verificar se o direcionador já está selecionado
+       
         const isDirecionadorAlreadySelected = selectedDirecionadores.some((d) => d.id === value)
 
         if (!isDirecionadorAlreadySelected && selectedDirecionador) {
-          // Adicionar à lista de direcionadores selecionados
+        
           setSelectedDirecionadores((prev) => [...prev, selectedDirecionador])
 
-          // Atualizar o formData
+        
           return setFormData((prev) => ({
             ...prev,
-            direcionador: value, // Manter para compatibilidade
-            direcionadores: [...prev.direcionadores, value], // Adicionar ao array
-            // Se for o primeiro direcionador, usar sua cultura associada
+            direcionador: value, 
+            direcionadores: [...prev.direcionadores, value],
             cultura:
               prev.direcionadores.length === 0 && selectedDirecionador.culturaAssociada
                 ? CULTURA.find((c) => c.name.toLowerCase() === selectedDirecionador.culturaAssociada.toLowerCase())
@@ -625,10 +619,10 @@ export default function FormScreen({ navigation }) {
           }))
         }
 
-        return // Se já estiver selecionado, não faz nada
+        return 
       }
 
-      // Se for o campo fichaControle e for um número válido, atualizar o estado fichaControleNumero
+   
       if (name === "fichaControle" && !isNaN(Number.parseInt(value, 10))) {
         setFichaControleNumero(Number.parseInt(value, 10))
       }
@@ -638,61 +632,61 @@ export default function FormScreen({ navigation }) {
     [direcionadores, selectedDirecionadores],
   )
 
-  // Modificar a função handleOperacaoMecanizadaChange para o caso do implemento
+
   const handleOperacaoMecanizadaChange = useCallback(
     (name, value) => {
       if (name === "implemento") {
-        // Buscar o implemento selecionado
+     
         const selectedImplemento = implementos.find((i) => i.id === value)
 
-        // Verificar se o implemento já está selecionado
+      
         const isImplementoAlreadySelected = selectedImplementos.some((i) => i.id === value)
 
         if (!isImplementoAlreadySelected && selectedImplemento) {
-          // Adicionar à lista de implementos selecionados
+       
           setSelectedImplementos((prev) => [...prev, selectedImplemento])
 
-          // Atualizar o operacaoMecanizadaData
+    
           setOperacaoMecanizadaData((prev) => ({
             ...prev,
-            implemento: value, // Manter para compatibilidade
-            implementos: [...prev.implementos, value], // Adicionar ao array
+            implemento: value,
+            implementos: [...prev.implementos, value],
           }))
         }
         return
       }
 
       setOperacaoMecanizadaData((prev) => {
-        // Se o campo alterado for "bem", resetamos o horaFinal
+    
         if (name === "bem") {
           return { ...prev, [name]: value, horaFinal: "" }
         }
 
-        // Não validamos mais aqui, apenas atualizamos o valor
+      
         return { ...prev, [name]: value }
       })
     },
     [implementos, selectedImplementos],
   )
 
-  // Adicionar função para remover um implemento
+
   const removeImplemento = useCallback((implementoId) => {
-    // Remover do array de IDs no operacaoMecanizadaData
+   
     setOperacaoMecanizadaData((prev) => ({
       ...prev,
       implementos: prev.implementos.filter((id) => id !== implementoId),
-      // Se for o implemento principal, atualizar para o próximo da lista ou vazio
+      
       implemento:
         prev.implemento === implementoId
           ? prev.implementos.filter((id) => id !== implementoId)[0] || ""
           : prev.implemento,
     }))
 
-    // Remover da lista de objetos selecionados
+  
     setSelectedImplementos((prev) => prev.filter((i) => i.id !== implementoId))
   }, [])
 
-  // Função para salvar os horímetros atualizados no Firebase
+
   const saveHorimetrosToFirebase = async (updatedHorimetros) => {
     if (!userPropriedade) {
       console.error("Propriedade não definida, não é possível salvar horímetros")
@@ -703,13 +697,13 @@ export default function FormScreen({ navigation }) {
       const horimetrosRef = ref(database, `propriedades/${userPropriedade}/horimetros`)
       await update(horimetrosRef, updatedHorimetros)
 
-      // Também salva localmente como backup
+
       await AsyncStorage.setItem(PREVIOUS_HORIMETROS_KEY, JSON.stringify(updatedHorimetros))
       return true
     } catch (error) {
       console.error("Erro ao salvar horímetros no Firebase:", error)
 
-      // Em caso de falha, salva apenas localmente
+   
       try {
         await AsyncStorage.setItem(PREVIOUS_HORIMETROS_KEY, JSON.stringify(updatedHorimetros))
       } catch (localError) {
@@ -719,24 +713,24 @@ export default function FormScreen({ navigation }) {
     }
   }
 
-  // Modificar a função addSelectedOperacaoMecanizada para incluir múltiplos implementos
+ 
   const addSelectedOperacaoMecanizada = useCallback(
     async (operacao) => {
-      // Verificar se há pelo menos um implemento selecionado
+      
       if (selectedImplementos.length === 0) {
         Alert.alert("Atenção", "Selecione pelo menos um implemento.")
         return
       }
 
-      // Obter o horímetro anterior para este bem
+  
       const horaInicial = previousHorimetros[operacao.bem] || "0.00"
 
-      // Calcular total de horas
+   
       const horaFinal = Number.parseFloat(operacao.horaFinal) || 0
       const horaInicialNum = Number.parseFloat(horaInicial) || 0
       const totalHoras = horaFinal > horaInicialNum ? (horaFinal - horaInicialNum).toFixed(2) : "0.00"
 
-      // Adicionar à lista de operações selecionadas com todos os implementos
+  
       setSelectedOperacoesMecanizadas((prev) => [
         ...prev,
         {
@@ -744,7 +738,7 @@ export default function FormScreen({ navigation }) {
           id: Date.now(),
           horaInicial,
           totalHoras,
-          // Incluir todos os implementos selecionados
+          
           implementos: selectedImplementos.map((i) => ({
             id: i.id,
             name: i.name,
@@ -752,15 +746,15 @@ export default function FormScreen({ navigation }) {
         },
       ])
 
-      // Atualizar o horímetro anterior para este bem
+    
       const updated = { ...previousHorimetros, [operacao.bem]: operacao.horaFinal }
 
-      // Salvar no Firebase e atualizar o estado local
+   
       const saved = await saveHorimetrosToFirebase(updated)
       if (saved) {
         setPreviousHorimetros(updated)
       } else {
-        // Se falhar ao salvar no Firebase, pelo menos atualiza localmente
+    
         setPreviousHorimetros(updated)
         Alert.alert(
           "Atenção",
@@ -768,7 +762,7 @@ export default function FormScreen({ navigation }) {
         )
       }
 
-      // Resetar o formulário de operação mecanizada
+   
       setOperacaoMecanizadaData({
         bem: "",
         implemento: "",
@@ -780,15 +774,12 @@ export default function FormScreen({ navigation }) {
     [previousHorimetros, userPropriedade, selectedImplementos],
   )
 
-  // Modificar a função removeSelectedOperacaoMecanizada para sempre restaurar o valor anterior
-  // em vez de excluir completamente o registro quando não há outras operações
 
-  // Localizar a função removeSelectedOperacaoMecanizada e substituí-la pela versão abaixo:
 
   const removeSelectedOperacaoMecanizada = useCallback(
     async (id) => {
       try {
-        // Encontrar a operação que será removida
+
         const operacaoParaRemover = selectedOperacoesMecanizadas.find((item) => item.id === id)
 
         if (!operacaoParaRemover || !userPropriedade) {
@@ -796,26 +787,26 @@ export default function FormScreen({ navigation }) {
           return
         }
 
-        // Remover da lista local primeiro
+      
         setSelectedOperacoesMecanizadas((prev) => prev.filter((item) => item.id !== id))
 
-        // Referência para o nó específico do horímetro no Firebase
+  
         const horimetroRef = ref(database, `propriedades/${userPropriedade}/horimetros/${operacaoParaRemover.bem}`)
 
-        // Sempre restaurar o valor anterior, independentemente de haver outras operações
+      
         const valorAnterior = operacaoParaRemover.horaInicial
 
-        // Atualizar o Firebase com o valor anterior
+    
         await set(horimetroRef, valorAnterior)
 
-        // Atualizar o estado local
+   
         const updatedHorimetros = {
           ...previousHorimetros,
           [operacaoParaRemover.bem]: valorAnterior,
         }
         setPreviousHorimetros(updatedHorimetros)
 
-        // Atualizar o AsyncStorage
+   
         await AsyncStorage.setItem(PREVIOUS_HORIMETROS_KEY, JSON.stringify(updatedHorimetros))
 
         console.log(`Horímetro para o bem ${operacaoParaRemover.bem} restaurado para ${valorAnterior}`)
@@ -846,40 +837,39 @@ export default function FormScreen({ navigation }) {
     [userPropriedade],
   )
 
-  // Adicionar função para remover um direcionador
+
   const removeDirecionador = useCallback((direcionadorId) => {
-    // Remover do array de IDs no formData
+   
     setFormData((prev) => ({
       ...prev,
       direcionadores: prev.direcionadores.filter((id) => id !== direcionadorId),
-      // Se for o direcionador principal, atualizar para o próximo da lista ou vazio
+     
       direcionador:
         prev.direcionador === direcionadorId
           ? prev.direcionadores.filter((id) => id !== direcionadorId)[0] || ""
           : prev.direcionador,
     }))
 
-    // Remover da lista de objetos selecionados
+   
     setSelectedDirecionadores((prev) => prev.filter((d) => d.id !== direcionadorId))
   }, [])
 
-  // Modificar o handleSubmit para incluir todos os direcionadores e usar atividades do Firebase
   const handleSubmit = useCallback(async () => {
     if (isFormValid()) {
       try {
         const localId = Date.now().toString()
 
-        // Obter todos os direcionadores selecionados
+ 
         const direcionadoresSelecionados = selectedDirecionadores.map((d) => ({
           id: d.id,
           name: d.name,
           culturaAssociada: d.culturaAssociada,
         }))
 
-        // Usar o primeiro direcionador como principal para compatibilidade
+     
         const primaryDirecionador = direcionadoresSelecionados.length > 0 ? direcionadoresSelecionados[0] : null
 
-        // Converter a data do formato DD/MM/YYYY para um timestamp
+    
         let timestamp = Date.now()
         if (formData.data) {
           const [day, month, year] = formData.data.split("/")
@@ -887,19 +877,19 @@ export default function FormScreen({ navigation }) {
           timestamp = dateObj.getTime()
         }
 
-        // Buscar a atividade selecionada do Firebase
+  
         const selectedAtividade = atividades.find((a) => a.id === formData.atividade)
 
-        // Preparar os dados do apontamento
+       
         const apontamentoData = {
           ...formData,
-          // Usar o nome da atividade do Firebase
+         
           atividade: selectedAtividade?.name || formData.atividade,
-          // Usar o nome do direcionador principal do Firebase para compatibilidade
+        
           direcionador: primaryDirecionador?.name || formData.direcionador,
-          // Incluir todos os direcionadores selecionados
+       
           direcionadores: direcionadoresSelecionados,
-          // Usar a culturaAssociada do direcionador principal selecionado
+     
           cultura:
             primaryDirecionador?.culturaAssociada ||
             CULTURA.find((c) => c.id === formData.cultura)?.name ||
@@ -907,9 +897,9 @@ export default function FormScreen({ navigation }) {
           timestamp: timestamp,
           operacoesMecanizadas: selectedOperacoesMecanizadas.map((op) => ({
             ...op,
-            // Usar os nomes dos maquinários do Firebase
+          
             bem: maquinarios.find((b) => b.id === op.bem)?.name || op.bem,
-            // Manter os implementos como estão, pois já estão no formato correto
+           
           })),
           userId: userId,
           propriedade: userPropriedade,
@@ -926,7 +916,7 @@ export default function FormScreen({ navigation }) {
                 text: "OK",
                 onPress: () => {
                   resetForm()
-                  // Navegar para a HomeScreen após o envio bem-sucedido
+               
                   if (navigation) {
                     navigation.navigate("Home")
                   }
@@ -937,7 +927,7 @@ export default function FormScreen({ navigation }) {
             Alert.alert("Atenção", "Este apontamento já foi enviado anteriormente.")
           }
         } else {
-          // Check if we already have this localId saved offline
+        
           const existingData = await AsyncStorage.getItem(OFFLINE_STORAGE_KEY)
           const offlineData = existingData ? JSON.parse(existingData) : []
           const isDuplicate = offlineData.some((item) => item.localId === localId)
@@ -949,7 +939,7 @@ export default function FormScreen({ navigation }) {
                 text: "OK",
                 onPress: () => {
                   resetForm()
-                  // Navegar para a HomeScreen mesmo no modo offline
+              
                   if (navigation) {
                     navigation.navigate("Home")
                   }
@@ -965,24 +955,24 @@ export default function FormScreen({ navigation }) {
         Alert.alert("Erro", "Ocorreu um erro ao enviar os dados. Os dados foram salvos localmente.")
 
         try {
-          // Check if we already have this localId saved offline before saving
+        
           const localId = Date.now().toString()
           const existingData = await AsyncStorage.getItem(OFFLINE_STORAGE_KEY)
           const offlineData = existingData ? JSON.parse(existingData) : []
           const isDuplicate = offlineData.some((item) => item.localId === localId)
 
           if (!isDuplicate) {
-            // Obter todos os direcionadores selecionados
+           
             const direcionadoresSelecionados = selectedDirecionadores.map((d) => ({
               id: d.id,
               name: d.name,
               culturaAssociada: d.culturaAssociada,
             }))
 
-            // Usar o primeiro direcionador como principal para compatibilidade
+         
             const primaryDirecionador = direcionadoresSelecionados.length > 0 ? direcionadoresSelecionados[0] : null
 
-            // Converter a data do formato DD/MM/YYYY para um timestamp
+         
             let timestamp = Date.now()
             if (formData.data) {
               const [day, month, year] = formData.data.split("/")
@@ -990,18 +980,18 @@ export default function FormScreen({ navigation }) {
               timestamp = dateObj.getTime()
             }
 
-            // Buscar a atividade selecionada do Firebase
+        
             const selectedAtividade = atividades.find((a) => a.id === formData.atividade)
 
             const apontamentoData = {
               ...formData,
-              // Usar o nome da atividade do Firebase
+          
               atividade: selectedAtividade?.name || formData.atividade,
-              // Usar o nome do direcionador principal do Firebase
+          
               direcionador: primaryDirecionador?.name || formData.direcionador,
-              // Incluir todos os direcionadores selecionados
+             
               direcionadores: direcionadoresSelecionados,
-              // Usar a culturaAssociada do direcionador principal selecionado
+     
               cultura:
                 primaryDirecionador?.culturaAssociada ||
                 CULTURA.find((c) => c.id === formData.cultura)?.name ||
@@ -1009,9 +999,9 @@ export default function FormScreen({ navigation }) {
               timestamp: timestamp,
               operacoesMecanizadas: selectedOperacoesMecanizadas.map((op) => ({
                 ...op,
-                // Usar os nomes dos maquinários do Firebase
+        
                 bem: maquinarios.find((b) => b.id === op.bem)?.name || op.bem,
-                // Manter os implementos como estão, pois já estão no formato correto
+           
               })),
               userId: userId,
               propriedade: userPropriedade,
@@ -1039,10 +1029,10 @@ export default function FormScreen({ navigation }) {
     maquinarios,
     selectedDirecionadores,
     navigation,
-    atividades, // Adicionar atividades às dependências
+    atividades, 
   ])
 
-  // Modificar o renderListItem para o caso do direcionador e implemento
+
   const renderListItem = useCallback(
     ({ item }) => (
       <TouchableOpacity
@@ -1054,7 +1044,7 @@ export default function FormScreen({ navigation }) {
             handleOperacaoMecanizadaChange(listModalType, item.id)
           } else if (listModalType === "bem") {
             handleOperacaoMecanizadaChange(listModalType, item.id)
-            // Limpar implementos ao selecionar um novo bem
+        
             setSelectedImplementos([])
             setOperacaoMecanizadaData((prev) => ({
               ...prev,
@@ -1062,7 +1052,7 @@ export default function FormScreen({ navigation }) {
               implementos: [],
             }))
           } else if (listModalType === "implemento") {
-            // Verificar se já está selecionado
+         
             const isAlreadySelected = selectedImplementos.some((i) => i.id === item.id)
             if (!isAlreadySelected) {
               handleOperacaoMecanizadaChange(listModalType, item.id)
@@ -1070,7 +1060,7 @@ export default function FormScreen({ navigation }) {
               Alert.alert("Atenção", "Este implemento já foi selecionado.")
             }
           } else if (listModalType === "direcionador") {
-            // Verificar se já está selecionado
+       
             const isAlreadySelected = selectedDirecionadores.some((d) => d.id === item.id)
             if (!isAlreadySelected) {
               handleChange(listModalType, item.id)
@@ -1174,7 +1164,7 @@ export default function FormScreen({ navigation }) {
     (type) => {
       setListModalType(type)
 
-      // Selecionar a lista correta com base no tipo
+
       if (type === "direcionador") {
         setListModalData(direcionadores)
       } else if (type === "bem") {
@@ -1182,7 +1172,7 @@ export default function FormScreen({ navigation }) {
       } else if (type === "implemento") {
         setListModalData(implementos)
       } else if (type === "atividade") {
-        // Usar atividades do Firebase em vez do arquivo assets.jsx
+    
         setListModalData(atividades)
       } else {
         setListModalData(type === "produto" ? PRODUTOS : TANQUEDIESEL)
@@ -1191,7 +1181,7 @@ export default function FormScreen({ navigation }) {
       setSearchQuery("")
       setListModalVisible(true)
     },
-    [direcionadores, maquinarios, implementos, atividades], // Adicionar atividades às dependências
+    [direcionadores, maquinarios, implementos, atividades],
   )
 
   const filteredListData = useMemo(() => {
@@ -1199,7 +1189,6 @@ export default function FormScreen({ navigation }) {
     return listModalData.filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
   }, [listModalData, searchQuery])
 
-  // Modificar o renderListItem para o caso do direcionador
 
   const renderListModal = useCallback(() => {
     return (
@@ -1258,7 +1247,6 @@ export default function FormScreen({ navigation }) {
   }
 
   if (!isAuthenticated) {
-    // navigation.replace("Login")
     return null
   }
 
@@ -1273,7 +1261,6 @@ export default function FormScreen({ navigation }) {
     )
   }
 
-  // Substituir a seção de direcionador no return do componente
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
@@ -1326,12 +1313,10 @@ export default function FormScreen({ navigation }) {
           <Text>
             {selectedDirecionadores.length > 0
               ? (() => {
-                  // Coletar todas as culturas únicas dos direcionadores selecionados
                   const culturas = selectedDirecionadores
                     .map((d) => d.culturaAssociada)
                     .filter((cultura) => cultura && cultura.trim() !== "")
 
-                  // Remover duplicatas e juntar com vírgula
                   const culturasUnicas = [...new Set(culturas)]
 
                   return culturasUnicas.length > 0 ? culturasUnicas.join(", ") : "Não definida"
@@ -1525,7 +1510,7 @@ export default function FormScreen({ navigation }) {
   )
 }
 
-// Adicionar novos estilos para os direcionadores selecionados
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,

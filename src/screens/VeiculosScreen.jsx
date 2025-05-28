@@ -27,7 +27,6 @@ import { PRODUTOS } from "./assets"
 import DateTimePicker from "@react-native-community/datetimepicker"
 import { saveOfflineData, checkConnectivityAndSync, cacheFirebaseData, getCachedData } from "../utils/offlineManager"
 
-// Definir chaves de cache localmente
 const LOCAL_CACHE_KEYS = {
   VEICULOS: "@cached_veiculos",
   TANQUES: "@cached_tanques",
@@ -71,7 +70,7 @@ export default function VeiculosScreen() {
   const [isConnected, setIsConnected] = useState(true)
   const navigation = useNavigation()
 
-  // Filtro states
+
   const [filterModalVisible, setFilterModalVisible] = useState(false)
   const [dateFilter, setDateFilter] = useState(null)
   const [typeFilter, setTypeFilter] = useState(null)
@@ -92,7 +91,7 @@ export default function VeiculosScreen() {
     loadUserData()
   }, [])
 
-  // Monitorar o estado da conexão
+
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
       setIsConnected(state.isConnected)
@@ -104,7 +103,7 @@ export default function VeiculosScreen() {
     return () => unsubscribe()
   }, [])
 
-  // Carregar veículos do Firebase ou do cache
+
   useEffect(() => {
     if (!userPropriedade) return
 
@@ -114,7 +113,7 @@ export default function VeiculosScreen() {
       try {
         const veiculosRef = ref(database, `propriedades/${userPropriedade}/veiculos`)
 
-        // Tentar carregar do Firebase primeiro
+
         if (isConnected) {
           const veiculosListener = onValue(
             veiculosRef,
@@ -128,7 +127,7 @@ export default function VeiculosScreen() {
                 }))
                 setVeiculos(veiculosArray)
 
-                // Salvar em cache para uso offline
+         
                 cacheFirebaseData(veiculosArray, LOCAL_CACHE_KEYS.VEICULOS)
               } else {
                 setVeiculos([])
@@ -145,7 +144,7 @@ export default function VeiculosScreen() {
             off(veiculosRef, "value", veiculosListener)
           }
         } else {
-          // Se estiver offline, carregar do cache
+     
           loadCachedVeiculos()
         }
       } catch (error) {
@@ -169,7 +168,7 @@ export default function VeiculosScreen() {
     loadVeiculos()
   }, [userPropriedade, isConnected])
 
-  // Carregar tanques do Firebase ou do cache
+
   useEffect(() => {
     if (!userPropriedade) return
 
@@ -188,7 +187,7 @@ export default function VeiculosScreen() {
               }))
               setTanques(tanquesArray)
 
-              // Salvar em cache para uso offline
+      
               cacheFirebaseData(tanquesArray, LOCAL_CACHE_KEYS.TANQUES)
             } else {
               setTanques([])
@@ -199,7 +198,7 @@ export default function VeiculosScreen() {
             off(tanquesRef, "value", tanquesListener)
           }
         } else {
-          // Carregar do cache se estiver offline
+    
           const cachedTanques = await getCachedData(LOCAL_CACHE_KEYS.TANQUES)
           if (cachedTanques) {
             setTanques(cachedTanques)
@@ -220,7 +219,7 @@ export default function VeiculosScreen() {
     loadTanques()
   }, [userPropriedade, isConnected])
 
-  // Carregar abastecimentos e percursos do Firebase ou do cache
+
   useEffect(() => {
     if (!userPropriedade || !userRole || !userId) return
 
@@ -228,7 +227,7 @@ export default function VeiculosScreen() {
 
     const loadData = async () => {
       try {
-        // Carregar abastecimentos
+
         const abastecimentosRef = ref(database, `propriedades/${userPropriedade}/abastecimentoVeiculos`)
         let abastecimentosQuery
 
@@ -238,7 +237,7 @@ export default function VeiculosScreen() {
           abastecimentosQuery = abastecimentosRef
         }
 
-        // Carregar percursos
+
         const percursosRef = ref(database, `propriedades/${userPropriedade}/percursos`)
         let percursosQuery
 
@@ -250,7 +249,7 @@ export default function VeiculosScreen() {
 
         if (userRole === "user" || userRole === "manager") {
           if (isConnected) {
-            // Carregar do Firebase se estiver conectado
+       
             const abastecimentosListener = onValue(
               abastecimentosQuery,
               (snapshot) => {
@@ -261,13 +260,13 @@ export default function VeiculosScreen() {
                     ...value,
                     tipo: "abastecimento",
                   }))
-                  // Filtrar apenas abastecimentos de veículos
+             
                   const veiculosAbastecimentos = abastecimentosArray.filter(
                     (item) => !item.tipoEquipamento || item.tipoEquipamento === "veiculo",
                   )
                   setAbastecimentos(veiculosAbastecimentos)
 
-                  // Salvar em cache para uso offline
+               
                   cacheFirebaseData(veiculosAbastecimentos, LOCAL_CACHE_KEYS.ABASTECIMENTOS_VEICULOS)
                 } else {
                   setAbastecimentos([])
@@ -292,7 +291,7 @@ export default function VeiculosScreen() {
                   }))
                   setPercursos(percursosArray)
 
-                  // Salvar em cache para uso offline
+    
                   cacheFirebaseData(percursosArray, LOCAL_CACHE_KEYS.PERCURSOS)
                 } else {
                   setPercursos([])
@@ -310,7 +309,7 @@ export default function VeiculosScreen() {
               off(percursosQuery, "value", percursosListener)
             }
           } else {
-            // Carregar do cache se estiver offline
+       
             loadCachedData()
           }
         } else {
@@ -347,7 +346,7 @@ export default function VeiculosScreen() {
     loadData()
   }, [userPropriedade, userRole, userId, isConnected])
 
-  // Carregar usuários da propriedade para o filtro (para gerentes)
+
   useEffect(() => {
     if (userRole === "manager" && userPropriedade) {
       const loadUsers = async () => {
@@ -363,12 +362,12 @@ export default function VeiculosScreen() {
                 }))
                 setPropertyUsers(usersArray)
 
-                // Salvar em cache para uso offline
+      
                 cacheFirebaseData(usersArray, LOCAL_CACHE_KEYS.USERS)
               }
             })
           } else {
-            // Carregar do cache se estiver offline
+          
             const cachedUsers = await getCachedData(LOCAL_CACHE_KEYS.USERS)
             if (cachedUsers) {
               setPropertyUsers(cachedUsers)
@@ -387,13 +386,13 @@ export default function VeiculosScreen() {
     }
   }, [userRole, userPropriedade, isConnected])
 
-  // Combinar e ordenar abastecimentos e percursos por timestamp
+
   useEffect(() => {
     const combined = [...abastecimentos, ...percursos].sort((a, b) => b.timestamp - a.timestamp)
     setCombinedData(combined)
   }, [abastecimentos, percursos])
 
-  // Carregar mapa de usuários
+ 
   useEffect(() => {
     if (!userPropriedade) return
 
@@ -410,12 +409,12 @@ export default function VeiculosScreen() {
               })
               setUsersMap(usersMapping)
 
-              // Salvar em cache para uso offline
+            
               cacheFirebaseData(usersMapping, LOCAL_CACHE_KEYS.USERS_MAP)
             }
           })
         } else {
-          // Carregar do cache se estiver offline
+      
           const cachedUsersMap = await getCachedData(LOCAL_CACHE_KEYS.USERS_MAP)
           if (cachedUsersMap) {
             setUsersMap(cachedUsersMap)
@@ -438,14 +437,14 @@ export default function VeiculosScreen() {
     setModalVisible(true)
   }
 
-  // Função para ordenar por timestamp
+
   const sortByTimestamp = (array) => {
     return [...array].sort((a, b) => {
       return sortOrder === "desc" ? b.timestamp - a.timestamp : a.timestamp - b.timestamp
     })
   }
 
-  // Função para lidar com a mudança de data no DatePicker
+
   const handleDateChange = (event, selectedDate) => {
     setShowDatePicker(false)
     if (selectedDate) {
@@ -453,14 +452,14 @@ export default function VeiculosScreen() {
     }
   }
 
-  // Função para limpar todos os filtros
+
   const clearFilters = () => {
     setDateFilter(null)
     setTypeFilter(null)
     setFiltroUsuario(null)
   }
 
-  // Dados filtrados com base nos critérios selecionados
+
   const filteredData = useMemo(() => {
     let filtered = [...combinedData]
 
@@ -558,7 +557,7 @@ export default function VeiculosScreen() {
     } else if (type === "tanqueDiesel") {
       setListModalData(tanques)
     } else if (type === "veiculo") {
-      setListModalData(veiculos) // Usar os veículos carregados do Firebase
+      setListModalData(veiculos) 
     }
     setSearchQuery("")
     setListModalVisible(true)
@@ -648,11 +647,11 @@ export default function VeiculosScreen() {
         tipo: "abastecimento",
         veiculo: selectedVeiculo?.modelo || "",
         placa: selectedVeiculo?.placa || abastecimentoData.placa,
-        tipoEquipamento: "veiculo", // Marcando explicitamente como veículo
+        tipoEquipamento: "veiculo", 
       }
 
       if (isConnected) {
-        // Alterado para usar o nó abastecimentoVeiculos
+        
         const abastecimentosRef = ref(database, `propriedades/${userPropriedade}/abastecimentoVeiculos`)
         const newEntryRef = push(abastecimentosRef)
         await dbSet(newEntryRef, abastecimentoInfo)
@@ -664,13 +663,13 @@ export default function VeiculosScreen() {
           horimetro: "",
           tanqueDiesel: "",
           placa: "",
-          observacao: "", // Resetando o campo de observação
+          observacao: "", 
         })
       } else {
-        // Salvar offline para sincronização posterior
+    
         await saveOfflineData(abastecimentoInfo, OFFLINE_ABASTECIMENTOS_KEY)
 
-        // Adicionar ao estado local para exibição imediata
+       
         setAbastecimentos((prev) => [
           {
             id: `local-${localId}`,
@@ -687,7 +686,7 @@ export default function VeiculosScreen() {
           horimetro: "",
           tanqueDiesel: "",
           placa: "",
-          observacao: "", // Resetando o campo de observação
+          observacao: "", 
         })
       }
     } catch (error) {
@@ -730,7 +729,7 @@ export default function VeiculosScreen() {
     )
   }
 
-  // Renderizar o modal de filtro
+
   const renderFilterModal = () => {
     return (
       <Modal

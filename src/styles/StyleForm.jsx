@@ -35,7 +35,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     height: 48,
     elevation: 2,
-    marginTop: 2, // Adicionado margem superior negativa
+    marginTop: 2,
     marginBottom: 20,
   },
   dropdownTitle: {
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: -20, // Removida a margem inferior
+    marginBottom: -20, 
     borderWidth: 2,
     borderColor: '#ccc',
     borderRadius: 8,

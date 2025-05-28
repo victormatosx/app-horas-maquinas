@@ -83,7 +83,6 @@ export default function LoginScreen() {
 
     try {
       await signInWithEmailAndPassword(auth, email, password)
-      // User data will be handled by the onAuthStateChanged listener
     } catch (error) {
       console.error("Login error:", error)
       switch (error.code) {

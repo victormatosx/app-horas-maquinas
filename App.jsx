@@ -8,14 +8,15 @@ import AsyncStorage from "@react-native-async-storage/async-storage"
 import NetInfo from "@react-native-community/netinfo"
 import { checkConnectivityAndSync } from "./src/utils/offlineManager"
 
-// Screens
+// screens
 import LoginScreen from "./src/screens/LoginScreen"
 import HomeScreen from "./src/screens/HomeScreen"
 import FormScreen from "./src/screens/FormScreen"
 import OpeningScreen from "./src/screens/OpeningScreen"
 import VeiculosScreen from "./src/screens/VeiculosScreen"
 import FormVeiculosScreen from "./src/screens/FormVeiculosScreen"
-import RegisterScreen from "./src/screens/RegisterScreen" // Adicionando o import da tela de cadastro
+import RegisterScreen from "./src/screens/RegisterScreen"
+import SalesScreen from "./src/screens/SalesScreen"
 
 const Stack = createNativeStackNavigator()
 
@@ -38,7 +39,7 @@ export default function App() {
     checkLoginStatus()
   }, [])
 
-  // Monitorar o estado da conexão e sincronizar quando estiver online
+  // monitorar o estado da conexão e sincronizar quando estiver online
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
       if (state.isConnected) {
@@ -46,7 +47,7 @@ export default function App() {
       }
     })
 
-    // Verificar e sincronizar ao iniciar o aplicativo
+    // verificar e sincronizar ao iniciar o aplicativo
     checkConnectivityAndSync()
 
     return () => unsubscribe()
@@ -72,6 +73,7 @@ export default function App() {
         <Stack.Screen name="Veiculos" component={VeiculosScreen} />
         <Stack.Screen name="FormVeiculos" component={FormVeiculosScreen} />
         <Stack.Screen name="RegisterScreen" component={RegisterScreen} />
+        <Stack.Screen name="SalesScreen" component={SalesScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   )

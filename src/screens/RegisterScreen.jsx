@@ -17,28 +17,28 @@ export default function RegisterScreen() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password)
       const user = userCredential.user
 
-      // Estrutura de dados modificada
+
       const userData = {
         nome: name,
         email: email,
         role: role,
-        propriedade: propriedade, // Adicionando a propriedade selecionada
+        propriedade: propriedade, 
       }
 
       console.log("Dados a serem salvos:", userData)
 
-      // Salvar os dados do usuário na estrutura correta
+
       await set(ref(database, `users/${user.uid}`), {
         ...userData,
         propriedade_escolhida: propriedade,
       })
 
-      // Salvar os dados do usuário também na propriedade
+   
       await set(ref(database, `propriedades/${propriedade}/users/${user.uid}`), userData)
 
       console.log("Dados salvos com sucesso")
 
-      // Remover qualquer nó desnecessário no nível raiz
+ 
       await remove(ref(database, `${user.uid}`))
 
       Alert.alert("Conta Criada!", "Sua conta foi criada com sucesso!", [

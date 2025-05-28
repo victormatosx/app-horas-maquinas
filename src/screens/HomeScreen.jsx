@@ -27,7 +27,7 @@ import { PRODUTOS, IMPLEMENTOS } from "./assets"
 import NetInfo from "@react-native-community/netinfo"
 import DateTimePicker from "@react-native-community/datetimepicker"
 
-// Definir chaves de cache localmente se não estiverem disponíveis no offlineManager
+
 const LOCAL_CACHE_KEYS = {
   MAQUINARIOS: "@cached_maquinarios",
   TANQUES: "@cached_tanques",
@@ -99,7 +99,7 @@ export default function HomeScreen() {
     loadUserData()
   }, [])
 
-  // Monitorar o estado da conexão
+
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
       setIsConnected(state.isConnected)
@@ -111,7 +111,7 @@ export default function HomeScreen() {
     return () => unsubscribe()
   }, [])
 
-  // Carregar máquinas do Firebase ou do cache
+  // carregar máquinas do Firebase ou do cache
   useEffect(() => {
     if (!userPropriedade) return
 
@@ -130,7 +130,7 @@ export default function HomeScreen() {
               }))
               setMaquinas(maquinasArray)
 
-              // Salvar em cache para uso offline
+              // salvar em cache para uso offline
               if (LOCAL_CACHE_KEYS.MAQUINARIOS) {
                 cacheFirebaseData(maquinasArray, LOCAL_CACHE_KEYS.MAQUINARIOS)
               }
@@ -143,7 +143,7 @@ export default function HomeScreen() {
             off(maquinariosRef, "value", maquinariosListener)
           }
         } else {
-          // Carregar do cache se estiver offline
+          // carregar do cache se estiver offline
           const cachedMaquinarios = await getCachedData(LOCAL_CACHE_KEYS.MAQUINARIOS)
           if (cachedMaquinarios) {
             setMaquinas(cachedMaquinarios)
@@ -164,7 +164,7 @@ export default function HomeScreen() {
     loadMaquinarios()
   }, [userPropriedade, isConnected])
 
-  // Carregar tanques do Firebase ou do cache
+  // carregar tanques do Firebase ou do cache
   useEffect(() => {
     if (!userPropriedade) return
 
@@ -183,7 +183,7 @@ export default function HomeScreen() {
               }))
               setTanques(tanquesArray)
 
-              // Salvar em cache para uso offline
+              // salvar em cache para uso offline
               if (LOCAL_CACHE_KEYS.TANQUES) {
                 cacheFirebaseData(tanquesArray, LOCAL_CACHE_KEYS.TANQUES)
               }
@@ -196,7 +196,7 @@ export default function HomeScreen() {
             off(tanquesRef, "value", tanquesListener)
           }
         } else {
-          // Carregar do cache se estiver offline
+          // carregar do cache se estiver offline
           const cachedTanques = await getCachedData(LOCAL_CACHE_KEYS.TANQUES)
           if (cachedTanques) {
             setTanques(cachedTanques)
@@ -217,14 +217,14 @@ export default function HomeScreen() {
     loadTanques()
   }, [userPropriedade, isConnected])
 
-  // Carregar apontamentos e abastecimentos
+  // carregar apontamentos e abastecimentos
   useEffect(() => {
     if (!userPropriedade || !userRole || !userId) return
     setIsLoading(true)
 
     const loadData = async () => {
       try {
-        // Fetch apontamentos
+
         const apontamentosRef = ref(database, `propriedades/${userPropriedade}/apontamentos`)
         let apontamentosQuery
 
@@ -234,7 +234,6 @@ export default function HomeScreen() {
           apontamentosQuery = apontamentosRef
         }
 
-        // Fetch abastecimentos
         const abastecimentosRef = ref(database, `propriedades/${userPropriedade}/abastecimentos`)
         let abastecimentosQuery
 
@@ -246,7 +245,7 @@ export default function HomeScreen() {
 
         if (userRole === "user" || userRole === "manager") {
           if (isConnected) {
-            // Carregar do Firebase se estiver conectado
+          
             const apontamentosListener = onValue(apontamentosQuery, (snapshot) => {
               const data = snapshot.val()
               if (data) {
@@ -257,7 +256,7 @@ export default function HomeScreen() {
 
                 sortApontamentos(apontamentosArray)
 
-                // Salvar em cache para uso offline
+             
                 cacheFirebaseData(apontamentosArray, LOCAL_CACHE_KEYS.APONTAMENTOS)
 
                 const uniqueResponsaveis = [...new Set(apontamentosArray.map((item) => item.responsavel))]
@@ -278,7 +277,7 @@ export default function HomeScreen() {
                 }))
                 setAbastecimentos(sortByTimestamp(abastecimentosArray))
 
-                // Salvar em cache para uso offline
+          
                 cacheFirebaseData(abastecimentosArray, LOCAL_CACHE_KEYS.ABASTECIMENTOS)
               } else {
                 setAbastecimentos([])
@@ -291,7 +290,7 @@ export default function HomeScreen() {
               off(abastecimentosRef, "value", abastecimentosListener)
             }
           } else {
-            // Carregar do cache se estiver offline
+     
             loadCachedData()
           }
         } else {
@@ -330,7 +329,7 @@ export default function HomeScreen() {
     loadData()
   }, [userPropriedade, userRole, userId, isConnected])
 
-  // Carregar usuários da propriedade para o filtro (para gerentes)
+
   useEffect(() => {
     if (userRole === "manager" && userPropriedade) {
       const loadUsers = async () => {
@@ -346,14 +345,14 @@ export default function HomeScreen() {
                 }))
                 setPropertyUsers(usersArray)
 
-                // Salvar em cache para uso offline
+      
                 if (LOCAL_CACHE_KEYS.USERS) {
                   cacheFirebaseData(usersArray, LOCAL_CACHE_KEYS.USERS)
                 }
               }
             })
           } else {
-            // Carregar do cache se estiver offline
+
             const cachedUsers = await getCachedData(LOCAL_CACHE_KEYS.USERS)
             if (cachedUsers) {
               setPropertyUsers(cachedUsers)
@@ -372,7 +371,7 @@ export default function HomeScreen() {
     }
   }, [userRole, userPropriedade, isConnected])
 
-  // Carregar mapa de usuários
+
   useEffect(() => {
     if (!userPropriedade) return
 
@@ -389,12 +388,12 @@ export default function HomeScreen() {
               })
               setUsersMap(usersMapping)
 
-              // Salvar em cache para uso offline
+           
               cacheFirebaseData(usersMapping, LOCAL_CACHE_KEYS.USERS_MAP)
             }
           })
         } else {
-          // Carregar do cache se estiver offline
+         
           const cachedUsersMap = await getCachedData(LOCAL_CACHE_KEYS.USERS_MAP)
           if (cachedUsersMap) {
             setUsersMap(cachedUsersMap)
@@ -648,10 +647,10 @@ export default function HomeScreen() {
           observacao: "",
         })
       } else {
-        // Salvar offline para sincronização posterior
+     
         await saveOfflineData(abastecimentoInfo, OFFLINE_ABASTECIMENTOS_KEY)
 
-        // Adicionar ao estado local para exibição imediata
+     
         setAbastecimentos((prev) => [
           {
             id: `local-${localId}`,
