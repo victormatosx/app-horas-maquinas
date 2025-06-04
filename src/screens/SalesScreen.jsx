@@ -1,133 +1,934 @@
 "use client"
 
-import { View, Text, StyleSheet, SafeAreaView, StatusBar, TouchableOpacity, ScrollView } from "react-native"
+import { useState, useRef, useEffect, useCallback, useMemo } from "react"
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  StatusBar,
+  TouchableOpacity,
+  ScrollView,
+  TextInput,
+  Alert,
+  Modal,
+  Platform,
+  ActivityIndicator,
+  FlatList,
+} from "react-native"
 import { useNavigation } from "@react-navigation/native"
 import Icon from "react-native-vector-icons/Ionicons"
-import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons"
-import { useState, useEffect } from "react"
+import MaterialIcons from "react-native-vector-icons/MaterialIcons"
+import { Picker } from "@react-native-picker/picker"
+import DateTimePicker from "@react-native-community/datetimepicker"
 import AsyncStorage from "@react-native-async-storage/async-storage"
+import { ChevronDown } from "lucide-react-native"
+// Importar Firebase
+import { database } from "../config/firebaseConfig"
+import { ref, push, set } from "firebase/database"
 
-const USER_ROLE_KEY = "@user_role"
+const COLORS = {
+  primary: "#8b5cf6",
+  primaryLight: "#f3f4f6",
+  secondary: "#64748b",
+  success: "#10b981",
+  danger: "#ef4444",
+  warning: "#f59e0b",
+  background: "#f8fafc",
+  white: "#ffffff",
+  gray100: "#f1f5f9",
+  gray200: "#e2e8f0",
+  gray300: "#cbd5e1",
+  gray400: "#94a3b8",
+  gray500: "#64748b",
+  gray600: "#475569",
+  gray700: "#334155",
+  gray800: "#1e293b",
+  gray900: "#0f172a",
+}
+
+const STORAGE_KEYS = {
+  VENDAS: "@vendas",
+  USER_PROPRIEDADE: "@user_propriedade",
+  USER_ID: "@user_id",
+}
+
+// Dados para os campos de seleção
+const SELECTION_DATA = {
+  clientes: [
+    { id: "1", name: "João Silva" },
+    { id: "2", name: "Maria Santos" },
+    { id: "3", name: "Pedro Oliveira" },
+    { id: "4", name: "Ana Costa" },
+    { id: "5", name: "Carlos Ferreira" },
+    { id: "6", name: "Lucia Almeida" },
+    { id: "7", name: "Roberto Lima" },
+    { id: "8", name: "Fernanda Rocha" },
+  ],
+  variedades: [
+    { id: "1", name: "Cebola Roxa" },
+    { id: "2", name: "Cebola Branca" },
+    { id: "3", name: "Cebola Amarela" },
+    { id: "4", name: "Alho Roxo" },
+    { id: "5", name: "Alho Branco" },
+    { id: "6", name: "Batata Inglesa" },
+    { id: "7", name: "Batata Doce" },
+    { id: "8", name: "Cenoura" },
+  ],
+  talhoes: [
+    { id: "1", name: "Talhão 01" },
+    { id: "2", name: "Talhão 02" },
+    { id: "3", name: "Talhão 03" },
+    { id: "4", name: "Talhão 04" },
+    { id: "5", name: "Talhão 05" },
+    { id: "6", name: "Talhão 06" },
+    { id: "7", name: "Talhão 07" },
+    { id: "8", name: "Talhão 08" },
+  ],
+  formasPagamento: [
+    { id: "vista", name: "À Vista" },
+    { id: "prazo", name: "A Prazo" },
+  ],
+  classificacoes: [
+    { id: "1", name: "Classe 1" },
+    { id: "2", name: "Classe 2" },
+    { id: "3", name: "Classe 3" },
+    { id: "4", name: "Extra" },
+    { id: "5", name: "Especial" },
+    { id: "6", name: "Comercial" },
+  ],
+  embalagens: [
+    { id: "1", name: "Saco 20kg" },
+    { id: "2", name: "Saco 25kg" },
+    { id: "3", name: "Saco 50kg" },
+    { id: "4", name: "Caixa 10kg" },
+    { id: "5", name: "Caixa 15kg" },
+    { id: "6", name: "Granel" },
+  ],
+  tiposProduto: [
+    { id: "cebola", name: "Cebola" },
+    { id: "alho", name: "Alho" },
+    { id: "batata", name: "Batata" },
+    { id: "cenoura", name: "Cenoura" },
+    { id: "outros", name: "Outros" },
+  ],
+}
 
 export default function SalesScreen() {
   const navigation = useNavigation()
-  const [userRole, setUserRole] = useState("")
+  const scrollViewRef = useRef(null)
+  const [loading, setLoading] = useState(false)
+  const [propriedadeNome, setPropriedadeNome] = useState("")
+  const [userId, setUserId] = useState("")
 
+  const [formData, setFormData] = useState({
+    dataPedido: new Date(),
+    cliente: "",
+    clienteId: "",
+    formaPagamento: "",
+    formaPagamentoId: "",
+    prazoDias: "",
+    dataCarregamento: new Date(),
+    observacao: "",
+  })
+
+  const [items, setItems] = useState([
+    {
+      id: "1",
+      talhao: "",
+      talhaoId: "",
+      variedade: "",
+      variedadeId: "",
+      classificacao: "",
+      classificacaoId: "",
+      quantidade: "",
+      embalagem: "",
+      embalagemId: "",
+      preco: "",
+      valorTotal: 0,
+      tipoProduto: "",
+    },
+  ])
+
+  const [showItemsModal, setShowItemsModal] = useState(false)
+  const [showDatePicker, setShowDatePicker] = useState(false)
+  const [datePickerField, setDatePickerField] = useState("")
+
+  // Estados para modal de seleção
+  const [isListModalVisible, setListModalVisible] = useState(false)
+  const [listModalType, setListModalType] = useState("")
+  const [listModalData, setListModalData] = useState([])
+  const [searchQuery, setSearchQuery] = useState("")
+  const [currentItemId, setCurrentItemId] = useState(null)
+
+  // Carregar informações do usuário atual
   useEffect(() => {
-    const loadUserRole = async () => {
-      const role = await AsyncStorage.getItem(USER_ROLE_KEY)
-      setUserRole(role)
+    const loadUserData = async () => {
+      try {
+        const storedPropriedade = await AsyncStorage.getItem(STORAGE_KEYS.USER_PROPRIEDADE)
+        const storedUserId = await AsyncStorage.getItem(STORAGE_KEYS.USER_ID)
+
+        setPropriedadeNome(storedPropriedade || "Matrice")
+        setUserId(storedUserId || `user_${Date.now()}`)
+
+        // Se não existir, criar um ID de usuário único
+        if (!storedUserId) {
+          const newUserId = `user_${Date.now()}`
+          await AsyncStorage.setItem(STORAGE_KEYS.USER_ID, newUserId)
+          setUserId(newUserId)
+        }
+
+        // Se não existir propriedade, definir padrão
+        if (!storedPropriedade) {
+          await AsyncStorage.setItem(STORAGE_KEYS.USER_PROPRIEDADE, "Matrice")
+          setPropriedadeNome("Matrice")
+        }
+      } catch (error) {
+        console.error("Erro ao carregar dados do usuário:", error)
+        setPropriedadeNome("Matrice")
+        setUserId(`user_${Date.now()}`)
+      }
     }
-    loadUserRole()
+
+    loadUserData()
   }, [])
 
-  const salesOptions = [
-    {
-      id: 1,
-      title: "Nova Venda",
-      description: "Registrar uma nova venda",
-      icon: "add-circle-outline",
-      color: "#27ae60",
-      onPress: () => {
-        // Navegar para tela de nova venda (a ser implementada)
-        console.log("Nova Venda")
-      },
-    },
-    {
-      id: 2,
-      title: "Relatórios",
-      description: "Visualizar relatórios de vendas",
-      icon: "bar-chart-outline",
-      color: "#3498db",
-      onPress: () => {
-        // Navegar para tela de relatórios (a ser implementada)
-        console.log("Relatórios")
-      },
-    },
-    {
-      id: 3,
-      title: "Clientes",
-      description: "Gerenciar cadastro de clientes",
-      icon: "people-outline",
-      color: "#e67e22",
-      onPress: () => {
-        // Navegar para tela de clientes (a ser implementada)
-        console.log("Clientes")
-      },
-    },
-    {
-      id: 4,
-      title: "Produtos",
-      description: "Gerenciar catálogo de produtos",
-      icon: "cube-outline",
-      color: "#9b59b6",
-      onPress: () => {
-        // Navegar para tela de produtos (a ser implementada)
-        console.log("Produtos")
-      },
-    },
-  ]
+  const addItem = () => {
+    const newItem = {
+      id: Date.now().toString(),
+      talhao: "",
+      talhaoId: "",
+      variedade: "",
+      variedadeId: "",
+      classificacao: "",
+      classificacaoId: "",
+      quantidade: "",
+      embalagem: "",
+      embalagemId: "",
+      preco: "",
+      valorTotal: 0,
+      tipoProduto: "",
+    }
+    setItems([...items, newItem])
+
+    // Scroll to bottom after adding
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true })
+    }, 100)
+  }
+
+  const removeItem = (id) => {
+    if (items.length > 1) {
+      setItems(items.filter((item) => item.id !== id))
+    }
+  }
+
+  const updateItem = (id, field, value, idField = null, idValue = null) => {
+    setItems(
+      items.map((item) => {
+        if (item.id === id) {
+          const updatedItem = { ...item, [field]: value }
+          
+          if (idField && idValue !== null) {
+            updatedItem[idField] = idValue
+          }
+
+          if (field === "quantidade" || field === "preco") {
+            const quantidade = Number.parseFloat(field === "quantidade" ? value : updatedItem.quantidade) || 0
+            const preco = Number.parseFloat(field === "preco" ? value : updatedItem.preco) || 0
+            updatedItem.valorTotal = quantidade * preco
+          }
+
+          return updatedItem
+        }
+        return item
+      }),
+    )
+  }
+
+  const totalPedido = items.reduce((total, item) => total + item.valorTotal, 0)
+  const totalItems = items.filter((item) => item.talhao || item.variedade || item.quantidade).length
+
+  // Função para abrir modal de seleção
+  const openListModal = useCallback((type, itemId = null) => {
+    setListModalType(type)
+    setCurrentItemId(itemId)
+    
+    switch (type) {
+      case "cliente":
+        setListModalData(SELECTION_DATA.clientes)
+        break
+      case "formaPagamento":
+        setListModalData(SELECTION_DATA.formasPagamento)
+        break
+      case "variedade":
+        setListModalData(SELECTION_DATA.variedades)
+        break
+      case "talhao":
+        setListModalData(SELECTION_DATA.talhoes)
+        break
+      case "classificacao":
+        setListModalData(SELECTION_DATA.classificacoes)
+        break
+      case "embalagem":
+        setListModalData(SELECTION_DATA.embalagens)
+        break
+      case "tipoProduto":
+        setListModalData(SELECTION_DATA.tiposProduto)
+        break
+      default:
+        setListModalData([])
+    }
+
+    setSearchQuery("")
+    setListModalVisible(true)
+  }, [])
+
+  // Dados filtrados para busca
+  const filteredListData = useMemo(() => {
+    if (!searchQuery) return listModalData
+    return listModalData.filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
+  }, [listModalData, searchQuery])
+
+  // Função para lidar com seleção de item
+  const handleItemSelection = useCallback((selectedItem) => {
+    if (currentItemId) {
+      // Seleção para item específico
+      switch (listModalType) {
+        case "variedade":
+          updateItem(currentItemId, "variedade", selectedItem.name, "variedadeId", selectedItem.id)
+          break
+        case "talhao":
+          updateItem(currentItemId, "talhao", selectedItem.name, "talhaoId", selectedItem.id)
+          break
+        case "classificacao":
+          updateItem(currentItemId, "classificacao", selectedItem.name, "classificacaoId", selectedItem.id)
+          break
+        case "embalagem":
+          updateItem(currentItemId, "embalagem", selectedItem.name, "embalagemId", selectedItem.id)
+          break
+        case "tipoProduto":
+          updateItem(currentItemId, "tipoProduto", selectedItem.id)
+          break
+      }
+    } else {
+      // Seleção para formulário principal
+      switch (listModalType) {
+        case "cliente":
+          setFormData(prev => ({ ...prev, cliente: selectedItem.name, clienteId: selectedItem.id }))
+          break
+        case "formaPagamento":
+          setFormData(prev => ({ ...prev, formaPagamento: selectedItem.name, formaPagamentoId: selectedItem.id }))
+          break
+      }
+    }
+    setListModalVisible(false)
+  }, [listModalType, currentItemId])
+
+  // Função para salvar no AsyncStorage (mantida para backup local)
+  const saveVendaToStorage = async (vendaData) => {
+    try {
+      // Buscar vendas existentes
+      const existingVendas = await AsyncStorage.getItem(STORAGE_KEYS.VENDAS)
+      const vendas = existingVendas ? JSON.parse(existingVendas) : {}
+
+      // Criar estrutura se não existir
+      if (!vendas.propriedades) {
+        vendas.propriedades = {}
+      }
+
+      if (!vendas.propriedades[propriedadeNome]) {
+        vendas.propriedades[propriedadeNome] = {
+          vendas: {},
+        }
+      }
+
+      // Gerar ID único para a venda
+      const vendaId = `venda_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+      // Adicionar a nova venda
+      vendas.propriedades[propriedadeNome].vendas[vendaId] = vendaData
+
+      // Salvar de volta no AsyncStorage
+      await AsyncStorage.setItem(STORAGE_KEYS.VENDAS, JSON.stringify(vendas))
+
+      return vendaId
+    } catch (error) {
+      throw new Error("Erro ao salvar no armazenamento local")
+    }
+  }
+
+  // Nova função para salvar no Firebase
+  const saveVendaToFirebase = async (vendaData) => {
+    try {
+      // Referência para o nó de vendas da propriedade específica
+      const vendasRef = ref(database, `propriedades/${propriedadeNome}/vendas`)
+
+      // Usar push para gerar uma chave única automaticamente
+      const newVendaRef = push(vendasRef)
+
+      // Salvar os dados da venda
+      await set(newVendaRef, vendaData)
+
+      // Retornar o ID gerado pelo Firebase
+      return newVendaRef.key
+    } catch (error) {
+      console.error("Erro ao salvar no Firebase:", error)
+      throw new Error("Erro ao salvar no banco de dados online")
+    }
+  }
+
+  const handleSubmit = async () => {
+    // Validação básica
+    if (!formData.cliente || !formData.formaPagamento) {
+      Alert.alert("Erro", "Por favor, preencha todos os campos obrigatórios")
+      return
+    }
+
+    // Validar prazo se for "A Prazo"
+    if (formData.formaPagamentoId === "prazo" && !formData.prazoDias) {
+      Alert.alert("Erro", "Por favor, informe o prazo em dias para pagamento a prazo")
+      return
+    }
+
+    // Verificar se há itens válidos
+    if (items.length === 0 || !items.some((item) => item.talhao && item.quantidade && item.preco)) {
+      Alert.alert("Erro", "Adicione pelo menos um item com talhão, quantidade e preço")
+      return
+    }
+
+    try {
+      setLoading(true)
+
+      // Preparar os dados para salvar
+      const vendaData = {
+        cliente: formData.cliente,
+        clienteId: formData.clienteId,
+        dataPedido: formatDate(formData.dataPedido),
+        dataTimestamp: formData.dataPedido.getTime(),
+        formaPagamento: formData.formaPagamento,
+        formaPagamentoId: formData.formaPagamentoId,
+        prazoDias: formData.formaPagamentoId === "prazo" ? formData.prazoDias : null,
+        dataCarregamento: formatDate(formData.dataCarregamento),
+        dataCarregamentoTimestamp: formData.dataCarregamento.getTime(),
+        observacao: formData.observacao,
+        valorTotal: totalPedido,
+        itens: items
+          .filter((item) => item.talhao || item.variedade || item.quantidade || item.preco)
+          .map((item) => ({
+            talhao: item.talhao,
+            talhaoId: item.talhaoId,
+            variedade: item.variedade,
+            variedadeId: item.variedadeId,
+            classificacao: item.classificacao,
+            classificacaoId: item.classificacaoId,
+            quantidade: Number.parseFloat(item.quantidade) || 0,
+            embalagem: item.embalagem,
+            embalagemId: item.embalagemId,
+            preco: Number.parseFloat(item.preco) || 0,
+            valorTotal: item.valorTotal,
+            tipoProduto: item.tipoProduto,
+          })),
+        status: "pendente",
+        criadoEm: new Date().toISOString(),
+        criadoPor: userId,
+        propriedade: propriedadeNome,
+      }
+
+      // Tentar salvar no Firebase primeiro
+      let firebaseVendaId = null
+      let localVendaId = null
+
+      try {
+        firebaseVendaId = await saveVendaToFirebase(vendaData)
+        console.log("Venda salva no Firebase com ID:", firebaseVendaId)
+      } catch (firebaseError) {
+        console.error("Erro ao salvar no Firebase:", firebaseError)
+        // Continuar para salvar localmente mesmo se o Firebase falhar
+      }
+
+      // Salvar localmente como backup
+      try {
+        localVendaId = await saveVendaToStorage(vendaData)
+        console.log("Venda salva localmente com ID:", localVendaId)
+      } catch (localError) {
+        console.error("Erro ao salvar localmente:", localError)
+      }
+
+      setLoading(false)
+
+      // Mostrar resultado baseado no que foi salvo
+      if (firebaseVendaId) {
+        Alert.alert(
+          "Sucesso",
+          `Venda registrada com sucesso!\nID Firebase: ${firebaseVendaId}\n${localVendaId ? `ID Local: ${localVendaId}` : ""}`,
+          [
+            {
+              text: "OK",
+              onPress: () => navigation.goBack(),
+            },
+          ],
+        )
+      } else if (localVendaId) {
+        Alert.alert(
+          "Salvo Localmente",
+          `Venda salva apenas localmente (sem conexão com internet).\nID Local: ${localVendaId}\n\nOs dados serão sincronizados quando a conexão for restabelecida.`,
+          [
+            {
+              text: "OK",
+              onPress: () => navigation.goBack(),
+            },
+          ],
+        )
+      } else {
+        throw new Error("Falha ao salvar em ambos os locais")
+      }
+    } catch (error) {
+      setLoading(false)
+      console.error("Erro ao salvar venda:", error)
+      Alert.alert("Erro", "Ocorreu um erro ao salvar a venda. Tente novamente.")
+    }
+  }
+
+  const updateFormData = (field, value) => {
+    setFormData({ ...formData, [field]: value })
+  }
+
+  const openDatePicker = (field) => {
+    setDatePickerField(field)
+    setShowDatePicker(true)
+  }
+
+  const handleDateChange = (event, selectedDate) => {
+    setShowDatePicker(Platform.OS === "ios")
+    if (selectedDate) {
+      updateFormData(datePickerField, selectedDate)
+    }
+  }
+
+  const formatDate = (date) => {
+    if (!date) return ""
+    return date instanceof Date
+      ? `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`
+      : ""
+  }
+
+  const isItemComplete = (item) => {
+    return item.talhao && item.variedade && item.quantidade && item.preco
+  }
+
+  // Função para obter o nome do tipo de produto
+  const getTipoProdutoName = (tipoProdutoId) => {
+    const tipoProduto = SELECTION_DATA.tiposProduto.find(item => item.id === tipoProdutoId);
+    return tipoProduto ? tipoProduto.name : "";
+  }
+
+  // Componente para renderizar item da lista
+  const renderListItem = useCallback(({ item }) => (
+    <TouchableOpacity
+      style={styles.listItem}
+      onPress={() => handleItemSelection(item)}
+    >
+      <Text style={styles.listItemText}>{item.name}</Text>
+    </TouchableOpacity>
+  ), [handleItemSelection])
+
+  // Modal de seleção flutuante
+  const renderListModal = () => {
+    const getModalTitle = () => {
+      switch (listModalType) {
+        case "cliente": return "Selecione o Cliente"
+        case "formaPagamento": return "Selecione a Forma de Pagamento"
+        case "variedade": return "Selecione a Variedade"
+        case "talhao": return "Selecione o Talhão"
+        case "classificacao": return "Selecione a Classificação"
+        case "embalagem": return "Selecione a Embalagem"
+        case "tipoProduto": return "Selecione o Produto"
+        default: return "Selecione uma opção"
+      }
+    }
+
+    return (
+      <Modal 
+        visible={isListModalVisible} 
+        transparent={true} 
+        animationType="fade"
+        onRequestClose={() => setListModalVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setListModalVisible(false)}
+        >
+          <View style={styles.floatingModalContainer}>
+            <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+              <View style={styles.floatingModalContent}>
+                <View style={styles.floatingModalHeader}>
+                  <Text style={styles.floatingModalTitle}>{getModalTitle()}</Text>
+                  <TouchableOpacity
+                    onPress={() => setListModalVisible(false)}
+                    style={styles.floatingCloseButton}
+                  >
+                    <Icon name="close" size={20} color={COLORS.gray600} />
+                  </TouchableOpacity>
+                </View>
+                
+                <TextInput
+                  style={styles.floatingSearchInput}
+                  placeholder="Pesquisar..."
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholderTextColor={COLORS.gray400}
+                />
+                
+                <FlatList
+                  data={filteredListData}
+                  renderItem={renderListItem}
+                  keyExtractor={(item) => item.id}
+                  showsVerticalScrollIndicator={false}
+                  style={styles.floatingList}
+                  maxHeight={200}
+                />
+              </View>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    )
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
 
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Icon name="arrow-back" size={24} color="#333" />
+          <Icon name="arrow-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Vendas</Text>
+        <Text style={styles.headerTitle}>Nova Venda</Text>
         <View style={styles.placeholder} />
       </View>
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-        <View style={styles.welcomeSection}>
-          <MaterialCommunityIcons name="chart-line" size={60} color="#9b59b6" />
-          <Text style={styles.welcomeTitle}>Módulo de Vendas</Text>
-          <Text style={styles.welcomeSubtitle}>
-            {userRole === "admin" ? "Acesso completo ao sistema de vendas" : "Área de vendas e relatórios"}
-          </Text>
+        {/* Info da Propriedade */}
+        <View style={styles.infoCard}>
+          <Text style={styles.infoText}>Propriedade: {propriedadeNome}</Text>
         </View>
 
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>0</Text>
-            <Text style={styles.statLabel}>Vendas Hoje</Text>
+        {/* Informações do Cliente */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Icon name="person" size={20} color={COLORS.primary} />
+            <Text style={styles.cardTitle}>Cliente</Text>
           </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>R$ 0,00</Text>
-            <Text style={styles.statLabel}>Faturamento</Text>
-          </View>
-        </View>
 
-        <View style={styles.optionsContainer}>
-          <Text style={styles.sectionTitle}>Opções Disponíveis</Text>
-
-          {salesOptions.map((option) => (
-            <TouchableOpacity key={option.id} style={styles.optionCard} onPress={option.onPress}>
-              <View style={[styles.iconContainer, { backgroundColor: option.color }]}>
-                <Icon name={option.icon} size={30} color="white" />
-              </View>
-              <View style={styles.optionContent}>
-                <Text style={styles.optionTitle}>{option.title}</Text>
-                <Text style={styles.optionDescription}>{option.description}</Text>
-              </View>
-              <View style={styles.arrowContainer}>
-                <Icon name="chevron-forward" size={24} color={option.color} />
-              </View>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Data do Pedido *</Text>
+            <TouchableOpacity style={styles.dateInput} onPress={() => openDatePicker("dataPedido")}>
+              <Text style={styles.dateText}>{formatDate(formData.dataPedido)}</Text>
+              <Icon name="calendar" size={18} color={COLORS.gray500} />
             </TouchableOpacity>
-          ))}
-        </View>
+          </View>
 
-        <View style={styles.infoSection}>
-          <View style={styles.infoCard}>
-            <Icon name="information-circle-outline" size={24} color="#3498db" />
-            <Text style={styles.infoText}>
-              Este módulo está em desenvolvimento. Novas funcionalidades serão adicionadas em breve.
-            </Text>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Nome do Cliente *</Text>
+            <TouchableOpacity
+              style={styles.selectionInput}
+              onPress={() => openListModal("cliente")}
+            >
+              <Text style={[styles.selectionText, !formData.cliente && styles.placeholderText]}>
+                {formData.cliente || "Selecione o cliente"}
+              </Text>
+              <ChevronDown size={20} color={COLORS.primary} />
+            </TouchableOpacity>
           </View>
         </View>
+
+        {/* Informações de Pagamento */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Icon name="card" size={20} color={COLORS.primary} />
+            <Text style={styles.cardTitle}>Pagamento</Text>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Forma de Pagamento *</Text>
+            <TouchableOpacity
+              style={styles.selectionInput}
+              onPress={() => openListModal("formaPagamento")}
+            >
+              <Text style={[styles.selectionText, !formData.formaPagamento && styles.placeholderText]}>
+                {formData.formaPagamento || "Selecione a forma de pagamento"}
+              </Text>
+              <ChevronDown size={20} color={COLORS.primary} />
+            </TouchableOpacity>
+          </View>
+
+          {formData.formaPagamentoId === "prazo" && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Prazo (dias) *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="30"
+                placeholderTextColor={COLORS.gray400}
+                keyboardType="numeric"
+                value={formData.prazoDias}
+                onChangeText={(value) => updateFormData("prazoDias", value)}
+              />
+            </View>
+          )}
+        </View>
+
+        {/* Itens da Venda */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Icon name="list" size={20} color={COLORS.primary} />
+            <Text style={styles.cardTitle}>Itens da Venda</Text>
+          </View>
+
+          <TouchableOpacity style={styles.itemsButton} onPress={() => setShowItemsModal(true)}>
+            <View style={styles.itemsButtonContent}>
+              <View style={styles.itemsInfo}>
+                <Text style={styles.itemsCount}>{totalItems} item(s) adicionado(s)</Text>
+                <Text style={styles.itemsTotal}>Total: R$ {totalPedido.toFixed(2)}</Text>
+              </View>
+              <MaterialIcons name="keyboard-arrow-right" size={24} color={COLORS.primary} />
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Data de Carregamento */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Icon name="calendar" size={20} color={COLORS.primary} />
+            <Text style={styles.cardTitle}>Data de Carregamento</Text>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Data do Carregamento</Text>
+            <TouchableOpacity style={styles.dateInput} onPress={() => openDatePicker("dataCarregamento")}>
+              <Text style={styles.dateText}>{formatDate(formData.dataCarregamento)}</Text>
+              <Icon name="calendar" size={18} color={COLORS.gray500} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Observações */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Icon name="document-text" size={20} color={COLORS.primary} />
+            <Text style={styles.cardTitle}>Observações</Text>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder="Observações adicionais sobre a venda..."
+              placeholderTextColor={COLORS.gray400}
+              multiline
+              numberOfLines={3}
+              value={formData.observacao}
+              onChangeText={(value) => updateFormData("observacao", value)}
+            />
+          </View>
+        </View>
+
+        {/* Botão Salvar Venda */}
+        <TouchableOpacity
+          style={[styles.saveButton, loading && styles.saveButtonDisabled]}
+          onPress={handleSubmit}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator size="small" color={COLORS.white} />
+          ) : (
+            <>
+              <Icon name="checkmark-circle" size={24} color={COLORS.white} />
+              <Text style={styles.saveButtonText}>Salvar Venda</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.bottomSpace} />
       </ScrollView>
+
+      {/* Modal de Itens */}
+      <Modal visible={showItemsModal} animationType="slide" presentationStyle="pageSheet">
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowItemsModal(false)}>
+              <MaterialIcons name="close" size={24} color={COLORS.gray600} />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Itens da Venda</Text>
+            <TouchableOpacity style={styles.addButton} onPress={addItem}>
+              <MaterialIcons name="add" size={24} color={COLORS.primary} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView ref={scrollViewRef} style={styles.modalContent} showsVerticalScrollIndicator={false}>
+            {items.map((item, index) => (
+              <View key={item.id} style={styles.itemCard}>
+                <View style={styles.itemHeader}>
+                  <View style={styles.itemNumberContainer}>
+                    <Text style={styles.itemNumber}>{index + 1}</Text>
+                  </View>
+                  <Text style={styles.itemTitle}>Item {index + 1}</Text>
+                  <View style={styles.itemActions}>
+                    {isItemComplete(item) && (
+                      <View style={styles.completeIndicator}>
+                        <MaterialIcons name="check-circle" size={16} color={COLORS.success} />
+                      </View>
+                    )}
+                    {items.length > 1 && (
+                      <TouchableOpacity style={styles.deleteButton} onPress={() => removeItem(item.id)}>
+                        <MaterialIcons name="delete-outline" size={20} color={COLORS.danger} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+
+                <View style={styles.inputGrid}>
+                  <View style={styles.inputRow}>
+                    <View style={styles.inputColumn}>
+                      <Text style={styles.itemLabel}>Produto</Text>
+                      <TouchableOpacity
+                        style={styles.itemSelectionInput}
+                        onPress={() => openListModal("tipoProduto", item.id)}
+                      >
+                        <Text style={[styles.itemSelectionText, !item.tipoProduto && styles.placeholderText]}>
+                          {getTipoProdutoName(item.tipoProduto) || "Selecione o Produto"}
+                        </Text>
+                        <ChevronDown size={16} color={COLORS.primary} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <View style={styles.inputRow}>
+                    <View style={styles.inputColumn}>
+                      <Text style={styles.itemLabel}>Talhão</Text>
+                      <TouchableOpacity
+                        style={styles.itemSelectionInput}
+                        onPress={() => openListModal("talhao", item.id)}
+                      >
+                        <Text style={[styles.itemSelectionText, !item.talhao && styles.placeholderText]}>
+                          {item.talhao || "Selecione o talhão"}
+                        </Text>
+                        <ChevronDown size={16} color={COLORS.primary} />
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.inputColumn}>
+                      <Text style={styles.itemLabel}>Variedade</Text>
+                      <TouchableOpacity
+                        style={styles.itemSelectionInput}
+                        onPress={() => openListModal("variedade", item.id)}
+                      >
+                        <Text style={[styles.itemSelectionText, !item.variedade && styles.placeholderText]}>
+                          {item.variedade || "Selecione a variedade"}
+                        </Text>
+                        <ChevronDown size={16} color={COLORS.primary} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <View style={styles.inputRow}>
+                    <View style={styles.inputColumn}>
+                      <Text style={styles.itemLabel}>Classificação</Text>
+                      <TouchableOpacity
+                        style={styles.itemSelectionInput}
+                        onPress={() => openListModal("classificacao", item.id)}
+                      >
+                        <Text style={[styles.itemSelectionText, !item.classificacao && styles.placeholderText]}>
+                          {item.classificacao || "Selecione a classificação"}
+                        </Text>
+                        <ChevronDown size={16} color={COLORS.primary} />
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.inputColumn}>
+                      <Text style={styles.itemLabel}>Embalagem</Text>
+                      <TouchableOpacity
+                        style={styles.itemSelectionInput}
+                        onPress={() => openListModal("embalagem", item.id)}
+                      >
+                        <Text style={[styles.itemSelectionText, !item.embalagem && styles.placeholderText]}>
+                          {item.embalagem || "Selecione a embalagem"}
+                        </Text>
+                        <ChevronDown size={16} color={COLORS.primary} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <View style={styles.inputRow}>
+                    <View style={styles.inputColumn}>
+                      <Text style={styles.itemLabel}>Quantidade</Text>
+                      <TextInput
+                        style={styles.itemInput}
+                        placeholder="0"
+                        keyboardType="numeric"
+                        value={item.quantidade}
+                        onChangeText={(value) => updateItem(item.id, "quantidade", value)}
+                      />
+                    </View>
+
+                    <View style={styles.inputColumn}>
+                      <Text style={styles.itemLabel}>Preço Unitário</Text>
+                      <TextInput
+                        style={styles.itemInput}
+                        placeholder="0,00"
+                        keyboardType="numeric"
+                        value={item.preco}
+                        onChangeText={(value) => updateItem(item.id, "preco", value)}
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                {item.valorTotal > 0 && (
+                  <View style={styles.itemTotal}>
+                    <Text style={styles.itemTotalLabel}>Subtotal:</Text>
+                    <Text style={styles.itemTotalValue}>R$ {item.valorTotal.toFixed(2)}</Text>
+                  </View>
+                )}
+              </View>
+            ))}
+
+            <View style={styles.addItemContainer}>
+              <TouchableOpacity style={styles.addItemButton} onPress={addItem}>
+                <MaterialIcons name="add" size={20} color={COLORS.primary} />
+                <Text style={styles.addItemText}>Adicionar Novo Item</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.bottomSpace} />
+          </ScrollView>
+
+          <View style={styles.modalFooter}>
+            <View style={styles.totalContainer}>
+              <Text style={styles.totalLabel}>Total do Pedido</Text>
+              <Text style={styles.totalValue}>R$ {totalPedido.toFixed(2)}</Text>
+            </View>
+
+            <TouchableOpacity style={styles.confirmButton} onPress={() => setShowItemsModal(false)}>
+              <Text style={styles.confirmButtonText}>Confirmar Itens</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Date Picker */}
+      {showDatePicker && (
+        <DateTimePicker
+          value={formData[datePickerField] || new Date()}
+          mode="date"
+          display="default"
+          onChange={handleDateChange}
+        />
+      )}
+
+      {/* Modal de Seleção Flutuante */}
+      {renderListModal()}
     </SafeAreaView>
   )
 }
@@ -135,7 +936,7 @@ export default function SalesScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: COLORS.background,
   },
   header: {
     flexDirection: "row",
@@ -143,9 +944,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingVertical: 15,
-    backgroundColor: "white",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
+    backgroundColor: COLORS.primary,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   backButton: {
     padding: 5,
@@ -153,129 +957,422 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#333",
+    color: COLORS.white,
   },
   placeholder: {
     width: 34,
   },
   container: {
     flex: 1,
-    padding: 20,
-  },
-  welcomeSection: {
-    alignItems: "center",
-    marginBottom: 30,
-    backgroundColor: "white",
-    padding: 30,
-    borderRadius: 16,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  welcomeTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#333",
-    marginTop: 15,
-    marginBottom: 10,
-  },
-  welcomeSubtitle: {
-    fontSize: 16,
-    color: "#666",
-    textAlign: "center",
-  },
-  statsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 30,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: "white",
-    padding: 20,
-    borderRadius: 12,
-    alignItems: "center",
-    marginHorizontal: 5,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#9b59b6",
-    marginBottom: 5,
-  },
-  statLabel: {
-    fontSize: 14,
-    color: "#666",
-    textAlign: "center",
-  },
-  optionsContainer: {
-    marginBottom: 30,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 15,
-  },
-  optionCard: {
-    backgroundColor: "white",
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 15,
-    flexDirection: "row",
-    alignItems: "center",
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  iconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 15,
-  },
-  optionContent: {
-    flex: 1,
-  },
-  optionTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 5,
-  },
-  optionDescription: {
-    fontSize: 14,
-    color: "#666",
-  },
-  arrowContainer: {
-    padding: 5,
-  },
-  infoSection: {
-    marginBottom: 20,
+    padding: 16,
   },
   infoCard: {
-    backgroundColor: "#e3f2fd",
-    padding: 15,
+    backgroundColor: COLORS.primaryLight,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+  },
+  infoText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: COLORS.primary,
+  },
+  card: {
+    backgroundColor: COLORS.white,
     borderRadius: 12,
+    padding: 20,
+    marginBottom: 16,
+    elevation: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: COLORS.gray800,
+    marginLeft: 8,
+  },
+  inputGroup: {
+    marginBottom: 12,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: COLORS.gray700,
+    marginBottom: 6,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: COLORS.gray300,
+    borderRadius: 8,
+    padding: 14,
+    fontSize: 16,
+    backgroundColor: COLORS.white,
+    color: COLORS.gray800,
+  },
+  selectionInput: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: COLORS.gray300,
+    borderRadius: 8,
+    padding: 14,
+    backgroundColor: COLORS.white,
+  },
+  selectionText: {
+    fontSize: 16,
+    color: COLORS.gray800,
+  },
+  placeholderText: {
+    color: COLORS.gray400,
+  },
+  textArea: {
+    height: 80,
+    textAlignVertical: "top",
+  },
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  halfInput: {
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  dateInput: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: COLORS.gray300,
+    borderRadius: 8,
+    padding: 14,
+    backgroundColor: COLORS.white,
+  },
+  dateText: {
+    fontSize: 16,
+    color: COLORS.gray800,
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: COLORS.gray300,
+    borderRadius: 8,
+    backgroundColor: COLORS.white,
+  },
+  picker: {
+    height: 50,
+  },
+  itemsButton: {
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    borderRadius: 8,
+    padding: 16,
+    backgroundColor: COLORS.primaryLight,
+  },
+  itemsButtonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  itemsInfo: {
+    flex: 1,
+  },
+  itemsCount: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: COLORS.gray700,
+    marginBottom: 2,
+  },
+  itemsTotal: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: COLORS.primary,
+  },
+  saveButton: {
+    backgroundColor: COLORS.primary,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  saveButtonDisabled: {
+    backgroundColor: COLORS.gray400,
+  },
+  saveButtonText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: "bold",
+    marginLeft: 8,
+  },
+  bottomSpace: {
+    height: 20,
+  },
+
+  // Modal Styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray200,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: COLORS.gray800,
+  },
+  addButton: {
+    padding: 4,
+  },
+  modalContent: {
+    flex: 1,
+    padding: 16,
+  },
+
+  // Item Card Styles
+  itemCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    elevation: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  itemHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  itemNumberContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  itemNumber: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  itemTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "600",
+    color: COLORS.gray800,
+  },
+  itemActions: {
     flexDirection: "row",
     alignItems: "center",
   },
-  infoText: {
+  completeIndicator: {
+    marginRight: 8,
+  },
+  deleteButton: {
+    padding: 4,
+  },
+  inputGrid: {
+    marginBottom: 12,
+  },
+  inputRow: {
+    flexDirection: "row",
+    marginBottom: 12,
+  },
+  inputColumn: {
     flex: 1,
+    marginHorizontal: 4,
+  },
+  itemLabel: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: COLORS.gray600,
+    marginBottom: 4,
+  },
+  itemInput: {
+    borderWidth: 1,
+    borderColor: COLORS.gray300,
+    borderRadius: 6,
+    padding: 10,
     fontSize: 14,
-    color: "#1976d2",
-    marginLeft: 10,
-    lineHeight: 20,
+    backgroundColor: COLORS.white,
+  },
+  itemSelectionInput: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: COLORS.gray300,
+    borderRadius: 6,
+    padding: 10,
+    backgroundColor: COLORS.white,
+  },
+  itemSelectionText: {
+    fontSize: 14,
+    color: COLORS.gray800,
+    flex: 1,
+  },
+  itemPicker: {
+    height: 40,
+  },
+  itemTotal: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.gray200,
+  },
+  itemTotalLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: COLORS.gray600,
+  },
+  itemTotalValue: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: COLORS.primary,
+  },
+
+  // Add Item Button
+  addItemContainer: {
+    alignItems: "center",
+    marginVertical: 8,
+  },
+  addItemButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    borderStyle: "dashed",
+    borderRadius: 8,
+    padding: 16,
+    width: "100%",
+  },
+  addItemText: {
+    color: COLORS.primary,
+    fontWeight: "500",
+    marginLeft: 8,
+  },
+
+  // Modal Footer
+  modalFooter: {
+    backgroundColor: COLORS.white,
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.gray200,
+  },
+  totalContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: COLORS.gray800,
+  },
+  totalValue: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: COLORS.primary,
+  },
+  confirmButton: {
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+    borderRadius: 8,
+  },
+  confirmButtonText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+
+  // Floating Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  floatingModalContainer: {
+    width: "85%",
+    maxWidth: 400,
+  },
+  floatingModalContent: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 20,
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+  },
+  floatingModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  floatingModalTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: COLORS.gray800,
+    flex: 1,
+  },
+  floatingCloseButton: {
+    padding: 4,
+  },
+  floatingSearchInput: {
+    height: 40,
+    borderColor: COLORS.gray300,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    backgroundColor: COLORS.white,
+    fontSize: 14,
+    color: COLORS.gray800,
+  },
+  floatingList: {
+    maxHeight: 200,
+  },
+  listItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray200,
+  },
+  listItemText: {
+    fontSize: 14,
+    color: COLORS.gray800,
   },
 })
