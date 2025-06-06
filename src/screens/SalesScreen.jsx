@@ -15,6 +15,7 @@ import {
   Platform,
   ActivityIndicator,
   FlatList,
+  Linking,
 } from "react-native"
 import { useNavigation } from "@react-navigation/native"
 import Icon from "react-native-vector-icons/Ionicons"
@@ -23,6 +24,11 @@ import { Picker } from "@react-native-picker/picker"
 import DateTimePicker from "@react-native-community/datetimepicker"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import { ChevronDown } from "lucide-react-native"
+
+// Importações compatíveis com Expo
+import * as Print from 'expo-print'
+import * as Sharing from 'expo-sharing'
+
 // Importar Firebase
 import { database } from "../config/firebaseConfig"
 import { ref, push, set } from "firebase/database"
@@ -114,12 +120,240 @@ const SELECTION_DATA = {
   ],
 }
 
+// Classe para gerenciar PDF com expo-print
+class PDFManager {
+  static async generateAndShareSalesReport(vendaData, propriedadeNome) {
+    try {
+      const htmlContent = this.generateHTMLContent(vendaData, propriedadeNome)
+      
+      const { uri } = await Print.printToFileAsync({
+        html: htmlContent,
+        base64: false, // Não precisamos do base64 para compartilhar o URI
+      })
+
+      if (!(await Sharing.isAvailableAsync())) {
+        Alert.alert('Compartilhamento não disponível', 'A funcionalidade de compartilhamento não está disponível neste dispositivo.')
+        return
+      }
+
+      await Sharing.shareAsync(uri, {
+        mimeType: 'application/pdf',
+        dialogTitle: 'Compartilhar Relatório de Venda',
+        UTI: 'com.adobe.pdf', // Para iOS
+      })
+
+      return uri // Retorna a URI caso precise ser usada para algo mais
+      
+    } catch (error) {
+      console.error('Erro ao gerar e compartilhar PDF:', error)
+      Alert.alert('Erro', 'Falha ao gerar ou compartilhar o relatório PDF.')
+      throw error // Propaga o erro para quem chamou
+    }
+  }
+
+  static generateHTMLContent(vendaData, propriedadeNome) {
+    const itensHTML = vendaData.itens.map((item, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${item.tipoProduto || '-'}</td>
+        <td>${item.variedade || '-'}</td>
+        <td>${item.talhao || '-'}</td>
+        <td>${item.classificacao || '-'}</td>
+        <td>${item.embalagem || '-'}</td>
+        <td class="numeric">${item.quantidade}</td>
+        <td class="numeric">R$ ${item.preco.toFixed(2)}</td>
+        <td class="numeric">R$ ${item.valorTotal.toFixed(2)}</td>
+      </tr>
+    `).join('')
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Relatório de Venda</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 0; padding: 20px; font-size: 12px; }
+          .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #8b5cf6; padding-bottom: 15px; }
+          .company-name { font-size: 20px; font-weight: bold; color: #8b5cf6; margin-bottom: 5px; }
+          .app-name { font-size: 14px; color: #333; margin-bottom: 10px; }
+          .report-title { font-size: 16px; font-weight: bold; color: #333; }
+
+          .info-section { margin-bottom: 15px; }
+          .info-title { font-size: 14px; font-weight: bold; color: #333; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+          .info-grid { display: flex; flex-wrap: wrap; gap: 10px 20px; margin-bottom: 10px; } /* Ajustado para flexbox */
+          .info-item { display: flex; width: calc(50% - 10px); } /* Ajustado para 2 colunas */
+          .info-label { font-weight: bold; margin-right: 5px; min-width: 100px; } /* Ajustado min-width */
+          .info-value { flex: 1; } /* Permite que o valor ocupe o espaço restante */
+
+          .items-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 10px; } /* Fonte menor para a tabela */
+          .items-table th { background-color: #8b5cf6; color: white; padding: 8px; text-align: left; border: 1px solid #ddd; } /* Padding menor */
+          .items-table td { border: 1px solid #ddd; padding: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } /* Padding menor, nowrap, ellipsis */
+          .items-table td:nth-child(1) { width: 5%; } /* Item */
+          .items-table td:nth-child(2) { width: 10%; } /* Produto */
+          .items-table td:nth-child(3) { width: 15%; } /* Variedade */
+          .items-table td:nth-child(4) { width: 10%; } /* Talhão */
+          .items-table td:nth-child(5) { width: 10%; } /* Classificação */
+          .items-table td:nth-child(6) { width: 10%; } /* Embalagem */
+          .items-table td:nth-child(7) { width: 10%; text-align: right; } /* Quantidade */
+          .items-table td:nth-child(8) { width: 10%; text-align: right; } /* Preço Unit. */
+          .items-table td:nth-child(9) { width: 10%; text-align: right; } /* Subtotal */
+
+          .numeric { text-align: right; } /* Classe para alinhar números à direita */
+
+          .total-section { margin-top: 20px; text-align: right; padding-top: 10px; border-top: 1px solid #ddd; }
+          .total-label { font-size: 14px; font-weight: bold; color: #333; margin-right: 10px; }
+          .total-value { font-size: 18px; font-weight: bold; color: #8b5cf6; }
+
+          .footer { margin-top: 30px; text-align: center; font-size: 10px; color: #666; border-top: 1px solid #ddd; padding-top: 15px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="company-name">J. R. AgroSolutions</div>
+          <div class="app-name">Sistema de Gestão Agrícola</div>
+          <div class="report-title">Relatório de Venda</div>
+        </div>
+
+        <div class="info-section">
+          <div class="info-title">Informações da Venda</div>
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">Cliente:</span>
+              <span class="info-value">${vendaData.cliente}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Data do Pedido:</span>
+              <span class="info-value">${vendaData.dataPedido}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Forma de Pagamento:</span>
+              <span class="info-value">${vendaData.formaPagamento}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Data Carregamento:</span>
+              <span class="info-value">${vendaData.dataCarregamento}</span>
+            </div>
+             ${vendaData.formaPagamentoId === "prazo" && vendaData.prazoDias ? `
+              <div class="info-item">
+                <span class="info-label">Prazo:</span>
+                <span class="info-value">${vendaData.prazoDias} dias</span>
+              </div>
+            ` : ''}
+          </div>
+           ${vendaData.observacao ? `
+            <div class="info-item" style="width: 100%;">
+              <span class="info-label">Observações:</span>
+              <span class="info-value">${vendaData.observacao}</span>
+            </div>
+          ` : ''}
+        </div>
+
+        <div class="info-section">
+          <div class="info-title">Itens da Venda</div>
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Produto</th>
+                <th>Variedade</th>
+                <th>Talhão</th>
+                <th>Classificação</th>
+                <th>Embalagem</th>
+                <th class="numeric">Quant.</th>
+                <th class="numeric">Preço Unit.</th>
+                <th class="numeric">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itensHTML}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="total-section">
+          <span class="total-label">Total do Pedido:</span>
+          <span class="total-value">R$ ${vendaData.valorTotal.toFixed(2)}</span>
+        </div>
+
+        <div class="footer">
+          <p>Relatório gerado em ${new Date().toLocaleString('pt-BR')}</p>
+          <p>Propriedade: ${propriedadeNome}</p>
+        </div>
+      </body>
+      </html>
+    `
+  }
+}
+
+// Componente para Modal de Sucesso
+const SuccessModal = ({ visible, onClose, onGenerateAndSharePDF, isGeneratingPDF }) => {
+  return (
+    <Modal visible={visible} transparent={true} animationType="fade">
+      <View style={styles.successModalOverlay}>
+        <View style={styles.successModalContainer}>
+          <View style={styles.successModalContent}>
+            {/* Ícone de Sucesso */}
+            <View style={styles.successIconContainer}>
+              <MaterialIcons name="check-circle" size={60} color={COLORS.success} />
+            </View>
+
+            {/* Título */}
+            <Text style={styles.successTitle}>Venda Registrada com Sucesso!</Text>
+            
+            {/* Mensagem */}
+            <Text style={styles.successMessage}>
+              Sua venda foi salva e está disponível no sistema.
+            </Text>
+
+            {/* Botões de Ação */}
+            <View style={styles.successActions}>
+              {/* Botão Gerar e Compartilhar PDF */}
+              <TouchableOpacity
+                style={[styles.successButton, styles.whatsappButton]} // Usando cor verde para compartilhar
+                onPress={onGenerateAndSharePDF}
+                disabled={isGeneratingPDF}
+              >
+                {isGeneratingPDF ? (
+                  <ActivityIndicator size="small" color={COLORS.white} />
+                ) : (
+                  <>
+                    <MaterialIcons name="share" size={20} color={COLORS.white} />
+                    <Text style={styles.successButtonText}>Gerar e Compartilhar PDF</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {/* Botão Fechar */}
+              <TouchableOpacity
+                style={[styles.successButton, styles.closeButton]}
+                onPress={onClose}
+              >
+                <Text style={[styles.successButtonText, { color: COLORS.primary }]}>Fechar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
+// O visualizador de PDF integrado foi removido.
+// A visualização ocorrerá em um app externo após o compartilhamento ou abertura do arquivo.
+
 export default function SalesScreen() {
   const navigation = useNavigation()
   const scrollViewRef = useRef(null)
   const [loading, setLoading] = useState(false)
   const [propriedadeNome, setPropriedadeNome] = useState("")
   const [userId, setUserId] = useState("")
+
+  // Estados para o modal de sucesso e PDF
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
+  // pdfUri não é mais necessário no estado do componente principal, pois é gerado e compartilhado na mesma função
+  const [lastSaleData, setLastSaleData] = useState(null)
 
   const [formData, setFormData] = useState({
     dataPedido: new Date(),
@@ -192,6 +426,26 @@ export default function SalesScreen() {
 
     loadUserData()
   }, [])
+
+  // Função unificada para gerar e compartilhar PDF
+  const handleGenerateAndSharePDF = async () => {
+    if (!lastSaleData) return
+
+    setIsGeneratingPDF(true)
+    try {
+      await PDFManager.generateAndShareSalesReport(lastSaleData, propriedadeNome)
+    } catch (error) {
+      // Erro já tratado dentro de generateAndShareSalesReport
+    } finally {
+      setIsGeneratingPDF(false)
+    }
+  }
+
+  const handleCloseSuccessModal = () => {
+    setShowSuccessModal(false)
+    setLastSaleData(null)
+    navigation.goBack()
+  }
 
   const addItem = () => {
     const newItem = {
@@ -457,32 +711,12 @@ export default function SalesScreen() {
 
       setLoading(false)
 
-      // Mostrar resultado baseado no que foi salvo
-      if (firebaseVendaId) {
-        Alert.alert(
-          "Sucesso",
-          `Venda registrada com sucesso!\nID Firebase: ${firebaseVendaId}\n${localVendaId ? `ID Local: ${localVendaId}` : ""}`,
-          [
-            {
-              text: "OK",
-              onPress: () => navigation.goBack(),
-            },
-          ],
-        )
-      } else if (localVendaId) {
-        Alert.alert(
-          "Salvo Localmente",
-          `Venda salva apenas localmente (sem conexão com internet).\nID Local: ${localVendaId}\n\nOs dados serão sincronizados quando a conexão for restabelecida.`,
-          [
-            {
-              text: "OK",
-              onPress: () => navigation.goBack(),
-            },
-          ],
-        )
-      } else {
-        throw new Error("Falha ao salvar em ambos os locais")
-      }
+      // Salvar dados da venda para uso no modal de sucesso
+      setLastSaleData(vendaData)
+
+      // Mostrar modal de sucesso
+      setShowSuccessModal(true)
+
     } catch (error) {
       setLoading(false)
       console.error("Erro ao salvar venda:", error)
@@ -929,6 +1163,16 @@ export default function SalesScreen() {
 
       {/* Modal de Seleção Flutuante */}
       {renderListModal()}
+
+      {/* Modal de Sucesso */}
+      <SuccessModal
+        visible={showSuccessModal}
+        onClose={handleCloseSuccessModal}
+        onGenerateAndSharePDF={handleGenerateAndSharePDF} // Chama a função unificada
+        isGeneratingPDF={isGeneratingPDF}
+      />
+
+      {/* O visualizador de PDF integrado foi removido */}
     </SafeAreaView>
   )
 }
@@ -978,6 +1222,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
     color: COLORS.primary,
+  },
+  warningCard: {
+    backgroundColor: "#fff3cd",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.warning,
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  warningText: {
+    fontSize: 12,
+    color: "#856404",
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 16,
   },
   card: {
     backgroundColor: COLORS.white,
@@ -1374,5 +1635,125 @@ const styles = StyleSheet.create({
   listItemText: {
     fontSize: 14,
     color: COLORS.gray800,
+  },
+
+  // Success Modal Styles
+  successModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  successModalContainer: {
+    width: "90%",
+    maxWidth: 400,
+  },
+  successModalContent: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: "center",
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+  },
+  successIconContainer: {
+    marginBottom: 16,
+  },
+  successTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: COLORS.gray800,
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  successMessage: {
+    fontSize: 14,
+    color: COLORS.gray600,
+    textAlign: "center",
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  warningMessage: {
+    fontSize: 12,
+    color: "#856404",
+    textAlign: "center",
+    marginBottom: 16,
+    lineHeight: 16,
+    backgroundColor: "#fff3cd",
+    padding: 8,
+    borderRadius: 6,
+    width: '100%', // Garante que o aviso ocupe a largura total
+  },
+  successActions: {
+    width: "100%",
+  },
+  successButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 14,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  pdfButton: {
+    backgroundColor: COLORS.danger,
+  },
+  whatsappButton: {
+    backgroundColor: "#25D366", // Cor verde para o botão de compartilhar
+  },
+  closeButton: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  successButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.white,
+    marginLeft: 8,
+  },
+
+  // PDF Viewer Styles (Removido o componente, mantido apenas estilos residuais se houver)
+  pdfViewerContainer: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  pdfViewerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray200,
+  },
+  pdfCloseButton: {
+    padding: 4,
+  },
+  pdfViewerTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: COLORS.gray800,
+  },
+  pdfViewer: {
+    flex: 1,
+    backgroundColor: COLORS.gray100,
+  },
+  pdfErrorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 40,
+  },
+  pdfErrorText: {
+    fontSize: 16,
+    color: COLORS.gray600,
+    textAlign: "center",
+    marginTop: 16,
+    lineHeight: 24,
   },
 })
