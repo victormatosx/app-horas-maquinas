@@ -24,14 +24,21 @@ import { Picker } from "@react-native-picker/picker"
 import DateTimePicker from "@react-native-community/datetimepicker"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import { ChevronDown } from "lucide-react-native"
+import { Image } from 'react-native';
+
+import * as FileSystem from 'expo-file-system';
 
 // Importações compatíveis com Expo
 import * as Print from 'expo-print'
 import * as Sharing from 'expo-sharing'
+import { Asset } from 'expo-asset' // Importar Asset
 
 // Importar Firebase
 import { database } from "../config/firebaseConfig"
 import { ref, push, set } from "firebase/database"
+
+// Importar a logo
+import matriceLogo from '../../assets/matriceLogo.png';
 
 const COLORS = {
   primary: "#8b5cf6",
@@ -120,12 +127,27 @@ const SELECTION_DATA = {
   ],
 }
 
+// Função para formatar números para o padrão brasileiro (R$ X.XXX,XX)
+const formatCurrencyBRL = (value) => {
+  if (value === null || value === undefined) return 'R$ 0,00';
+  const number = parseFloat(value);
+  if (isNaN(number)) return 'R$ 0,00';
+
+  return number.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
+
+
 // Classe para gerenciar PDF com expo-print
 class PDFManager {
-  static async generateAndShareSalesReport(vendaData, propriedadeNome) {
+  static async generateAndShareSalesReport(vendaData, propriedadeNome, logoUri) {
     try {
-      const htmlContent = this.generateHTMLContent(vendaData, propriedadeNome)
-      
+      const htmlContent = this.generateHTMLContent(vendaData, propriedadeNome, logoUri)
+
       const { uri } = await Print.printToFileAsync({
         html: htmlContent,
         base64: false, // Não precisamos do base64 para compartilhar o URI
@@ -143,7 +165,7 @@ class PDFManager {
       })
 
       return uri // Retorna a URI caso precise ser usada para algo mais
-      
+
     } catch (error) {
       console.error('Erro ao gerar e compartilhar PDF:', error)
       Alert.alert('Erro', 'Falha ao gerar ou compartilhar o relatório PDF.')
@@ -151,7 +173,7 @@ class PDFManager {
     }
   }
 
-  static generateHTMLContent(vendaData, propriedadeNome) {
+  static generateHTMLContent(vendaData, propriedadeNome, logoUri) {
     const itensHTML = vendaData.itens.map((item, index) => `
       <tr>
         <td>${index + 1}</td>
@@ -161,8 +183,8 @@ class PDFManager {
         <td>${item.classificacao || '-'}</td>
         <td>${item.embalagem || '-'}</td>
         <td class="numeric">${item.quantidade}</td>
-        <td class="numeric">R$ ${item.preco.toFixed(2)}</td>
-        <td class="numeric">R$ ${item.valorTotal.toFixed(2)}</td>
+        <td class="numeric">${formatCurrencyBRL(item.preco)}</td>
+        <td class="numeric">${formatCurrencyBRL(item.valorTotal)}</td>
       </tr>
     `).join('')
 
@@ -174,10 +196,31 @@ class PDFManager {
         <title>Relatório de Venda</title>
         <style>
           body { font-family: Arial, sans-serif; margin: 0; padding: 20px; font-size: 12px; }
-          .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #8b5cf6; padding-bottom: 15px; }
-          .company-name { font-size: 20px; font-weight: bold; color: #8b5cf6; margin-bottom: 5px; }
-          .app-name { font-size: 14px; color: #333; margin-bottom: 10px; }
-          .report-title { font-size: 16px; font-weight: bold; color: #333; }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #8b5cf6;
+            padding-bottom: 15px;
+          }
+          .header-left {
+            flex: 1;
+          }
+          .header-right {
+            flex: 1;
+            text-align: right;
+          }
+          .logo {
+            max-width: 100px; /* Ajuste conforme necessário */
+            height: auto;
+          }
+          .report-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+            margin-top: 5px;
+          }
 
           .info-section { margin-bottom: 15px; }
           .info-title { font-size: 14px; font-weight: bold; color: #333; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
@@ -206,13 +249,18 @@ class PDFManager {
           .total-value { font-size: 18px; font-weight: bold; color: #8b5cf6; }
 
           .footer { margin-top: 30px; text-align: center; font-size: 10px; color: #666; border-top: 1px solid #ddd; padding-top: 15px; }
+          .company-footer { font-size: 12px; font-weight: bold; color: #8b5cf6; margin-top: 5px; }
         </style>
       </head>
       <body>
         <div class="header">
-          <div class="company-name">J. R. AgroSolutions</div>
-          <div class="app-name">Sistema de Gestão Agrícola</div>
-          <div class="report-title">Relatório de Venda</div>
+          <div class="header-left">
+            ${logoUri ? `<img src="${logoUri}" class="logo" alt="Logo da Fazenda" />` : ''}
+          </div>
+          <div class="header-right">
+            <div class="report-title">Relatório de Venda</div>
+            <div class="app-name">Sistema de Gestão Agrícola</div>
+          </div>
         </div>
 
         <div class="info-section">
@@ -273,12 +321,13 @@ class PDFManager {
 
         <div class="total-section">
           <span class="total-label">Total do Pedido:</span>
-          <span class="total-value">R$ ${vendaData.valorTotal.toFixed(2)}</span>
+          <span class="total-value">${formatCurrencyBRL(vendaData.valorTotal)}</span>
         </div>
 
         <div class="footer">
           <p>Relatório gerado em ${new Date().toLocaleString('pt-BR')}</p>
           <p>Propriedade: ${propriedadeNome}</p>
+          <div class="company-footer">J. R. AgSolutions</div>
         </div>
       </body>
       </html>
@@ -300,7 +349,7 @@ const SuccessModal = ({ visible, onClose, onGenerateAndSharePDF, isGeneratingPDF
 
             {/* Título */}
             <Text style={styles.successTitle}>Venda Registrada com Sucesso!</Text>
-            
+
             {/* Mensagem */}
             <Text style={styles.successMessage}>
               Sua venda foi salva e está disponível no sistema.
@@ -348,6 +397,7 @@ export default function SalesScreen() {
   const [loading, setLoading] = useState(false)
   const [propriedadeNome, setPropriedadeNome] = useState("")
   const [userId, setUserId] = useState("")
+  const [logoUri, setLogoUri] = useState(null); // Estado para armazenar a URI da logo
 
   // Estados para o modal de sucesso e PDF
   const [showSuccessModal, setShowSuccessModal] = useState(false)
@@ -395,9 +445,9 @@ export default function SalesScreen() {
   const [searchQuery, setSearchQuery] = useState("")
   const [currentItemId, setCurrentItemId] = useState(null)
 
-  // Carregar informações do usuário atual
+  // Carregar informações do usuário atual e a URI da logo
   useEffect(() => {
-    const loadUserData = async () => {
+    const loadUserDataAndLogo = async () => {
       try {
         const storedPropriedade = await AsyncStorage.getItem(STORAGE_KEYS.USER_PROPRIEDADE)
         const storedUserId = await AsyncStorage.getItem(STORAGE_KEYS.USER_ID)
@@ -417,14 +467,26 @@ export default function SalesScreen() {
           await AsyncStorage.setItem(STORAGE_KEYS.USER_PROPRIEDADE, "Matrice")
           setPropriedadeNome("Matrice")
         }
+
+        // Carregar a URI da logo e converter para Base64
+        const asset = Asset.fromModule(matriceLogo);
+        await asset.downloadAsync();
+        const base64 = await FileSystem.readAsStringAsync(asset.localUri || asset.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        const base64Uri = `data:image/png;base64,${base64}`;
+        setLogoUri(base64Uri);
+
+
       } catch (error) {
-        console.error("Erro ao carregar dados do usuário:", error)
+        console.error("Erro ao carregar dados do usuário ou logo:", error)
         setPropriedadeNome("Matrice")
         setUserId(`user_${Date.now()}`)
+        setLogoUri(null); // Definir como null em caso de erro
       }
     }
 
-    loadUserData()
+    loadUserDataAndLogo()
   }, [])
 
   // Função unificada para gerar e compartilhar PDF
@@ -433,7 +495,8 @@ export default function SalesScreen() {
 
     setIsGeneratingPDF(true)
     try {
-      await PDFManager.generateAndShareSalesReport(lastSaleData, propriedadeNome)
+      // Passar a URI da logo para a função de geração de PDF
+      await PDFManager.generateAndShareSalesReport(lastSaleData, propriedadeNome, logoUri)
     } catch (error) {
       // Erro já tratado dentro de generateAndShareSalesReport
     } finally {
@@ -482,15 +545,15 @@ export default function SalesScreen() {
       items.map((item) => {
         if (item.id === id) {
           const updatedItem = { ...item, [field]: value }
-          
+
           if (idField && idValue !== null) {
             updatedItem[idField] = idValue
           }
 
           if (field === "quantidade" || field === "preco") {
-            const quantidade = Number.parseFloat(field === "quantidade" ? value : updatedItem.quantidade) || 0
-            const preco = Number.parseFloat(field === "preco" ? value : updatedItem.preco) || 0
-            updatedItem.valorTotal = quantidade * preco
+            const quantidade = Number.parseFloat(field === "quantidade" ? value.replace(',', '.') : updatedItem.quantidade.replace(',', '.')) || 0;
+            const preco = Number.parseFloat(field === "preco" ? value.replace(',', '.') : updatedItem.preco.replace(',', '.')) || 0;
+            updatedItem.valorTotal = quantidade * preco;
           }
 
           return updatedItem
@@ -507,7 +570,7 @@ export default function SalesScreen() {
   const openListModal = useCallback((type, itemId = null) => {
     setListModalType(type)
     setCurrentItemId(itemId)
-    
+
     switch (type) {
       case "cliente":
         setListModalData(SELECTION_DATA.clientes)
@@ -676,11 +739,11 @@ export default function SalesScreen() {
             variedadeId: item.variedadeId,
             classificacao: item.classificacao,
             classificacaoId: item.classificacaoId,
-            quantidade: Number.parseFloat(item.quantidade) || 0,
+            quantidade: Number.parseFloat(item.quantidade.replace(',', '.')) || 0,
             embalagem: item.embalagem,
             embalagemId: item.embalagemId,
-            preco: Number.parseFloat(item.preco) || 0,
-            valorTotal: item.valorTotal,
+            preco: Number.parseFloat(item.preco.replace(',', '.')) || 0,
+            valorTotal: Number.parseFloat(item.valorTotal) || 0,
             tipoProduto: item.tipoProduto,
           })),
         status: "pendente",
@@ -783,19 +846,19 @@ export default function SalesScreen() {
     }
 
     return (
-      <Modal 
-        visible={isListModalVisible} 
-        transparent={true} 
+      <Modal
+        visible={isListModalVisible}
+        transparent={true}
         animationType="fade"
         onRequestClose={() => setListModalVisible(false)}
       >
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
           onPress={() => setListModalVisible(false)}
         >
           <View style={styles.floatingModalContainer}>
-            <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <TouchableOpacity activeOpacity={1} onPress={() => { }}>
               <View style={styles.floatingModalContent}>
                 <View style={styles.floatingModalHeader}>
                   <Text style={styles.floatingModalTitle}>{getModalTitle()}</Text>
@@ -806,7 +869,7 @@ export default function SalesScreen() {
                     <Icon name="close" size={20} color={COLORS.gray600} />
                   </TouchableOpacity>
                 </View>
-                
+
                 <TextInput
                   style={styles.floatingSearchInput}
                   placeholder="Pesquisar..."
@@ -814,7 +877,7 @@ export default function SalesScreen() {
                   onChangeText={setSearchQuery}
                   placeholderTextColor={COLORS.gray400}
                 />
-                
+
                 <FlatList
                   data={filteredListData}
                   renderItem={renderListItem}
@@ -925,7 +988,7 @@ export default function SalesScreen() {
             <View style={styles.itemsButtonContent}>
               <View style={styles.itemsInfo}>
                 <Text style={styles.itemsCount}>{totalItems} item(s) adicionado(s)</Text>
-                <Text style={styles.itemsTotal}>Total: R$ {totalPedido.toFixed(2)}</Text>
+                <Text style={styles.itemsTotal}>Total: {formatCurrencyBRL(totalPedido)}</Text>
               </View>
               <MaterialIcons name="keyboard-arrow-right" size={24} color={COLORS.primary} />
             </View>
@@ -969,6 +1032,7 @@ export default function SalesScreen() {
         </View>
 
         {/* Botão Salvar Venda */}
+
         <TouchableOpacity
           style={[styles.saveButton, loading && styles.saveButtonDisabled]}
           onPress={handleSubmit}
@@ -1122,7 +1186,7 @@ export default function SalesScreen() {
                 {item.valorTotal > 0 && (
                   <View style={styles.itemTotal}>
                     <Text style={styles.itemTotalLabel}>Subtotal:</Text>
-                    <Text style={styles.itemTotalValue}>R$ {item.valorTotal.toFixed(2)}</Text>
+                    <Text style={styles.itemTotalValue}>{formatCurrencyBRL(item.valorTotal)}</Text>
                   </View>
                 )}
               </View>
@@ -1141,7 +1205,7 @@ export default function SalesScreen() {
           <View style={styles.modalFooter}>
             <View style={styles.totalContainer}>
               <Text style={styles.totalLabel}>Total do Pedido</Text>
-              <Text style={styles.totalValue}>R$ {totalPedido.toFixed(2)}</Text>
+              <Text style={styles.totalValue}>{formatCurrencyBRL(totalPedido)}</Text>
             </View>
 
             <TouchableOpacity style={styles.confirmButton} onPress={() => setShowItemsModal(false)}>
@@ -1176,6 +1240,7 @@ export default function SalesScreen() {
     </SafeAreaView>
   )
 }
+
 
 const styles = StyleSheet.create({
   safeArea: {
