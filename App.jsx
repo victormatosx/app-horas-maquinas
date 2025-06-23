@@ -8,7 +8,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage"
 import NetInfo from "@react-native-community/netinfo"
 import { checkConnectivityAndSync } from "./src/utils/offlineManager"
 
-// screens
 import LoginScreen from "./src/screens/LoginScreen"
 import HomeScreen from "./src/screens/HomeScreen"
 import FormScreen from "./src/screens/FormScreen"
@@ -17,6 +16,7 @@ import VeiculosScreen from "./src/screens/VeiculosScreen"
 import FormVeiculosScreen from "./src/screens/FormVeiculosScreen"
 import RegisterScreen from "./src/screens/RegisterScreen"
 import SalesScreen from "./src/screens/SalesScreen"
+import VendasHome from "./src/screens/VendasHome"
 
 const Stack = createNativeStackNavigator()
 
@@ -39,7 +39,6 @@ export default function App() {
     checkLoginStatus()
   }, [])
 
-  // monitorar o estado da conexão e sincronizar quando estiver online
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
       if (state.isConnected) {
@@ -47,7 +46,6 @@ export default function App() {
       }
     })
 
-    // verificar e sincronizar ao iniciar o aplicativo
     checkConnectivityAndSync()
 
     return () => unsubscribe()
@@ -74,6 +72,7 @@ export default function App() {
         <Stack.Screen name="FormVeiculos" component={FormVeiculosScreen} />
         <Stack.Screen name="RegisterScreen" component={RegisterScreen} />
         <Stack.Screen name="SalesScreen" component={SalesScreen} />
+        <Stack.Screen name="VendasHome" component={VendasHome} />
       </Stack.Navigator>
     </NavigationContainer>
   )

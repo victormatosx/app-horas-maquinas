@@ -93,9 +93,9 @@ export default function OpeningScreen() {
               </TouchableOpacity>
             )}
 
-            {/* Vendas - Mostrar para admin e seller */}
+            {/* Vendas - Mostrar para admin e seller - ALTERADO PARA VendasHome */}
             {(userRole === "admin" || userRole === "seller") && (
-              <TouchableOpacity style={styles.optionCard} onPress={() => navigation.navigate("SalesScreen")}>
+              <TouchableOpacity style={styles.optionCard} onPress={() => navigation.navigate("VendasHome")}>
                 <View style={[styles.iconContainer, { backgroundColor: "#9b59b6" }]}>
                   <MaterialCommunityIcons name="chart-line" size={40} color="white" />
                 </View>

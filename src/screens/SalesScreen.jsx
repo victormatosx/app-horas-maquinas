@@ -15,30 +15,27 @@ import {
   Platform,
   ActivityIndicator,
   FlatList,
-  Linking,
 } from "react-native"
-import { useNavigation } from "@react-navigation/native"
+import { useNavigation, useRoute } from "@react-navigation/native"
 import Icon from "react-native-vector-icons/Ionicons"
 import MaterialIcons from "react-native-vector-icons/MaterialIcons"
-import { Picker } from "@react-native-picker/picker"
 import DateTimePicker from "@react-native-community/datetimepicker"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import { ChevronDown } from "lucide-react-native"
-import { Image } from 'react-native';
 
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from "expo-file-system"
 
 // Importações compatíveis com Expo
-import * as Print from 'expo-print'
-import * as Sharing from 'expo-sharing'
-import { Asset } from 'expo-asset' // Importar Asset
+import * as Print from "expo-print"
+import * as Sharing from "expo-sharing"
+import { Asset } from "expo-asset" // Importar Asset
 
 // Importar Firebase
 import { database } from "../config/firebaseConfig"
-import { ref, push, set, onValue } from "firebase/database"
+import { ref, push, set, onValue, update } from "firebase/database"
 
 // Importar a logo
-import matriceLogo from '../../assets/matriceLogo.png';
+import matriceLogo from "../../assets/matriceLogo.png"
 
 const COLORS = {
   primary: "#8b5cf6",
@@ -83,18 +80,17 @@ const SELECTION_DATA = {
 
 // Função para formatar números para o padrão brasileiro (R$ X.XXX,XX)
 const formatCurrencyBRL = (value) => {
-  if (value === null || value === undefined) return 'R$ 0,00';
-  const number = parseFloat(value);
-  if (isNaN(number)) return 'R$ 0,00';
+  if (value === null || value === undefined) return "R$ 0,00"
+  const number = Number.parseFloat(value)
+  if (isNaN(number)) return "R$ 0,00"
 
-  return number.toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
+  return number.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  });
-};
-
+  })
+}
 
 // Classe para gerenciar PDF com expo-print
 class PDFManager {
@@ -108,39 +104,45 @@ class PDFManager {
       })
 
       if (!(await Sharing.isAvailableAsync())) {
-        Alert.alert('Compartilhamento não disponível', 'A funcionalidade de compartilhamento não está disponível neste dispositivo.')
+        Alert.alert(
+          "Compartilhamento não disponível",
+          "A funcionalidade de compartilhamento não está disponível neste dispositivo.",
+        )
         return
       }
 
       await Sharing.shareAsync(uri, {
-        mimeType: 'application/pdf',
-        dialogTitle: 'Compartilhar Relatório de Venda',
-        UTI: 'com.adobe.pdf', // Para iOS
+        mimeType: "application/pdf",
+        dialogTitle: "Compartilhar Relatório de Venda",
+        UTI: "com.adobe.pdf", // Para iOS
       })
 
       return uri // Retorna a URI caso precise ser usada para algo mais
-
     } catch (error) {
-      console.error('Erro ao gerar e compartilhar PDF:', error)
-      Alert.alert('Erro', 'Falha ao gerar ou compartilhar o relatório PDF.')
+      console.error("Erro ao gerar e compartilhar PDF:", error)
+      Alert.alert("Erro", "Falha ao gerar ou compartilhar o relatório PDF.")
       throw error // Propaga o erro para quem chamou
     }
   }
 
   static generateHTMLContent(vendaData, propriedadeNome, logoUri) {
-    const itensHTML = vendaData.itens.map((item, index) => `
+    const itensHTML = vendaData.itens
+      .map(
+        (item, index) => `
       <tr>
         <td>${index + 1}</td>
-        <td>${item.tipoProduto || '-'}</td>
-        <td>${item.variedade || '-'}</td>
-        <td>${item.talhao || '-'}</td>
-        <td>${item.classificacao || '-'}</td>
-        <td>${item.embalagem || '-'}</td>
+        <td>${item.tipoProduto || "-"}</td>
+        <td>${item.variedade || "-"}</td>
+        <td>${item.talhao || "-"}</td>
+        <td>${item.classificacao || "-"}</td>
+        <td>${item.embalagem || "-"}</td>
         <td class="numeric">${item.quantidade}</td>
         <td class="numeric">${formatCurrencyBRL(item.preco)}</td>
         <td class="numeric">${formatCurrencyBRL(item.valorTotal)}</td>
       </tr>
-    `).join('')
+    `,
+      )
+      .join("")
 
     return `
       <!DOCTYPE html>
@@ -209,7 +211,7 @@ class PDFManager {
       <body>
         <div class="header">
           <div class="header-left">
-            ${logoUri ? `<img src="${logoUri}" class="logo" alt="Logo da Fazenda" />` : ''}
+            ${logoUri ? `<img src="${logoUri}" class="logo" alt="Logo da Fazenda" />` : ""}
           </div>
           <div class="header-right">
             <div class="report-title">Relatório de Venda</div>
@@ -236,25 +238,37 @@ class PDFManager {
               <span class="info-label">Data Carregamento:</span>
               <span class="info-value">${vendaData.dataCarregamento}</span>
             </div>
-             ${vendaData.formaPagamentoId === "prazo" && vendaData.prazoDias ? `
+             ${
+               vendaData.formaPagamentoId === "prazo" && vendaData.prazoDias
+                 ? `
               <div class="info-item">
                 <span class="info-label">Prazo:</span>
                 <span class="info-value">${vendaData.prazoDias} dias</span>
               </div>
-            ` : ''}
-             ${vendaData.observacaoPagamento ? `
+            `
+                 : ""
+             }
+             ${
+               vendaData.observacaoPagamento
+                 ? `
               <div class="info-item" style="width: 100%;">
                 <span class="info-label">Observação Pagamento:</span>
                 <span class="info-value">${vendaData.observacaoPagamento}</span>
               </div>
-            ` : ''}
+            `
+                 : ""
+             }
           </div>
-           ${vendaData.observacao ? `
+           ${
+             vendaData.observacao
+               ? `
             <div class="info-item" style="width: 100%;">
               <span class="info-label">Observações Gerais:</span>
               <span class="info-value">${vendaData.observacao}</span>
             </div>
-          ` : ''}
+          `
+               : ""
+           }
         </div>
 
         <div class="info-section">
@@ -285,7 +299,7 @@ class PDFManager {
         </div>
 
         <div class="footer">
-          <p>Relatório gerado em ${new Date().toLocaleString('pt-BR')}</p>
+          <p>Relatório gerado em ${new Date().toLocaleString("pt-BR")}</p>
           <p>Propriedade: ${propriedadeNome}</p>
           <div class="company-footer">J. R. AgSolutions</div>
         </div>
@@ -296,7 +310,7 @@ class PDFManager {
 }
 
 // Componente para Modal de Sucesso
-const SuccessModal = ({ visible, onClose, onGenerateAndSharePDF, isGeneratingPDF }) => {
+const SuccessModal = ({ visible, onClose, onGenerateAndSharePDF, isGeneratingPDF, isEditMode }) => {
   return (
     <Modal visible={visible} transparent={true} animationType="fade">
       <View style={styles.successModalOverlay}>
@@ -308,11 +322,15 @@ const SuccessModal = ({ visible, onClose, onGenerateAndSharePDF, isGeneratingPDF
             </View>
 
             {/* Título */}
-            <Text style={styles.successTitle}>Venda Registrada com Sucesso!</Text>
+            <Text style={styles.successTitle}>
+              {isEditMode ? "Venda Atualizada com Sucesso!" : "Venda Registrada com Sucesso!"}
+            </Text>
 
             {/* Mensagem */}
             <Text style={styles.successMessage}>
-              Sua venda foi salva e está disponível no sistema.
+              {isEditMode
+                ? "As alterações da venda foram salvas e estão disponíveis no sistema."
+                : "Sua venda foi salva e está disponível no sistema."}
             </Text>
 
             {/* Botões de Ação */}
@@ -334,10 +352,7 @@ const SuccessModal = ({ visible, onClose, onGenerateAndSharePDF, isGeneratingPDF
               </TouchableOpacity>
 
               {/* Botão Fechar */}
-              <TouchableOpacity
-                style={[styles.successButton, styles.closeButton]}
-                onPress={onClose}
-              >
+              <TouchableOpacity style={[styles.successButton, styles.closeButton]} onPress={onClose}>
                 <Text style={[styles.successButtonText, { color: COLORS.primary }]}>Fechar</Text>
               </TouchableOpacity>
             </View>
@@ -348,34 +363,34 @@ const SuccessModal = ({ visible, onClose, onGenerateAndSharePDF, isGeneratingPDF
   )
 }
 
-// O visualizador de PDF integrado foi removido.
-// A visualização ocorrerá em um app externo após o compartilhamento ou abertura do arquivo.
-
 export default function SalesScreen() {
   const navigation = useNavigation()
+  const route = useRoute()
   const scrollViewRef = useRef(null)
   const [loading, setLoading] = useState(false)
   const [propriedadeNome, setPropriedadeNome] = useState("")
   const [userId, setUserId] = useState("")
-  const [logoUri, setLogoUri] = useState(null); // Estado para armazenar a URI da logo
+  const [logoUri, setLogoUri] = useState(null) // Estado para armazenar a URI da logo
+
+  // Estados para modo de edição
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [editingSaleId, setEditingSaleId] = useState(null)
 
   // Estados para o modal de sucesso e PDF
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
-  // pdfUri não é mais necessário no estado do componente principal, pois é gerado e compartilhado na mesma função
   const [lastSaleData, setLastSaleData] = useState(null)
 
   // Estado para armazenar os direcionadores do Firebase
-  const [direcionadores, setDirecionadores] = useState([]);
+  const [direcionadores, setDirecionadores] = useState([])
   // Estado para armazenar as classificações do Firebase
-  const [classificacoes, setClassificacoes] = useState([]);
+  const [classificacoes, setClassificacoes] = useState([])
   // Estado para armazenar as embalagens do Firebase
-  const [embalagens, setEmbalagens] = useState([]);
+  const [embalagens, setEmbalagens] = useState([])
   // Estado para armazenar os tipos de produto do Firebase
-  const [tiposProduto, setTiposProduto] = useState([]);
+  const [tiposProduto, setTiposProduto] = useState([])
   // Estado para armazenar os clientes do Firebase
-  const [clientes, setClientes] = useState([]);
-
+  const [clientes, setClientes] = useState([])
 
   const [formData, setFormData] = useState({
     dataPedido: new Date(),
@@ -418,6 +433,51 @@ export default function SalesScreen() {
   const [searchQuery, setSearchQuery] = useState("")
   const [currentItemId, setCurrentItemId] = useState(null)
 
+  // Verificar se está em modo de edição
+  useEffect(() => {
+    if (route.params?.editMode && route.params?.saleData) {
+      setIsEditMode(true)
+      setEditingSaleId(route.params.saleId)
+      loadSaleDataForEdit(route.params.saleData)
+    }
+  }, [route.params])
+
+  // Função para carregar dados da venda para edição
+  const loadSaleDataForEdit = (saleData) => {
+    // Carregar dados do formulário
+    setFormData({
+      dataPedido: saleData.dataTimestamp ? new Date(saleData.dataTimestamp) : new Date(),
+      cliente: saleData.cliente || "",
+      clienteId: saleData.clienteId || "",
+      formaPagamento: saleData.formaPagamento || "",
+      formaPagamentoId: saleData.formaPagamentoId || "",
+      prazoDias: saleData.prazoDias || "",
+      dataCarregamento: saleData.dataCarregamentoTimestamp ? new Date(saleData.dataCarregamentoTimestamp) : new Date(),
+      observacao: saleData.observacao || "",
+      observacaoPagamento: saleData.observacaoPagamento || "",
+    })
+
+    // Carregar itens da venda
+    if (saleData.itens && saleData.itens.length > 0) {
+      const loadedItems = saleData.itens.map((item, index) => ({
+        id: (index + 1).toString(),
+        talhao: item.talhao || "",
+        talhaoId: item.talhaoId || "",
+        variedade: item.variedade || "",
+        variedadeId: item.variedadeId || "",
+        classificacao: item.classificacao || "",
+        classificacaoId: item.classificacaoId || "",
+        quantidade: item.quantidade ? item.quantidade.toString() : "",
+        embalagem: item.embalagem || "",
+        embalagemId: item.embalagemId || "",
+        preco: item.preco ? item.preco.toString() : "",
+        valorTotal: item.valorTotal || 0,
+        tipoProduto: item.tipoProduto || "",
+      }))
+      setItems(loadedItems)
+    }
+  }
+
   // Carregar informações do usuário atual e a URI da logo
   useEffect(() => {
     const loadUserDataAndLogo = async () => {
@@ -442,20 +502,18 @@ export default function SalesScreen() {
         }
 
         // Carregar a URI da logo e converter para Base64
-        const asset = Asset.fromModule(matriceLogo);
-        await asset.downloadAsync();
+        const asset = Asset.fromModule(matriceLogo)
+        await asset.downloadAsync()
         const base64 = await FileSystem.readAsStringAsync(asset.localUri || asset.uri, {
           encoding: FileSystem.EncodingType.Base64,
-        });
-        const base64Uri = `data:image/png;base64,${base64}`;
-        setLogoUri(base64Uri);
-
-
+        })
+        const base64Uri = `data:image/png;base64,${base64}`
+        setLogoUri(base64Uri)
       } catch (error) {
         console.error("Erro ao carregar dados do usuário ou logo:", error)
         setPropriedadeNome("Matrice")
         setUserId(`user_${Date.now()}`)
-        setLogoUri(null); // Definir como null em caso de erro
+        setLogoUri(null) // Definir como null em caso de erro
       }
     }
 
@@ -464,122 +522,142 @@ export default function SalesScreen() {
 
   // Efeito para carregar os direcionadores, classificações, embalagens, tipos de produto e clientes do Firebase
   useEffect(() => {
-    if (!propriedadeNome) return; // Espera o nome da propriedade ser carregado
+    if (!propriedadeNome) return // Espera o nome da propriedade ser carregado
 
     // Carregar Direcionadores (Talhões e Variedades)
-    const direcionadoresRef = ref(database, `propriedades/${propriedadeNome}/direcionadores`);
-    const unsubscribeDirecionadores = onValue(direcionadoresRef, (snapshot) => {
-      const data = snapshot.val();
-      const loadedDirecionadores = [];
-      if (data) {
-        Object.keys(data).forEach(key => {
-          loadedDirecionadores.push({
-            id: key,
-            ...data[key]
-          });
-        });
-      }
-      setDirecionadores(loadedDirecionadores);
-    }, (error) => {
-      console.error("Erro ao carregar direcionadores do Firebase:", error);
-      Alert.alert("Erro", "Não foi possível carregar a lista de talhões e variedades.");
-    });
+    const direcionadoresRef = ref(database, `propriedades/${propriedadeNome}/direcionadores`)
+    const unsubscribeDirecionadores = onValue(
+      direcionadoresRef,
+      (snapshot) => {
+        const data = snapshot.val()
+        const loadedDirecionadores = []
+        if (data) {
+          Object.keys(data).forEach((key) => {
+            loadedDirecionadores.push({
+              id: key,
+              ...data[key],
+            })
+          })
+        }
+        setDirecionadores(loadedDirecionadores)
+      },
+      (error) => {
+        console.error("Erro ao carregar direcionadores do Firebase:", error)
+        Alert.alert("Erro", "Não foi possível carregar a lista de talhões e variedades.")
+      },
+    )
 
     // Carregar Classificações
-    const classificacoesRef = ref(database, `propriedades/${propriedadeNome}/classificacao`);
-    const unsubscribeClassificacoes = onValue(classificacoesRef, (snapshot) => {
-      const data = snapshot.val();
-      const loadedClassificacoes = [];
-      if (data) {
-        Object.keys(data).forEach(key => {
-          // Usar a chave 'Descrição' como nome e o ID do Firebase como id
-          loadedClassificacoes.push({
-            id: key,
-            name: data[key].Descrição || `Classificação ${key}` // Usar Descrição ou um fallback
-          });
-        });
-      }
-      setClassificacoes(loadedClassificacoes);
-    }, (error) => {
-      console.error("Erro ao carregar classificações do Firebase:", error);
-      Alert.alert("Erro", "Não foi possível carregar a lista de classificações.");
-    });
+    const classificacoesRef = ref(database, `propriedades/${propriedadeNome}/classificacao`)
+    const unsubscribeClassificacoes = onValue(
+      classificacoesRef,
+      (snapshot) => {
+        const data = snapshot.val()
+        const loadedClassificacoes = []
+        if (data) {
+          Object.keys(data).forEach((key) => {
+            // Usar a chave 'Descrição' como nome e o ID do Firebase como id
+            loadedClassificacoes.push({
+              id: key,
+              name: data[key].Descrição || `Classificação ${key}`, // Usar Descrição ou um fallback
+            })
+          })
+        }
+        setClassificacoes(loadedClassificacoes)
+      },
+      (error) => {
+        console.error("Erro ao carregar classificações do Firebase:", error)
+        Alert.alert("Erro", "Não foi possível carregar a lista de classificações.")
+      },
+    )
 
     // Carregar Embalagens
-    const embalagensRef = ref(database, `propriedades/${propriedadeNome}/embalagens`);
-    const unsubscribeEmbalagens = onValue(embalagensRef, (snapshot) => {
-      const data = snapshot.val();
-      const loadedEmbalagens = [];
-      if (data) {
-        Object.keys(data).forEach(key => {
-          // Usar a chave 'descricao' como nome e o ID do Firebase como id
-          loadedEmbalagens.push({
-            id: key,
-            name: data[key].descricao || `Embalagem ${key}` // Usar descricao ou um fallback
-          });
-        });
-      }
-      setEmbalagens(loadedEmbalagens);
-    }, (error) => {
-      console.error("Erro ao carregar embalagens do Firebase:", error);
-      Alert.alert("Erro", "Não foi possível carregar a lista de embalagens.");
-    });
+    const embalagensRef = ref(database, `propriedades/${propriedadeNome}/embalagens`)
+    const unsubscribeEmbalagens = onValue(
+      embalagensRef,
+      (snapshot) => {
+        const data = snapshot.val()
+        const loadedEmbalagens = []
+        if (data) {
+          Object.keys(data).forEach((key) => {
+            // Usar a chave 'descricao' como nome e o ID do Firebase como id
+            loadedEmbalagens.push({
+              id: key,
+              name: data[key].descricao || `Embalagem ${key}`, // Usar descricao ou um fallback
+            })
+          })
+        }
+        setEmbalagens(loadedEmbalagens)
+      },
+      (error) => {
+        console.error("Erro ao carregar embalagens do Firebase:", error)
+        Alert.alert("Erro", "Não foi possível carregar a lista de embalagens.")
+      },
+    )
 
-     // Carregar Tipos de Produto (culturaAssociada)
-     const tiposProdutoRef = ref(database, `propriedades/${propriedadeNome}/direcionadores`); // Assumindo que culturaAssociada está dentro de direcionadores
-     const unsubscribeTiposProduto = onValue(tiposProdutoRef, (snapshot) => {
-       const data = snapshot.val();
-       const loadedTiposProduto = [];
-       const uniqueCulturas = new Set(); // Usar um Set para garantir unicidade
-       if (data) {
-         Object.keys(data).forEach(key => {
-           if (data[key].culturaAssociada && !uniqueCulturas.has(data[key].culturaAssociada)) {
-             uniqueCulturas.add(data[key].culturaAssociada);
-             loadedTiposProduto.push({
-               id: data[key].culturaAssociada, // Usar a culturaAssociada como ID e nome
-               name: data[key].culturaAssociada
-             });
-           }
-         });
-       }
-       setTiposProduto(loadedTiposProduto);
-     }, (error) => {
-       console.error("Erro ao carregar tipos de produto do Firebase:", error);
-       Alert.alert("Erro", "Não foi possível carregar a lista de tipos de produto.");
-     });
+    // Carregar Tipos de Produto (culturaAssociada)
+    const tiposProdutoRef = ref(database, `propriedades/${propriedadeNome}/direcionadores`) // Assumindo que culturaAssociada está dentro de direcionadores
+    const unsubscribeTiposProduto = onValue(
+      tiposProdutoRef,
+      (snapshot) => {
+        const data = snapshot.val()
+        const loadedTiposProduto = []
+        const uniqueCulturas = new Set() // Usar um Set para garantir unicidade
+        if (data) {
+          Object.keys(data).forEach((key) => {
+            if (data[key].culturaAssociada && !uniqueCulturas.has(data[key].culturaAssociada)) {
+              uniqueCulturas.add(data[key].culturaAssociada)
+              loadedTiposProduto.push({
+                id: data[key].culturaAssociada, // Usar a culturaAssociada como ID e nome
+                name: data[key].culturaAssociada,
+              })
+            }
+          })
+        }
+        setTiposProduto(loadedTiposProduto)
+      },
+      (error) => {
+        console.error("Erro ao carregar tipos de produto do Firebase:", error)
+        Alert.alert("Erro", "Não foi possível carregar a lista de tipos de produto.")
+      },
+    )
 
-     // Carregar Clientes
-     const clientesRef = ref(database, `propriedades/${propriedadeNome}/clientes`);
-     const unsubscribeClientes = onValue(clientesRef, (snapshot) => {
-       const data = snapshot.val();
-       const loadedClientes = [];
-       if (data) {
-         Object.keys(data).forEach(key => {
-           // Usar a chave 'Nome' como nome e o ID do Firebase como id
-           if (data[key].Nome) { // Garantir que o cliente tem um nome
-             loadedClientes.push({
-               id: key,
-               name: data[key].Nome
-             });
-           }
-         });
-       }
-       setClientes(loadedClientes);
-     }, (error) => {
-       console.error("Erro ao carregar clientes do Firebase:", error);
-       Alert.alert("Erro", "Não foi possível carregar a lista de clientes.");
-     });
-
+    // Carregar Clientes
+    const clientesRef = ref(database, `propriedades/${propriedadeNome}/clientes`)
+    const unsubscribeClientes = onValue(
+      clientesRef,
+      (snapshot) => {
+        const data = snapshot.val()
+        const loadedClientes = []
+        if (data) {
+          Object.keys(data).forEach((key) => {
+            // Usar a chave 'Nome' como nome e o ID do Firebase como id
+            if (data[key].Nome) {
+              // Garantir que o cliente tem um nome
+              loadedClientes.push({
+                id: key,
+                name: data[key].Nome,
+              })
+            }
+          })
+        }
+        setClientes(loadedClientes)
+      },
+      (error) => {
+        console.error("Erro ao carregar clientes do Firebase:", error)
+        Alert.alert("Erro", "Não foi possível carregar a lista de clientes.")
+      },
+    )
 
     // Cleanup function para parar de escutar as mudanças quando o componente desmontar
     return () => {
-      unsubscribeDirecionadores();
-      unsubscribeClassificacoes();
-      unsubscribeEmbalagens();
-      unsubscribeTiposProduto();
-      unsubscribeClientes(); // Limpar o listener de clientes
-    };
-  }, [propriedadeNome]); // Depende de propriedadeNome
+      unsubscribeDirecionadores()
+      unsubscribeClassificacoes()
+      unsubscribeEmbalagens()
+      unsubscribeTiposProduto()
+      unsubscribeClientes() // Limpar o listener de clientes
+    }
+  }, [propriedadeNome]) // Depende de propriedadeNome
 
   // Função unificada para gerar e compartilhar PDF
   const handleGenerateAndSharePDF = async () => {
@@ -643,21 +721,24 @@ export default function SalesScreen() {
           }
 
           // Se o campo atualizado for 'talhao', encontrar o direcionador correspondente e preencher a variedade
-          if (field === 'talhao') {
-            const selectedDirecionador = direcionadores.find(d => d.direcionador === value);
+          if (field === "talhao") {
+            const selectedDirecionador = direcionadores.find((d) => d.direcionador === value)
             if (selectedDirecionador) {
-              updatedItem.variedade = selectedDirecionador.variedade;
+              updatedItem.variedade = selectedDirecionador.variedade
               // Não há variedadeId no Firebase, então não atualizamos
             } else {
-              updatedItem.variedade = ""; // Limpa a variedade se o talhão não for encontrado
+              updatedItem.variedade = "" // Limpa a variedade se o talhão não for encontrado
             }
           }
 
-
           if (field === "quantidade" || field === "preco") {
-            const quantidade = Number.parseFloat(field === "quantidade" ? value.replace(',', '.') : updatedItem.quantidade.replace(',', '.')) || 0;
-            const preco = Number.parseFloat(field === "preco" ? value.replace(',', '.') : updatedItem.preco.replace(',', '.')) || 0;
-            updatedItem.valorTotal = quantidade * preco;
+            const quantidade =
+              Number.parseFloat(
+                field === "quantidade" ? value.replace(",", ".") : updatedItem.quantidade.replace(",", "."),
+              ) || 0
+            const preco =
+              Number.parseFloat(field === "preco" ? value.replace(",", ".") : updatedItem.preco.replace(",", ".")) || 0
+            updatedItem.valorTotal = quantidade * preco
           }
 
           return updatedItem
@@ -671,54 +752,58 @@ export default function SalesScreen() {
   const totalItems = items.filter((item) => item.talhao || item.variedade || item.quantidade).length
 
   // Função para abrir modal de seleção
-  const openListModal = useCallback((type, itemId = null) => {
-    setListModalType(type)
-    setCurrentItemId(itemId)
+  const openListModal = useCallback(
+    (type, itemId = null) => {
+      setListModalType(type)
+      setCurrentItemId(itemId)
 
-    switch (type) {
-      case "cliente":
-        // Usar os clientes carregados do Firebase
-        setListModalData(clientes)
-        break
-      case "formaPagamento":
-        setListModalData(SELECTION_DATA.formasPagamento)
-        break
-      case "variedade":
-        // Variedade agora é preenchida automaticamente pelo Talhão,
-        // mas mantemos a opção de seleção manual caso necessário ou para outros fluxos.
-        // Para este caso, a lista de variedades pode ser gerada a partir dos direcionadores únicos.
-        const uniqueVariedades = Array.from(new Set(direcionadores.map(d => d.variedade)))
-          .map((variedade, index) => ({ id: index.toString(), name: variedade }));
-        setListModalData(uniqueVariedades);
-        break
-      case "talhao":
-        // Usar os direcionadores carregados do Firebase para a lista de talhões
-        const talhoesFromDirecionadores = direcionadores.map(d => ({
-          id: d.id, // Usar o ID do direcionador como ID do item
-          name: d.direcionador, // Usar o valor do direcionador como nome
-          variedade: d.variedade, // Incluir a variedade para auto-preenchimento
-        }));
-        setListModalData(talhoesFromDirecionadores);
-        break
-      case "classificacao":
-        // Usar as classificações carregadas do Firebase
-        setListModalData(classificacoes);
-        break
-      case "embalagem":
-        // Usar as embalagens carregadas do Firebase
-        setListModalData(embalagens);
-        break
-      case "tipoProduto":
-        // Usar os tipos de produto carregados do Firebase
-        setListModalData(tiposProduto);
-        break
-      default:
-        setListModalData([])
-    }
+      switch (type) {
+        case "cliente":
+          // Usar os clientes carregados do Firebase
+          setListModalData(clientes)
+          break
+        case "formaPagamento":
+          setListModalData(SELECTION_DATA.formasPagamento)
+          break
+        case "variedade":
+          // Variedade agora é preenchida automaticamente pelo Talhão,
+          // mas mantemos a opção de seleção manual caso necessário ou para outros fluxos.
+          // Para este caso, a lista de variedades pode ser gerada a partir dos direcionadores únicos.
+          const uniqueVariedades = Array.from(new Set(direcionadores.map((d) => d.variedade))).map(
+            (variedade, index) => ({ id: index.toString(), name: variedade }),
+          )
+          setListModalData(uniqueVariedades)
+          break
+        case "talhao":
+          // Usar os direcionadores carregados do Firebase para a lista de talhões
+          const talhoesFromDirecionadores = direcionadores.map((d) => ({
+            id: d.id, // Usar o ID do direcionador como ID do item
+            name: d.direcionador, // Usar o valor do direcionador como nome
+            variedade: d.variedade, // Incluir a variedade para auto-preenchimento
+          }))
+          setListModalData(talhoesFromDirecionadores)
+          break
+        case "classificacao":
+          // Usar as classificações carregadas do Firebase
+          setListModalData(classificacoes)
+          break
+        case "embalagem":
+          // Usar as embalagens carregadas do Firebase
+          setListModalData(embalagens)
+          break
+        case "tipoProduto":
+          // Usar os tipos de produto carregados do Firebase
+          setListModalData(tiposProduto)
+          break
+        default:
+          setListModalData([])
+      }
 
-    setSearchQuery("")
-    setListModalVisible(true)
-  }, [direcionadores, classificacoes, embalagens, tiposProduto, clientes]) // Adicionar clientes como dependência
+      setSearchQuery("")
+      setListModalVisible(true)
+    },
+    [direcionadores, classificacoes, embalagens, tiposProduto, clientes],
+  ) // Adicionar clientes como dependência
 
   // Dados filtrados para busca
   const filteredListData = useMemo(() => {
@@ -727,41 +812,44 @@ export default function SalesScreen() {
   }, [listModalData, searchQuery])
 
   // Função para lidar com seleção de item
-  const handleItemSelection = useCallback((selectedItem) => {
-    if (currentItemId) {
-      // Seleção para item específico
-      switch (listModalType) {
-        case "variedade":
-          updateItem(currentItemId, "variedade", selectedItem.name, "variedadeId", selectedItem.id)
-          break
-        case "talhao":
-          // Ao selecionar um talhão, atualiza o talhão e a variedade do item
-          updateItem(currentItemId, "talhao", selectedItem.name, "talhaoId", selectedItem.id);
-          // A variedade será preenchida automaticamente dentro de updateItem
-          break
-        case "classificacao":
-          updateItem(currentItemId, "classificacao", selectedItem.name, "classificacaoId", selectedItem.id)
-          break
-        case "embalagem":
-          updateItem(currentItemId, "embalagem", selectedItem.name, "embalagemId", selectedItem.id)
-          break
-        case "tipoProduto":
-          updateItem(currentItemId, "tipoProduto", selectedItem.id)
-          break
+  const handleItemSelection = useCallback(
+    (selectedItem) => {
+      if (currentItemId) {
+        // Seleção para item específico
+        switch (listModalType) {
+          case "variedade":
+            updateItem(currentItemId, "variedade", selectedItem.name, "variedadeId", selectedItem.id)
+            break
+          case "talhao":
+            // Ao selecionar um talhão, atualiza o talhão e a variedade do item
+            updateItem(currentItemId, "talhao", selectedItem.name, "talhaoId", selectedItem.id)
+            // A variedade será preenchida automaticamente dentro de updateItem
+            break
+          case "classificacao":
+            updateItem(currentItemId, "classificacao", selectedItem.name, "classificacaoId", selectedItem.id)
+            break
+          case "embalagem":
+            updateItem(currentItemId, "embalagem", selectedItem.name, "embalagemId", selectedItem.id)
+            break
+          case "tipoProduto":
+            updateItem(currentItemId, "tipoProduto", selectedItem.id)
+            break
+        }
+      } else {
+        // Seleção para formulário principal
+        switch (listModalType) {
+          case "cliente":
+            setFormData((prev) => ({ ...prev, cliente: selectedItem.name, clienteId: selectedItem.id }))
+            break
+          case "formaPagamento":
+            setFormData((prev) => ({ ...prev, formaPagamento: selectedItem.name, formaPagamentoId: selectedItem.id }))
+            break
+        }
       }
-    } else {
-      // Seleção para formulário principal
-      switch (listModalType) {
-        case "cliente":
-          setFormData(prev => ({ ...prev, cliente: selectedItem.name, clienteId: selectedItem.id }))
-          break
-        case "formaPagamento":
-          setFormData(prev => ({ ...prev, formaPagamento: selectedItem.name, formaPagamentoId: selectedItem.id }))
-          break
-      }
-    }
-    setListModalVisible(false)
-  }, [listModalType, currentItemId, updateItem]) // Adicionar updateItem como dependência
+      setListModalVisible(false)
+    },
+    [listModalType, currentItemId, updateItem, tiposProduto, embalagens, classificacoes, direcionadores],
+  )
 
   // Função para salvar no AsyncStorage (mantida para backup local)
   const saveVendaToStorage = async (vendaData) => {
@@ -816,6 +904,36 @@ export default function SalesScreen() {
     }
   }
 
+  // Nova função para atualizar venda no Firebase
+  const updateVendaToFirebase = async (vendaData, saleId) => {
+    try {
+      // Referência para a venda específica
+      const vendaRef = ref(database, `propriedades/${propriedadeNome}/vendas/${saleId}`)
+
+      // Atualizar os dados da venda
+      await update(vendaRef, vendaData)
+
+      return saleId
+    } catch (error) {
+      console.error("Erro ao atualizar no Firebase:", error)
+      throw new Error("Erro ao atualizar no banco de dados online")
+    }
+  }
+
+  // Modal de confirmação para salvar alterações
+  const showSaveConfirmation = () => {
+    Alert.alert("Confirmar Alterações", "Deseja salvar as alterações feitas nesta venda?", [
+      {
+        text: "Cancelar",
+        style: "cancel",
+      },
+      {
+        text: "Salvar",
+        onPress: handleSubmit,
+      },
+    ])
+  }
+
   const handleSubmit = async () => {
     // Validação básica
     if (!formData.cliente || !formData.formaPagamento) {
@@ -861,17 +979,24 @@ export default function SalesScreen() {
             variedadeId: item.variedadeId,
             classificacao: item.classificacao,
             classificacaoId: item.classificacaoId,
-            quantidade: Number.parseFloat(item.quantidade.replace(',', '.')) || 0,
+            quantidade: Number.parseFloat(item.quantidade.replace(",", ".")) || 0,
             embalagem: item.embalagem,
             embalagemId: item.embalagemId,
-            preco: Number.parseFloat(item.preco.replace(',', '.')) || 0,
+            preco: Number.parseFloat(item.preco.replace(",", ".")) || 0,
             valorTotal: Number.parseFloat(item.valorTotal) || 0,
             tipoProduto: item.tipoProduto,
           })),
         status: "pendente",
-        criadoEm: new Date().toISOString(),
-        criadoPor: userId,
         propriedade: propriedadeNome,
+      }
+
+      // Adicionar campos específicos para criação ou edição
+      if (isEditMode) {
+        vendaData.atualizadoEm = new Date().toISOString()
+        vendaData.atualizadoPor = userId
+      } else {
+        vendaData.criadoEm = new Date().toISOString()
+        vendaData.criadoPor = userId
       }
 
       // Tentar salvar no Firebase primeiro
@@ -879,8 +1004,13 @@ export default function SalesScreen() {
       let localVendaId = null
 
       try {
-        firebaseVendaId = await saveVendaToFirebase(vendaData)
-        console.log("Venda salva no Firebase com ID:", firebaseVendaId)
+        if (isEditMode) {
+          firebaseVendaId = await updateVendaToFirebase(vendaData, editingSaleId)
+          console.log("Venda atualizada no Firebase com ID:", firebaseVendaId)
+        } else {
+          firebaseVendaId = await saveVendaToFirebase(vendaData)
+          console.log("Venda salva no Firebase com ID:", firebaseVendaId)
+        }
       } catch (firebaseError) {
         console.error("Erro ao salvar no Firebase:", firebaseError)
         // Continuar para salvar localmente mesmo se o Firebase falhar
@@ -901,7 +1031,6 @@ export default function SalesScreen() {
 
       // Mostrar modal de sucesso
       setShowSuccessModal(true)
-
     } catch (error) {
       setLoading(false)
       console.error("Erro ao salvar venda:", error)
@@ -938,32 +1067,40 @@ export default function SalesScreen() {
 
   // Função para obter o nome do tipo de produto
   const getTipoProdutoName = (tipoProdutoId) => {
-    const tipoProduto = tiposProduto.find(item => item.id === tipoProdutoId);
-    return tipoProduto ? tipoProduto.name : "";
+    const tipoProduto = tiposProduto.find((item) => item.id === tipoProdutoId)
+    return tipoProduto ? tipoProduto.name : ""
   }
 
   // Componente para renderizar item da lista
-  const renderListItem = useCallback(({ item }) => (
-    <TouchableOpacity
-      style={styles.listItem}
-      onPress={() => handleItemSelection(item)}
-    >
-      <Text style={styles.listItemText}>{item.name}</Text>
-    </TouchableOpacity>
-  ), [handleItemSelection])
+  const renderListItem = useCallback(
+    ({ item }) => (
+      <TouchableOpacity style={styles.listItem} onPress={() => handleItemSelection(item)}>
+        <Text style={styles.listItemText}>{item.name}</Text>
+      </TouchableOpacity>
+    ),
+    [handleItemSelection],
+  )
 
   // Modal de seleção flutuante
   const renderListModal = () => {
     const getModalTitle = () => {
       switch (listModalType) {
-        case "cliente": return "Selecione o Cliente"
-        case "formaPagamento": return "Selecione a Forma de Pagamento"
-        case "variedade": return "Selecione a Variedade"
-        case "talhao": return "Selecione o Talhão"
-        case "classificacao": return "Selecione a Classificação"
-        case "embalagem": return "Selecione a Embalagem"
-        case "tipoProduto": return "Selecione o Produto"
-        default: return "Selecione uma opção"
+        case "cliente":
+          return "Selecione o Cliente"
+        case "formaPagamento":
+          return "Selecione a Forma de Pagamento"
+        case "variedade":
+          return "Selecione a Variedade"
+        case "talhao":
+          return "Selecione o Talhão"
+        case "classificacao":
+          return "Selecione a Classificação"
+        case "embalagem":
+          return "Selecione a Embalagem"
+        case "tipoProduto":
+          return "Selecione o Produto"
+        default:
+          return "Selecione uma opção"
       }
     }
 
@@ -974,20 +1111,13 @@ export default function SalesScreen() {
         animationType="fade"
         onRequestClose={() => setListModalVisible(false)}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setListModalVisible(false)}
-        >
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setListModalVisible(false)}>
           <View style={styles.floatingModalContainer}>
-            <TouchableOpacity activeOpacity={1} onPress={() => { }}>
+            <TouchableOpacity activeOpacity={1} onPress={() => {}}>
               <View style={styles.floatingModalContent}>
                 <View style={styles.floatingModalHeader}>
                   <Text style={styles.floatingModalTitle}>{getModalTitle()}</Text>
-                  <TouchableOpacity
-                    onPress={() => setListModalVisible(false)}
-                    style={styles.floatingCloseButton}
-                  >
+                  <TouchableOpacity onPress={() => setListModalVisible(false)} style={styles.floatingCloseButton}>
                     <Icon name="close" size={20} color={COLORS.gray600} />
                   </TouchableOpacity>
                 </View>
@@ -1025,7 +1155,7 @@ export default function SalesScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Icon name="arrow-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Nova Venda</Text>
+        <Text style={styles.headerTitle}>{isEditMode ? "Editar Venda" : "Nova Venda"}</Text>
         <View style={styles.placeholder} />
       </View>
 
@@ -1033,6 +1163,7 @@ export default function SalesScreen() {
         {/* Info da Propriedade */}
         <View style={styles.infoCard}>
           <Text style={styles.infoText}>Propriedade: {propriedadeNome}</Text>
+          {isEditMode && <Text style={styles.editModeText}>Modo de Edição</Text>}
         </View>
 
         {/* Informações do Cliente */}
@@ -1052,10 +1183,7 @@ export default function SalesScreen() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Nome do Cliente *</Text>
-            <TouchableOpacity
-              style={styles.selectionInput}
-              onPress={() => openListModal("cliente")}
-            >
+            <TouchableOpacity style={styles.selectionInput} onPress={() => openListModal("cliente")}>
               <Text style={[styles.selectionText, !formData.cliente && styles.placeholderText]}>
                 {formData.cliente || "Selecione o cliente"}
               </Text>
@@ -1073,10 +1201,7 @@ export default function SalesScreen() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Forma de Pagamento *</Text>
-            <TouchableOpacity
-              style={styles.selectionInput}
-              onPress={() => openListModal("formaPagamento")}
-            >
+            <TouchableOpacity style={styles.selectionInput} onPress={() => openListModal("formaPagamento")}>
               <Text style={[styles.selectionText, !formData.formaPagamento && styles.placeholderText]}>
                 {formData.formaPagamento || "Selecione a forma de pagamento"}
               </Text>
@@ -1098,8 +1223,8 @@ export default function SalesScreen() {
             </View>
           )}
 
-           {/* Campo de Observação Pagamento */}
-           <View style={styles.inputGroup}>
+          {/* Campo de Observação Pagamento */}
+          <View style={styles.inputGroup}>
             <Text style={styles.label}>Observação Pagamento</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
@@ -1168,18 +1293,17 @@ export default function SalesScreen() {
         </View>
 
         {/* Botão Salvar Venda */}
-
         <TouchableOpacity
           style={[styles.saveButton, loading && styles.saveButtonDisabled]}
-          onPress={handleSubmit}
+          onPress={isEditMode ? showSaveConfirmation : handleSubmit}
           disabled={loading}
         >
           {loading ? (
             <ActivityIndicator size="small" color={COLORS.white} />
           ) : (
             <>
-              <Icon name="checkmark-circle" size={24} color={COLORS.white} />
-              <Text style={styles.saveButtonText}>Salvar Venda</Text>
+              <Icon name={isEditMode ? "save" : "checkmark-circle"} size={24} color={COLORS.white} />
+              <Text style={styles.saveButtonText}>{isEditMode ? "Salvar Alterações" : "Salvar Venda"}</Text>
             </>
           )}
         </TouchableOpacity>
@@ -1256,7 +1380,7 @@ export default function SalesScreen() {
                       <Text style={styles.itemLabel}>Variedade</Text>
                       {/* Campo Variedade agora é preenchido automaticamente */}
                       <View style={styles.itemSelectionInput}>
-                         <Text style={[styles.itemSelectionText, !item.variedade && styles.placeholderText]}>
+                        <Text style={[styles.itemSelectionText, !item.variedade && styles.placeholderText]}>
                           {item.variedade || "Preenchido automaticamente"}
                         </Text>
                         {/* Remove o ícone de seleção manual */}
@@ -1368,13 +1492,11 @@ export default function SalesScreen() {
         onClose={handleCloseSuccessModal}
         onGenerateAndSharePDF={handleGenerateAndSharePDF} // Chama a função unificada
         isGeneratingPDF={isGeneratingPDF}
+        isEditMode={isEditMode}
       />
-
-      {/* O visualizador de PDF integrado foi removido */}
     </SafeAreaView>
   )
 }
-
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -1421,6 +1543,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
     color: COLORS.primary,
+  },
+  editModeText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.warning,
+    marginTop: 4,
   },
   warningCard: {
     backgroundColor: "#fff3cd",
@@ -1884,7 +2012,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff3cd",
     padding: 8,
     borderRadius: 6,
-    width: '100%', // Garante que o aviso ocupe a largura total
+    width: "100%", // Garante que o aviso ocupe a largura total
   },
   successActions: {
     width: "100%",
