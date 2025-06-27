@@ -19,43 +19,37 @@ export default function LoginScreen() {
   const navigation = useNavigation()
   const [initializing, setInitializing] = useState(true)
 
-  // Função para criar usuário no database se não existir
-  const createUserInDatabase = async (user) => {
+  // Função para criar usuário na propriedade se não existir
+  const createUserInPropriedade = async (user, propriedadeId) => {
     try {
-      const userRef = ref(database, `users/${user.uid}`)
-      const defaultUserData = {
+      const propriedadeUserRef = ref(database, `propriedades/${propriedadeId}/users/${user.uid}`)
+      const defaultPropriedadeData = {
         email: user.email,
         nome: user.displayName || user.email.split("@")[0],
-        propriedade_escolhida: "Matrice", // Valor padrão baseado na sua estrutura
+        propriedade: propriedadeId,
+        role: "user", // Valor padrão
+        status: "active",
         created_at: new Date().toISOString(),
       }
 
-      await set(userRef, defaultUserData)
-      console.log("Usuário criado no database:", user.uid)
-      return defaultUserData
+      await set(propriedadeUserRef, defaultPropriedadeData)
+      console.log("Usuário criado na propriedade:", propriedadeId)
+      return defaultPropriedadeData
     } catch (error) {
-      console.error("Erro ao criar usuário no database:", error)
+      console.error("Erro ao criar usuário na propriedade:", error)
       throw error
     }
   }
 
-  // Função para criar usuário na propriedade se não existir
-  const createUserInPropriedade = async (userId, propriedadeId) => {
-    try {
-      const propriedadeUserRef = ref(database, `propriedades/${propriedadeId}/users/${userId}`)
-      const defaultPropriedadeData = {
-        role: "user", // Valor padrão
-        status: "active",
-        added_at: new Date().toISOString(),
-      }
-
-      await set(propriedadeUserRef, defaultPropriedadeData)
-      console.log("Usuário adicionado à propriedade:", propriedadeId)
-      return defaultPropriedadeData
-    } catch (error) {
-      console.error("Erro ao adicionar usuário à propriedade:", error)
-      throw error
+  // Função para determinar a propriedade do usuário baseada no email
+  const determinarPropriedade = (email) => {
+    // Você pode implementar lógica mais complexa aqui
+    // Por exemplo, baseado no domínio do email ou uma tabela de mapeamento
+    if (email.includes("@matrice.com")) {
+      return "Matrice"
     }
+    // Propriedade padrão
+    return "Matrice"
   }
 
   useEffect(() => {
@@ -78,59 +72,69 @@ export default function LoginScreen() {
       if (user) {
         try {
           console.log("Usuário autenticado:", user.uid)
+          console.log("Email do usuário:", user.email)
 
-          const userRef = ref(database, `users/${user.uid}`)
-          const userSnapshot = await get(userRef)
-          let userData
-
-          // Se o usuário não existe no database, criar
-          if (!userSnapshot.exists()) {
-            console.log("Usuário não encontrado no database, criando...")
-            userData = await createUserInDatabase(user)
-          } else {
-            userData = userSnapshot.val()
-            console.log("Dados do usuário encontrados:", userData)
-          }
-
-          const propriedadeEscolhida = userData.propriedade_escolhida
-
-          if (!propriedadeEscolhida) {
-            Alert.alert("Erro", "Propriedade não definida para este usuário. Entre em contato com o suporte.")
-            return
-          }
+          // Determinar propriedade baseada no email
+          const propriedadeEscolhida = determinarPropriedade(user.email)
+          console.log("Propriedade determinada:", propriedadeEscolhida)
 
           const propriedadeRef = ref(database, `propriedades/${propriedadeEscolhida}/users/${user.uid}`)
-          const propriedadeSnapshot = await get(propriedadeRef)
-          let propriedadeUserData
 
-          // Se o usuário não existe na propriedade, criar
-          if (!propriedadeSnapshot.exists()) {
-            console.log("Usuário não encontrado na propriedade, adicionando...")
-            propriedadeUserData = await createUserInPropriedade(user.uid, propriedadeEscolhida)
-          } else {
-            propriedadeUserData = propriedadeSnapshot.val()
-            console.log("Dados do usuário na propriedade:", propriedadeUserData)
+          try {
+            const propriedadeSnapshot = await get(propriedadeRef)
+            let propriedadeUserData
+
+            if (!propriedadeSnapshot.exists()) {
+              console.log("Usuário não encontrado na propriedade, criando...")
+              propriedadeUserData = await createUserInPropriedade(user, propriedadeEscolhida)
+            } else {
+              propriedadeUserData = propriedadeSnapshot.val()
+              console.log("Dados do usuário encontrados:", propriedadeUserData)
+            }
+
+            // Salvar dados no AsyncStorage
+            await AsyncStorage.setItem(USER_TOKEN_KEY, user.uid)
+            await AsyncStorage.setItem(USER_ROLE_KEY, propriedadeUserData.role || "user")
+            await AsyncStorage.setItem(USER_PROPRIEDADE_KEY, propriedadeEscolhida)
+
+            console.log("Login realizado com sucesso")
+            navigation.replace("Opening")
+          } catch (dbError) {
+            console.error("Erro ao acessar banco de dados:", dbError)
+
+            // Se houver erro de permissão, tenta criar o usuário mesmo assim
+            if (dbError.code === "PERMISSION_DENIED") {
+              console.log("Erro de permissão, tentando criar usuário...")
+              try {
+                const propriedadeUserData = await createUserInPropriedade(user, propriedadeEscolhida)
+
+                await AsyncStorage.setItem(USER_TOKEN_KEY, user.uid)
+                await AsyncStorage.setItem(USER_ROLE_KEY, propriedadeUserData.role || "user")
+                await AsyncStorage.setItem(USER_PROPRIEDADE_KEY, propriedadeEscolhida)
+
+                console.log("Usuário criado com sucesso após erro de permissão")
+                navigation.replace("Opening")
+              } catch (createError) {
+                console.error("Erro ao criar usuário após erro de permissão:", createError)
+                Alert.alert(
+                  "Erro de Acesso",
+                  "Sua conta não foi encontrada no sistema. Entre em contato com o suporte para ativação.",
+                  [{ text: "OK", onPress: () => auth.signOut() }],
+                )
+              }
+            } else {
+              throw dbError
+            }
           }
-
-          // Salvar dados no AsyncStorage
-          await AsyncStorage.setItem(USER_TOKEN_KEY, user.uid)
-          await AsyncStorage.setItem(USER_ROLE_KEY, propriedadeUserData.role)
-          await AsyncStorage.setItem(USER_PROPRIEDADE_KEY, propriedadeEscolhida)
-
-          console.log("Login realizado com sucesso")
-          navigation.replace("Opening")
         } catch (error) {
-          console.error("Erro ao processar dados do usuário:", error)
+          console.error("Erro geral ao processar usuário:", error)
           Alert.alert(
             "Erro",
             "Ocorreu um erro ao processar seus dados. Tente novamente ou entre em contato com o suporte.",
             [
               {
                 text: "Tentar Novamente",
-                onPress: () => {
-                  // Força logout para tentar novamente
-                  auth.signOut()
-                },
+                onPress: () => auth.signOut(),
               },
               {
                 text: "OK",
@@ -161,11 +165,11 @@ export default function LoginScreen() {
       console.error("Erro de login:", error)
       switch (error.code) {
         case "auth/user-not-found":
-          Alert.alert("Usuário não encontrado", "Este email não está cadastrado.")
+          Alert.alert("Usuário não encontrado", "Este email não está cadastrado no Firebase Authentication.")
           break
         case "auth/wrong-password":
         case "auth/invalid-credential":
-          Alert.alert("Senha incorreta", "A senha informada está incorreta.")
+          Alert.alert("Credenciais inválidas", "Email ou senha incorretos.")
           break
         case "auth/invalid-email":
           Alert.alert("Email inválido", "Por favor, insira um email válido.")

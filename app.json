@@ -22,7 +22,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.victormatos1.agrocoleta2",
-      "versionCode": 74
+      "versionCode": 78
     },
     "web": {
       "favicon": "./assets/icon.png"
