@@ -71,18 +71,15 @@ export default function FormScreen({ navigation }) {
   const [isSyncing, setIsSyncing] = useState(false)
   const [isHorimetrosLoading, setIsHorimetrosLoading] = useState(true)
 
+  // Inicializar arrays como arrays vazios para evitar erros de undefined
   const [direcionadores, setDirecionadores] = useState([])
-
   const [maquinarios, setMaquinarios] = useState([])
   const [implementos, setImplementos] = useState([])
+  const [atividades, setAtividades] = useState([])
 
   const [fichaControleNumero, setFichaControleNumero] = useState(40000)
-
   const [selectedDirecionadores, setSelectedDirecionadores] = useState([])
-
   const [selectedImplementos, setSelectedImplementos] = useState([])
-
-  const [atividades, setAtividades] = useState([])
 
   const isMounted = useRef(true)
 
@@ -118,29 +115,24 @@ export default function FormScreen({ navigation }) {
     }
   }, [])
 
-
   useEffect(() => {
     const carregarNumeroFicha = async () => {
       try {
         const numeroSalvo = await AsyncStorage.getItem(FICHA_CONTROLE_KEY)
         if (numeroSalvo) {
           const numero = Number.parseInt(numeroSalvo, 10)
-
           setFichaControleNumero(numero)
         } else {
-   
           setFichaControleNumero(40000)
         }
       } catch (error) {
         console.error("Erro ao carregar número da ficha:", error)
-    
         setFichaControleNumero(40000)
       }
     }
 
     carregarNumeroFicha()
   }, [])
-
 
   useEffect(() => {
     if (!userPropriedade) return
@@ -149,14 +141,11 @@ export default function FormScreen({ navigation }) {
       try {
         const atividadesRef = ref(database, `propriedades/${userPropriedade}/atividades`)
 
-
         const unsubscribe = onValue(
           atividadesRef,
           (snapshot) => {
             if (isMounted.current) {
               const data = snapshot.val() || {}
-
-           
               const atividadesArray = Object.entries(data).map(([key, value]) => ({
                 id: value.id || key,
                 name: value.atividade || "Atividade sem nome",
@@ -171,8 +160,6 @@ export default function FormScreen({ navigation }) {
           },
           (error) => {
             console.error("Erro ao carregar atividades do Firebase:", error)
-
-       
             loadCachedAtividades()
           },
         )
@@ -180,13 +167,10 @@ export default function FormScreen({ navigation }) {
         return unsubscribe
       } catch (error) {
         console.error("Erro ao configurar listener para atividades:", error)
-
-      
         loadCachedAtividades()
       }
     }
 
-  
     const loadCachedAtividades = async () => {
       try {
         const cachedData = await AsyncStorage.getItem(CACHED_ATIVIDADES_KEY)
@@ -207,7 +191,6 @@ export default function FormScreen({ navigation }) {
     }
   }, [userPropriedade])
 
-
   useEffect(() => {
     if (!userPropriedade) return
 
@@ -215,14 +198,11 @@ export default function FormScreen({ navigation }) {
       try {
         const direcionadoresRef = ref(database, `propriedades/${userPropriedade}/direcionadores`)
 
-   
         const unsubscribe = onValue(
           direcionadoresRef,
           (snapshot) => {
             if (isMounted.current) {
               const data = snapshot.val() || {}
-
-            
               const direcionadoresArray = Object.entries(data).map(([key, value]) => ({
                 id: value.id || key,
                 name: value.direcionador || "Direcionador sem nome",
@@ -231,7 +211,6 @@ export default function FormScreen({ navigation }) {
 
               setDirecionadores(direcionadoresArray)
 
-             
               AsyncStorage.setItem(CACHED_DIRECIONADORES_KEY, JSON.stringify(direcionadoresArray)).catch((error) =>
                 console.error("Erro ao salvar direcionadores no cache:", error),
               )
@@ -239,8 +218,6 @@ export default function FormScreen({ navigation }) {
           },
           (error) => {
             console.error("Erro ao carregar direcionadores do Firebase:", error)
-
-           
             loadCachedDirecionadores()
           },
         )
@@ -248,13 +225,10 @@ export default function FormScreen({ navigation }) {
         return unsubscribe
       } catch (error) {
         console.error("Erro ao configurar listener para direcionadores:", error)
-
-       
         loadCachedDirecionadores()
       }
     }
 
-    
     const loadCachedDirecionadores = async () => {
       try {
         const cachedData = await AsyncStorage.getItem(CACHED_DIRECIONADORES_KEY)
@@ -275,7 +249,6 @@ export default function FormScreen({ navigation }) {
     }
   }, [userPropriedade])
 
-
   useEffect(() => {
     if (!userPropriedade) return
 
@@ -283,14 +256,11 @@ export default function FormScreen({ navigation }) {
       try {
         const maquinariosRef = ref(database, `propriedades/${userPropriedade}/maquinarios`)
 
-       
         const unsubscribe = onValue(
           maquinariosRef,
           (snapshot) => {
             if (isMounted.current) {
               const data = snapshot.val() || {}
-
-              
               const maquinariosArray = Object.entries(data).map(([key, value]) => ({
                 id: value.id || key,
                 name: `${value.id} - ${value.nome}`,
@@ -299,7 +269,6 @@ export default function FormScreen({ navigation }) {
 
               setMaquinarios(maquinariosArray)
 
-           
               AsyncStorage.setItem(CACHED_MAQUINARIOS_KEY, JSON.stringify(maquinariosArray)).catch((error) =>
                 console.error("Erro ao salvar maquinários no cache:", error),
               )
@@ -307,8 +276,6 @@ export default function FormScreen({ navigation }) {
           },
           (error) => {
             console.error("Erro ao carregar maquinários do Firebase:", error)
-
-           
             loadCachedMaquinarios()
           },
         )
@@ -316,13 +283,10 @@ export default function FormScreen({ navigation }) {
         return unsubscribe
       } catch (error) {
         console.error("Erro ao configurar listener para maquinários:", error)
-
-        
         loadCachedMaquinarios()
       }
     }
 
-   
     const loadCachedMaquinarios = async () => {
       try {
         const cachedData = await AsyncStorage.getItem(CACHED_MAQUINARIOS_KEY)
@@ -343,7 +307,6 @@ export default function FormScreen({ navigation }) {
     }
   }, [userPropriedade])
 
-  
   useEffect(() => {
     if (!userPropriedade) return
 
@@ -351,14 +314,11 @@ export default function FormScreen({ navigation }) {
       try {
         const implementosRef = ref(database, `propriedades/${userPropriedade}/implementos`)
 
-       
         const unsubscribe = onValue(
           implementosRef,
           (snapshot) => {
             if (isMounted.current) {
               const data = snapshot.val() || {}
-
-             
               const implementosArray = Object.entries(data).map(([key, value]) => ({
                 id: value.id || key,
                 name: `${value.id} - ${value.nome}`, 
@@ -367,7 +327,6 @@ export default function FormScreen({ navigation }) {
 
               setImplementos(implementosArray)
 
-        
               AsyncStorage.setItem(CACHED_IMPLEMENTOS_KEY, JSON.stringify(implementosArray)).catch((error) =>
                 console.error("Erro ao salvar implementos no cache:", error),
               )
@@ -375,8 +334,6 @@ export default function FormScreen({ navigation }) {
           },
           (error) => {
             console.error("Erro ao carregar implementos do Firebase:", error)
-
-       
             loadCachedImplementos()
           },
         )
@@ -384,12 +341,9 @@ export default function FormScreen({ navigation }) {
         return unsubscribe
       } catch (error) {
         console.error("Erro ao configurar listener para implementos:", error)
-
-     
         loadCachedImplementos()
       }
     }
-
 
     const loadCachedImplementos = async () => {
       try {
@@ -411,7 +365,6 @@ export default function FormScreen({ navigation }) {
     }
   }, [userPropriedade])
 
-  
   useEffect(() => {
     if (!userPropriedade) return
 
@@ -420,7 +373,6 @@ export default function FormScreen({ navigation }) {
         setIsHorimetrosLoading(true)
         const horimetrosRef = ref(database, `propriedades/${userPropriedade}/horimetros`)
 
-     
         const unsubscribe = onValue(
           horimetrosRef,
           (snapshot) => {
@@ -428,12 +380,10 @@ export default function FormScreen({ navigation }) {
               const data = snapshot.val() || {}
               setPreviousHorimetros(data)
 
-      
               AsyncStorage.setItem(PREVIOUS_HORIMETROS_KEY, JSON.stringify(data)).catch((error) =>
                 console.error("Erro ao salvar horímetros no cache:", error),
               )
 
-          
               AsyncStorage.setItem(CACHED_HORIMETROS_KEY, JSON.stringify(data)).catch((error) =>
                 console.error("Erro ao salvar horímetros no cache padrão:", error),
               )
@@ -444,8 +394,6 @@ export default function FormScreen({ navigation }) {
           (error) => {
             console.error("Erro ao carregar horímetros do Firebase:", error)
             setIsHorimetrosLoading(false)
-
-         
             loadLocalHorimetros()
           },
         )
@@ -454,22 +402,18 @@ export default function FormScreen({ navigation }) {
       } catch (error) {
         console.error("Erro ao configurar listener para horímetros:", error)
         setIsHorimetrosLoading(false)
-
-     
         loadLocalHorimetros()
       }
     }
 
     const loadLocalHorimetros = async () => {
       try {
-      
         const storedHorimetros = await AsyncStorage.getItem(PREVIOUS_HORIMETROS_KEY)
         if (storedHorimetros) {
           setPreviousHorimetros(JSON.parse(storedHorimetros))
           return
         }
 
-        // Se não encontrar, tentar da chave padrão do offlineManager
         const cachedHorimetros = await AsyncStorage.getItem(CACHED_HORIMETROS_KEY)
         if (cachedHorimetros) {
           setPreviousHorimetros(JSON.parse(cachedHorimetros))
@@ -500,10 +444,8 @@ export default function FormScreen({ navigation }) {
         setUserId(id)
         setUserPropriedade(propriedade)
 
-        // Verificar conectividade
         const netInfo = await NetInfo.fetch()
         if (!netInfo.isConnected) {
-          // Se estiver offline, carregar dados do cache
           loadCachedData()
         }
       } catch (error) {
@@ -515,38 +457,32 @@ export default function FormScreen({ navigation }) {
     return () => unsubscribeAuth()
   }, [])
 
-  // Função para carregar todos os dados do cache quando offline
   const loadCachedData = async () => {
     try {
-      // Carregar maquinários
       const cachedMaquinarios = await AsyncStorage.getItem(CACHED_MAQUINARIOS_KEY)
       if (cachedMaquinarios) {
         setMaquinarios(JSON.parse(cachedMaquinarios))
         console.log("Maquinários carregados do cache")
       }
 
-      // Carregar implementos
       const cachedImplementos = await AsyncStorage.getItem(CACHED_IMPLEMENTOS_KEY)
       if (cachedImplementos) {
         setImplementos(JSON.parse(cachedImplementos))
         console.log("Implementos carregados do cache")
       }
 
-      // Carregar direcionadores
       const cachedDirecionadores = await AsyncStorage.getItem(CACHED_DIRECIONADORES_KEY)
       if (cachedDirecionadores) {
         setDirecionadores(JSON.parse(cachedDirecionadores))
         console.log("Direcionadores carregados do cache")
       }
 
-      // Carregar atividades
       const cachedAtividades = await AsyncStorage.getItem(CACHED_ATIVIDADES_KEY)
       if (cachedAtividades) {
         setAtividades(JSON.parse(cachedAtividades))
         console.log("Atividades carregadas do cache")
       }
 
-      // Carregar horímetros
       const cachedHorimetros = await AsyncStorage.getItem(CACHED_HORIMETROS_KEY)
       if (cachedHorimetros) {
         setPreviousHorimetros(JSON.parse(cachedHorimetros))
@@ -564,8 +500,6 @@ export default function FormScreen({ navigation }) {
     if (!isAuthInitialized || !isAuthenticated) {
       return
     }
-
-  
     setIsLoading(false)
   }, [isAuthInitialized, isAuthenticated])
 
@@ -592,28 +526,36 @@ export default function FormScreen({ navigation }) {
     setDatePickerVisible(false)
   }, [])
 
-
+  // CORREÇÃO PRINCIPAL: Adicionar verificações de segurança para arrays
   const handleChange = useCallback(
     (name, value) => {
       if (name === "direcionador") {
-      
+        // Verificar se direcionadores existe e é um array antes de usar find
+        if (!Array.isArray(direcionadores) || direcionadores.length === 0) {
+          console.warn("Direcionadores não carregados ainda")
+          return
+        }
+
         const selectedDirecionador = direcionadores.find((d) => d.id === value)
 
-       
+        // Verificar se selectedDirecionadores existe e é um array
+        if (!Array.isArray(selectedDirecionadores)) {
+          console.warn("selectedDirecionadores não é um array")
+          return
+        }
+
         const isDirecionadorAlreadySelected = selectedDirecionadores.some((d) => d.id === value)
 
         if (!isDirecionadorAlreadySelected && selectedDirecionador) {
-        
           setSelectedDirecionadores((prev) => [...prev, selectedDirecionador])
 
-        
           return setFormData((prev) => ({
             ...prev,
             direcionador: value, 
             direcionadores: [...prev.direcionadores, value],
             cultura:
               prev.direcionadores.length === 0 && selectedDirecionador.culturaAssociada
-                ? CULTURA.find((c) => c.name.toLowerCase() === selectedDirecionador.culturaAssociada.toLowerCase())
+                ? CULTURA?.find((c) => c.name.toLowerCase() === selectedDirecionador.culturaAssociada.toLowerCase())
                     ?.id || prev.cultura
                 : prev.cultura,
           }))
@@ -622,7 +564,6 @@ export default function FormScreen({ navigation }) {
         return 
       }
 
-   
       if (name === "fichaControle" && !isNaN(Number.parseInt(value, 10))) {
         setFichaControleNumero(Number.parseInt(value, 10))
       }
@@ -632,21 +573,28 @@ export default function FormScreen({ navigation }) {
     [direcionadores, selectedDirecionadores],
   )
 
-
   const handleOperacaoMecanizadaChange = useCallback(
     (name, value) => {
       if (name === "implemento") {
-     
+        // Verificar se implementos existe e é um array antes de usar find
+        if (!Array.isArray(implementos) || implementos.length === 0) {
+          console.warn("Implementos não carregados ainda")
+          return
+        }
+
         const selectedImplemento = implementos.find((i) => i.id === value)
 
-      
+        // Verificar se selectedImplementos existe e é um array
+        if (!Array.isArray(selectedImplementos)) {
+          console.warn("selectedImplementos não é um array")
+          return
+        }
+
         const isImplementoAlreadySelected = selectedImplementos.some((i) => i.id === value)
 
         if (!isImplementoAlreadySelected && selectedImplemento) {
-       
           setSelectedImplementos((prev) => [...prev, selectedImplemento])
 
-    
           setOperacaoMecanizadaData((prev) => ({
             ...prev,
             implemento: value,
@@ -657,35 +605,27 @@ export default function FormScreen({ navigation }) {
       }
 
       setOperacaoMecanizadaData((prev) => {
-    
         if (name === "bem") {
           return { ...prev, [name]: value, horaFinal: "" }
         }
-
-      
         return { ...prev, [name]: value }
       })
     },
     [implementos, selectedImplementos],
   )
 
-
   const removeImplemento = useCallback((implementoId) => {
-   
     setOperacaoMecanizadaData((prev) => ({
       ...prev,
       implementos: prev.implementos.filter((id) => id !== implementoId),
-      
       implemento:
         prev.implemento === implementoId
           ? prev.implementos.filter((id) => id !== implementoId)[0] || ""
           : prev.implemento,
     }))
 
-  
     setSelectedImplementos((prev) => prev.filter((i) => i.id !== implementoId))
   }, [])
-
 
   const saveHorimetrosToFirebase = async (updatedHorimetros) => {
     if (!userPropriedade) {
@@ -697,13 +637,11 @@ export default function FormScreen({ navigation }) {
       const horimetrosRef = ref(database, `propriedades/${userPropriedade}/horimetros`)
       await update(horimetrosRef, updatedHorimetros)
 
-
       await AsyncStorage.setItem(PREVIOUS_HORIMETROS_KEY, JSON.stringify(updatedHorimetros))
       return true
     } catch (error) {
       console.error("Erro ao salvar horímetros no Firebase:", error)
 
-   
       try {
         await AsyncStorage.setItem(PREVIOUS_HORIMETROS_KEY, JSON.stringify(updatedHorimetros))
       } catch (localError) {
@@ -713,24 +651,18 @@ export default function FormScreen({ navigation }) {
     }
   }
 
- 
   const addSelectedOperacaoMecanizada = useCallback(
     async (operacao) => {
-      
-      if (selectedImplementos.length === 0) {
+      if (!Array.isArray(selectedImplementos) || selectedImplementos.length === 0) {
         Alert.alert("Atenção", "Selecione pelo menos um implemento.")
         return
       }
 
-  
       const horaInicial = previousHorimetros[operacao.bem] || "0.00"
-
-   
       const horaFinal = Number.parseFloat(operacao.horaFinal) || 0
       const horaInicialNum = Number.parseFloat(horaInicial) || 0
       const totalHoras = horaFinal > horaInicialNum ? (horaFinal - horaInicialNum).toFixed(2) : "0.00"
 
-  
       setSelectedOperacoesMecanizadas((prev) => [
         ...prev,
         {
@@ -738,7 +670,6 @@ export default function FormScreen({ navigation }) {
           id: Date.now(),
           horaInicial,
           totalHoras,
-          
           implementos: selectedImplementos.map((i) => ({
             id: i.id,
             name: i.name,
@@ -746,15 +677,12 @@ export default function FormScreen({ navigation }) {
         },
       ])
 
-    
       const updated = { ...previousHorimetros, [operacao.bem]: operacao.horaFinal }
 
-   
       const saved = await saveHorimetrosToFirebase(updated)
       if (saved) {
         setPreviousHorimetros(updated)
       } else {
-    
         setPreviousHorimetros(updated)
         Alert.alert(
           "Atenção",
@@ -762,7 +690,6 @@ export default function FormScreen({ navigation }) {
         )
       }
 
-   
       setOperacaoMecanizadaData({
         bem: "",
         implemento: "",
@@ -774,11 +701,13 @@ export default function FormScreen({ navigation }) {
     [previousHorimetros, userPropriedade, selectedImplementos],
   )
 
-
-
   const removeSelectedOperacaoMecanizada = useCallback(
     async (id) => {
       try {
+        if (!Array.isArray(selectedOperacoesMecanizadas)) {
+          console.error("selectedOperacoesMecanizadas não é um array")
+          return
+        }
 
         const operacaoParaRemover = selectedOperacoesMecanizadas.find((item) => item.id === id)
 
@@ -787,26 +716,19 @@ export default function FormScreen({ navigation }) {
           return
         }
 
-      
         setSelectedOperacoesMecanizadas((prev) => prev.filter((item) => item.id !== id))
 
-  
         const horimetroRef = ref(database, `propriedades/${userPropriedade}/horimetros/${operacaoParaRemover.bem}`)
-
-      
         const valorAnterior = operacaoParaRemover.horaInicial
 
-    
         await set(horimetroRef, valorAnterior)
 
-   
         const updatedHorimetros = {
           ...previousHorimetros,
           [operacaoParaRemover.bem]: valorAnterior,
         }
         setPreviousHorimetros(updatedHorimetros)
 
-   
         await AsyncStorage.setItem(PREVIOUS_HORIMETROS_KEY, JSON.stringify(updatedHorimetros))
 
         console.log(`Horímetro para o bem ${operacaoParaRemover.bem} restaurado para ${valorAnterior}`)
@@ -837,20 +759,16 @@ export default function FormScreen({ navigation }) {
     [userPropriedade],
   )
 
-
   const removeDirecionador = useCallback((direcionadorId) => {
-   
     setFormData((prev) => ({
       ...prev,
       direcionadores: prev.direcionadores.filter((id) => id !== direcionadorId),
-     
       direcionador:
         prev.direcionador === direcionadorId
           ? prev.direcionadores.filter((id) => id !== direcionadorId)[0] || ""
           : prev.direcionador,
     }))
 
-   
     setSelectedDirecionadores((prev) => prev.filter((d) => d.id !== direcionadorId))
   }, [])
 
@@ -859,17 +777,17 @@ export default function FormScreen({ navigation }) {
       try {
         const localId = Date.now().toString()
 
- 
-        const direcionadoresSelecionados = selectedDirecionadores.map((d) => ({
-          id: d.id,
-          name: d.name,
-          culturaAssociada: d.culturaAssociada,
-        }))
+        // Verificar se selectedDirecionadores é um array
+        const direcionadoresSelecionados = Array.isArray(selectedDirecionadores) 
+          ? selectedDirecionadores.map((d) => ({
+              id: d.id,
+              name: d.name,
+              culturaAssociada: d.culturaAssociada,
+            }))
+          : []
 
-     
         const primaryDirecionador = direcionadoresSelecionados.length > 0 ? direcionadoresSelecionados[0] : null
 
-    
         let timestamp = Date.now()
         if (formData.data) {
           const [day, month, year] = formData.data.split("/")
@@ -877,30 +795,29 @@ export default function FormScreen({ navigation }) {
           timestamp = dateObj.getTime()
         }
 
-  
-        const selectedAtividade = atividades.find((a) => a.id === formData.atividade)
+        // Verificar se atividades é um array antes de usar find
+        const selectedAtividade = Array.isArray(atividades) 
+          ? atividades.find((a) => a.id === formData.atividade)
+          : null
 
-       
         const apontamentoData = {
           ...formData,
-         
           atividade: selectedAtividade?.name || formData.atividade,
-        
           direcionador: primaryDirecionador?.name || formData.direcionador,
-       
           direcionadores: direcionadoresSelecionados,
-     
           cultura:
             primaryDirecionador?.culturaAssociada ||
-            CULTURA.find((c) => c.id === formData.cultura)?.name ||
+            (Array.isArray(CULTURA) ? CULTURA.find((c) => c.id === formData.cultura)?.name : null) ||
             formData.cultura,
           timestamp: timestamp,
-          operacoesMecanizadas: selectedOperacoesMecanizadas.map((op) => ({
-            ...op,
-          
-            bem: maquinarios.find((b) => b.id === op.bem)?.name || op.bem,
-           
-          })),
+          operacoesMecanizadas: Array.isArray(selectedOperacoesMecanizadas) 
+            ? selectedOperacoesMecanizadas.map((op) => ({
+                ...op,
+                bem: Array.isArray(maquinarios) 
+                  ? maquinarios.find((b) => b.id === op.bem)?.name || op.bem
+                  : op.bem,
+              }))
+            : [],
           userId: userId,
           propriedade: userPropriedade,
           localId: localId,
@@ -916,7 +833,6 @@ export default function FormScreen({ navigation }) {
                 text: "OK",
                 onPress: () => {
                   resetForm()
-               
                   if (navigation) {
                     navigation.navigate("Home")
                   }
@@ -927,7 +843,6 @@ export default function FormScreen({ navigation }) {
             Alert.alert("Atenção", "Este apontamento já foi enviado anteriormente.")
           }
         } else {
-        
           const existingData = await AsyncStorage.getItem(OFFLINE_STORAGE_KEY)
           const offlineData = existingData ? JSON.parse(existingData) : []
           const isDuplicate = offlineData.some((item) => item.localId === localId)
@@ -939,7 +854,6 @@ export default function FormScreen({ navigation }) {
                 text: "OK",
                 onPress: () => {
                   resetForm()
-              
                   if (navigation) {
                     navigation.navigate("Home")
                   }
@@ -955,24 +869,22 @@ export default function FormScreen({ navigation }) {
         Alert.alert("Erro", "Ocorreu um erro ao enviar os dados. Os dados foram salvos localmente.")
 
         try {
-        
           const localId = Date.now().toString()
           const existingData = await AsyncStorage.getItem(OFFLINE_STORAGE_KEY)
           const offlineData = existingData ? JSON.parse(existingData) : []
           const isDuplicate = offlineData.some((item) => item.localId === localId)
 
           if (!isDuplicate) {
-           
-            const direcionadoresSelecionados = selectedDirecionadores.map((d) => ({
-              id: d.id,
-              name: d.name,
-              culturaAssociada: d.culturaAssociada,
-            }))
+            const direcionadoresSelecionados = Array.isArray(selectedDirecionadores) 
+              ? selectedDirecionadores.map((d) => ({
+                  id: d.id,
+                  name: d.name,
+                  culturaAssociada: d.culturaAssociada,
+                }))
+              : []
 
-         
             const primaryDirecionador = direcionadoresSelecionados.length > 0 ? direcionadoresSelecionados[0] : null
 
-         
             let timestamp = Date.now()
             if (formData.data) {
               const [day, month, year] = formData.data.split("/")
@@ -980,29 +892,28 @@ export default function FormScreen({ navigation }) {
               timestamp = dateObj.getTime()
             }
 
-        
-            const selectedAtividade = atividades.find((a) => a.id === formData.atividade)
+            const selectedAtividade = Array.isArray(atividades) 
+              ? atividades.find((a) => a.id === formData.atividade)
+              : null
 
             const apontamentoData = {
               ...formData,
-          
               atividade: selectedAtividade?.name || formData.atividade,
-          
               direcionador: primaryDirecionador?.name || formData.direcionador,
-             
               direcionadores: direcionadoresSelecionados,
-     
               cultura:
                 primaryDirecionador?.culturaAssociada ||
-                CULTURA.find((c) => c.id === formData.cultura)?.name ||
+                (Array.isArray(CULTURA) ? CULTURA.find((c) => c.id === formData.cultura)?.name : null) ||
                 formData.cultura,
               timestamp: timestamp,
-              operacoesMecanizadas: selectedOperacoesMecanizadas.map((op) => ({
-                ...op,
-        
-                bem: maquinarios.find((b) => b.id === op.bem)?.name || op.bem,
-           
-              })),
+              operacoesMecanizadas: Array.isArray(selectedOperacoesMecanizadas) 
+                ? selectedOperacoesMecanizadas.map((op) => ({
+                    ...op,
+                    bem: Array.isArray(maquinarios) 
+                      ? maquinarios.find((b) => b.id === op.bem)?.name || op.bem
+                      : op.bem,
+                  }))
+                : [],
               userId: userId,
               propriedade: userPropriedade,
               localId: localId,
@@ -1032,7 +943,6 @@ export default function FormScreen({ navigation }) {
     atividades, 
   ])
 
-
   const renderListItem = useCallback(
     ({ item }) => (
       <TouchableOpacity
@@ -1044,7 +954,6 @@ export default function FormScreen({ navigation }) {
             handleOperacaoMecanizadaChange(listModalType, item.id)
           } else if (listModalType === "bem") {
             handleOperacaoMecanizadaChange(listModalType, item.id)
-        
             setSelectedImplementos([])
             setOperacaoMecanizadaData((prev) => ({
               ...prev,
@@ -1052,7 +961,11 @@ export default function FormScreen({ navigation }) {
               implementos: [],
             }))
           } else if (listModalType === "implemento") {
-         
+            // Verificar se selectedImplementos é um array
+            if (!Array.isArray(selectedImplementos)) {
+              console.warn("selectedImplementos não é um array")
+              return
+            }
             const isAlreadySelected = selectedImplementos.some((i) => i.id === item.id)
             if (!isAlreadySelected) {
               handleOperacaoMecanizadaChange(listModalType, item.id)
@@ -1060,7 +973,11 @@ export default function FormScreen({ navigation }) {
               Alert.alert("Atenção", "Este implemento já foi selecionado.")
             }
           } else if (listModalType === "direcionador") {
-       
+            // Verificar se selectedDirecionadores é um array
+            if (!Array.isArray(selectedDirecionadores)) {
+              console.warn("selectedDirecionadores não é um array")
+              return
+            }
             const isAlreadySelected = selectedDirecionadores.some((d) => d.id === item.id)
             if (!isAlreadySelected) {
               handleChange(listModalType, item.id)
@@ -1141,12 +1058,12 @@ export default function FormScreen({ navigation }) {
   const renderSelectedItems = useCallback(
     (items, removeFunction, type) => (
       <View>
-        {items.map((item) => (
+        {Array.isArray(items) && items.map((item) => (
           <View key={item.id} style={styles.selectedItem}>
             <Text>
               {type === "produto"
-                ? `${PRODUTOS.find((p) => p.id === item.produto)?.name} - ${TANQUEDIESEL.find((t) => t.id === item.tanqueDiesel)?.name || ""}`
-                : PRODUTOS.find((p) => p.id === item.produto)?.name}
+                ? `${Array.isArray(PRODUTOS) ? PRODUTOS.find((p) => p.id === item.produto)?.name : ""} - ${Array.isArray(TANQUEDIESEL) ? TANQUEDIESEL.find((t) => t.id === item.tanqueDiesel)?.name || "" : ""}`
+                : Array.isArray(PRODUTOS) ? PRODUTOS.find((p) => p.id === item.produto)?.name : ""}
             </Text>
             <TouchableOpacity onPress={() => removeFunction(item.id)}>
               <Trash2 size={20} color="#FF0000" />
@@ -1164,18 +1081,16 @@ export default function FormScreen({ navigation }) {
     (type) => {
       setListModalType(type)
 
-
       if (type === "direcionador") {
-        setListModalData(direcionadores)
+        setListModalData(Array.isArray(direcionadores) ? direcionadores : [])
       } else if (type === "bem") {
-        setListModalData(maquinarios)
+        setListModalData(Array.isArray(maquinarios) ? maquinarios : [])
       } else if (type === "implemento") {
-        setListModalData(implementos)
+        setListModalData(Array.isArray(implementos) ? implementos : [])
       } else if (type === "atividade") {
-    
-        setListModalData(atividades)
+        setListModalData(Array.isArray(atividades) ? atividades : [])
       } else {
-        setListModalData(type === "produto" ? PRODUTOS : TANQUEDIESEL)
+        setListModalData(type === "produto" ? (Array.isArray(PRODUTOS) ? PRODUTOS : []) : (Array.isArray(TANQUEDIESEL) ? TANQUEDIESEL : []))
       }
 
       setSearchQuery("")
@@ -1185,10 +1100,9 @@ export default function FormScreen({ navigation }) {
   )
 
   const filteredListData = useMemo(() => {
-    if (!searchQuery) return listModalData
-    return listModalData.filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    if (!searchQuery || !Array.isArray(listModalData)) return listModalData
+    return listModalData.filter((item) => item.name && item.name.toLowerCase().includes(searchQuery.toLowerCase()))
   }, [listModalData, searchQuery])
-
 
   const renderListModal = useCallback(() => {
     return (
@@ -1225,7 +1139,7 @@ export default function FormScreen({ navigation }) {
             />
             <FlatList
               style={styles.flatList}
-              data={filteredListData}
+              data={Array.isArray(filteredListData) ? filteredListData : []}
               renderItem={renderListItem}
               keyExtractor={(item, index) => `${listModalType}-${item.id}-${index}`}
               ItemSeparatorComponent={Separator}
@@ -1280,15 +1194,14 @@ export default function FormScreen({ navigation }) {
           accessibilityLabel="Selecionar Direcionador"
         >
           <Text>
-            {selectedDirecionadores.length > 0
+            {Array.isArray(selectedDirecionadores) && selectedDirecionadores.length > 0
               ? `${selectedDirecionadores.length} direcionador(es) selecionado(s)`
               : "Selecione um ou mais direcionadores"}
           </Text>
           <ChevronDown size={20} color="#2a9d8f" />
         </TouchableOpacity>
 
-        {/* Lista de direcionadores selecionados */}
-        {selectedDirecionadores.length > 0 && (
+        {Array.isArray(selectedDirecionadores) && selectedDirecionadores.length > 0 && (
           <View style={styles.selectedDirecionadoresContainer}>
             {selectedDirecionadores.map((direcionador) => (
               <View key={direcionador.id} style={styles.selectedItem}>
@@ -1307,11 +1220,10 @@ export default function FormScreen({ navigation }) {
         )}
 
         <Separator />
-        {/* Modificar a exibição da cultura para mostrar todas as culturas dos direcionadores selecionados */}
         <Text style={styles.label}>Cultura</Text>
         <View style={[styles.input, styles.disabledInput]}>
           <Text>
-            {selectedDirecionadores.length > 0
+            {Array.isArray(selectedDirecionadores) && selectedDirecionadores.length > 0
               ? (() => {
                   const culturas = selectedDirecionadores
                     .map((d) => d.culturaAssociada)
@@ -1331,7 +1243,11 @@ export default function FormScreen({ navigation }) {
           onPress={() => openListModal("atividade")}
           accessibilityLabel="Selecionar Atividade"
         >
-          <Text>{atividades.find((a) => a.id === formData.atividade)?.name || "Selecione a Atividade"}</Text>
+          <Text>
+            {Array.isArray(atividades) 
+              ? atividades.find((a) => a.id === formData.atividade)?.name || "Selecione a Atividade"
+              : "Selecione a Atividade"}
+          </Text>
           <ChevronDown size={20} color="#2a9d8f" />
         </TouchableOpacity>
         <Separator />
@@ -1375,7 +1291,11 @@ export default function FormScreen({ navigation }) {
             onPress={() => openListModal("bem")}
             accessibilityLabel="Selecionar Bem"
           >
-            <Text>{maquinarios.find((b) => b.id === operacaoMecanizadaData.bem)?.name || "Selecione o Bem"}</Text>
+            <Text>
+              {Array.isArray(maquinarios) 
+                ? maquinarios.find((b) => b.id === operacaoMecanizadaData.bem)?.name || "Selecione o Bem"
+                : "Selecione o Bem"}
+            </Text>
             <ChevronDown size={20} color="#2a9d8f" />
           </TouchableOpacity>
 
@@ -1395,15 +1315,14 @@ export default function FormScreen({ navigation }) {
             accessibilityLabel="Selecionar Implemento"
           >
             <Text>
-              {selectedImplementos.length > 0
+              {Array.isArray(selectedImplementos) && selectedImplementos.length > 0
                 ? `${selectedImplementos.length} implemento(s) selecionado(s)`
                 : "Selecione um ou mais implementos"}
             </Text>
             <ChevronDown size={20} color="#2a9d8f" />
           </TouchableOpacity>
 
-          {/* Lista de implementos selecionados */}
-          {selectedImplementos.length > 0 && (
+          {Array.isArray(selectedImplementos) && selectedImplementos.length > 0 && (
             <View style={styles.selectedImplementosContainer}>
               {selectedImplementos.map((implemento) => (
                 <View key={implemento.id} style={styles.selectedItem}>
@@ -1437,19 +1356,24 @@ export default function FormScreen({ navigation }) {
             </View>
           )}
 
-          {selectedOperacoesMecanizadas.length > 0 && (
+          {Array.isArray(selectedOperacoesMecanizadas) && selectedOperacoesMecanizadas.length > 0 && (
             <View style={styles.selectedItemsContainer}>
               <Text style={[styles.label, { marginTop: 16 }]}>Operações Adicionadas:</Text>
               {selectedOperacoesMecanizadas.map((item) => (
                 <View key={item.id} style={styles.selectedItem}>
                   <View>
-                    <Text style={styles.selectedItemTitle}>{maquinarios.find((b) => b.id === item.bem)?.name}</Text>
-                    {/* Mostrar todos os implementos da operação */}
+                    <Text style={styles.selectedItemTitle}>
+                      {Array.isArray(maquinarios) 
+                        ? maquinarios.find((b) => b.id === item.bem)?.name || item.bem
+                        : item.bem}
+                    </Text>
                     <Text style={styles.selectedItemSubtitle}>
                       Implementos:{" "}
-                      {item.implementos
+                      {item.implementos && Array.isArray(item.implementos)
                         ? item.implementos.map((imp) => imp.name).join(", ")
-                        : implementos.find((i) => i.id === item.implemento)?.name || ""}
+                        : Array.isArray(implementos) 
+                          ? implementos.find((i) => i.id === item.implemento)?.name || ""
+                          : ""}
                     </Text>
                     <Text>
                       Horas: {item.horaInicial} → {item.horaFinal} = {item.totalHoras}
@@ -1467,6 +1391,7 @@ export default function FormScreen({ navigation }) {
             style={[
               styles.button,
               (!operacaoMecanizadaData.bem ||
+                !Array.isArray(selectedImplementos) ||
                 selectedImplementos.length === 0 ||
                 !operacaoMecanizadaData.horaFinal ||
                 Number.parseFloat(operacaoMecanizadaData.horaFinal) <=
@@ -1474,7 +1399,7 @@ export default function FormScreen({ navigation }) {
                 styles.disabledButton,
             ]}
             onPress={() => {
-              if (operacaoMecanizadaData.bem && selectedImplementos.length > 0 && operacaoMecanizadaData.horaFinal) {
+              if (operacaoMecanizadaData.bem && Array.isArray(selectedImplementos) && selectedImplementos.length > 0 && operacaoMecanizadaData.horaFinal) {
                 const horaAnterior = Number.parseFloat(previousHorimetros[operacaoMecanizadaData.bem] || "0.00")
                 const horaAtual = Number.parseFloat(operacaoMecanizadaData.horaFinal)
 
@@ -1488,12 +1413,13 @@ export default function FormScreen({ navigation }) {
                   addSelectedOperacaoMecanizada(operacaoMecanizadaData)
                   setOperacaoMecanizadaModalVisible(false)
                 }
-              } else if (selectedImplementos.length === 0) {
+              } else if (!Array.isArray(selectedImplementos) || selectedImplementos.length === 0) {
                 Alert.alert("Atenção", "Selecione pelo menos um implemento.")
               }
             }}
             disabled={
               !operacaoMecanizadaData.bem ||
+              !Array.isArray(selectedImplementos) ||
               selectedImplementos.length === 0 ||
               !operacaoMecanizadaData.horaFinal ||
               Number.parseFloat(operacaoMecanizadaData.horaFinal) <=
@@ -1509,7 +1435,6 @@ export default function FormScreen({ navigation }) {
     </SafeAreaView>
   )
 }
-
 
 const styles = StyleSheet.create({
   container: {
