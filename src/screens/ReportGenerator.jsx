@@ -437,7 +437,7 @@ class PDFManager {
         text-align: right;
       }
       .logo {
-        max-width: 100px;
+        max-width: 200px;
         height: auto;
       }
       .report-title {

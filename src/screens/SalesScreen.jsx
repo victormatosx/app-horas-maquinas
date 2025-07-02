@@ -168,7 +168,7 @@ class PDFManager {
             text-align: right;
           }
           .logo {
-            max-width: 100px; /* Ajuste conforme necessário */
+            max-width: 200px;
             height: auto;
           }
           .report-title {
@@ -360,6 +360,108 @@ const SuccessModal = ({ visible, onClose, onGenerateAndSharePDF, isGeneratingPDF
   )
 }
 
+// Componente para Modal de Variedade Não Cadastrada
+const VariedadeModal = ({ visible, talhao, onCadastrar, onContinuar, onClose }) => {
+  const [novaVariedade, setNovaVariedade] = useState("")
+  const [loading, setLoading] = useState(false)
+
+  const handleCadastrar = async () => {
+    if (!novaVariedade.trim()) {
+      Alert.alert("Erro", "Por favor, digite o nome da variedade")
+      return
+    }
+
+    setLoading(true)
+    try {
+      await onCadastrar(novaVariedade.trim())
+      setNovaVariedade("")
+    } catch (error) {
+      Alert.alert("Erro", "Não foi possível cadastrar a variedade")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleClose = () => {
+    setNovaVariedade("")
+    onClose()
+  }
+
+  return (
+    <Modal visible={visible} transparent={true} animationType="fade">
+      <View style={styles.varietyModalOverlay}>
+        <View style={styles.varietyModalContainer}>
+          <View style={styles.varietyModalContent}>
+            {/* Ícone de Aviso */}
+            <View style={styles.varietyIconContainer}>
+              <MaterialIcons name="warning" size={50} color={COLORS.warning} />
+            </View>
+
+            {/* Título */}
+            <Text style={styles.varietyTitle}>Variedade Não Cadastrada</Text>
+
+            {/* Mensagem */}
+            <Text style={styles.varietyMessage}>
+              O talhão "{talhao}" não possui variedade cadastrada. O que deseja fazer?
+            </Text>
+
+            {/* Campo para nova variedade */}
+            <View style={styles.varietyInputContainer}>
+              <Text style={styles.varietyInputLabel}>Nome da Variedade:</Text>
+              <TextInput
+                style={styles.varietyInput}
+                placeholder="Digite o nome da variedade"
+                placeholderTextColor={COLORS.gray400}
+                value={novaVariedade}
+                onChangeText={setNovaVariedade}
+                editable={!loading}
+              />
+            </View>
+
+            {/* Botões de Ação */}
+            <View style={styles.varietyActions}>
+              {/* Botão Cadastrar Variedade */}
+              <TouchableOpacity
+                style={[styles.varietyButton, styles.varietyCadastrarButton]}
+                onPress={handleCadastrar}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color={COLORS.white} />
+                ) : (
+                  <>
+                    <MaterialIcons name="add" size={20} color={COLORS.white} />
+                    <Text style={styles.varietyButtonText}>Cadastrar Variedade</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {/* Botão Continuar Sem Variedade */}
+              <TouchableOpacity
+                style={[styles.varietyButton, styles.varietyContinuarButton]}
+                onPress={onContinuar}
+                disabled={loading}
+              >
+                <MaterialIcons name="skip-next" size={20} color={COLORS.white} />
+                <Text style={styles.varietyButtonText}>Continuar Sem Variedade</Text>
+              </TouchableOpacity>
+
+              {/* Botão Cancelar */}
+              <TouchableOpacity
+                style={[styles.varietyButton, styles.varietyCancelarButton]}
+                onPress={handleClose}
+                disabled={loading}
+              >
+                <Text style={[styles.varietyButtonText, { color: COLORS.gray600 }]}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
 export default function SalesScreen() {
   const navigation = useNavigation()
   const route = useRoute()
@@ -377,6 +479,11 @@ export default function SalesScreen() {
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
   const [lastSaleData, setLastSaleData] = useState(null)
+
+  // Estados para o modal de variedade não cadastrada
+  const [showVariedadeModal, setShowVariedadeModal] = useState(false)
+  const [talhaoSemVariedade, setTalhaoSemVariedade] = useState(null)
+  const [itemIdPendente, setItemIdPendente] = useState(null)
 
   // Estado para armazenar os direcionadores do Firebase
   const [direcionadores, setDirecionadores] = useState([])
@@ -429,6 +536,62 @@ export default function SalesScreen() {
   const [listModalData, setListModalData] = useState([])
   const [searchQuery, setSearchQuery] = useState("")
   const [currentItemId, setCurrentItemId] = useState(null)
+
+  // Função para verificar se um talhão tem variedade cadastrada
+  const verificarVariedadeTalhao = (talhaoNome) => {
+    const direcionador = direcionadores.find(d => d.direcionador === talhaoNome)
+    return direcionador && direcionador.variedade && direcionador.variedade.trim() !== ""
+  }
+
+  // Função para cadastrar nova variedade para um talhão
+  const cadastrarVariedadeTalhao = async (talhaoNome, novaVariedade) => {
+    try {
+      // Encontrar o direcionador correspondente ao talhão
+      const direcionador = direcionadores.find(d => d.direcionador === talhaoNome)
+      
+      if (!direcionador) {
+        throw new Error("Talhão não encontrado")
+      }
+
+      // Atualizar no Firebase
+      const direcionadorRef = ref(database, `propriedades/${propriedadeNome}/direcionadores/${direcionador.id}`)
+      await update(direcionadorRef, {
+        variedade: novaVariedade
+      })
+
+      // Atualizar o estado local
+      setDirecionadores(prev => prev.map(d => 
+        d.id === direcionador.id 
+          ? { ...d, variedade: novaVariedade }
+          : d
+      ))
+
+      // Atualizar o item que estava pendente
+      if (itemIdPendente) {
+        updateItem(itemIdPendente, "variedade", novaVariedade)
+      }
+
+      Alert.alert("Sucesso", "Variedade cadastrada com sucesso!")
+      setShowVariedadeModal(false)
+      setTalhaoSemVariedade(null)
+      setItemIdPendente(null)
+
+    } catch (error) {
+      console.error("Erro ao cadastrar variedade:", error)
+      throw error
+    }
+  }
+
+  // Função para continuar sem variedade
+  const continuarSemVariedade = () => {
+    if (itemIdPendente) {
+      updateItem(itemIdPendente, "variedade", "Variedade não registrada")
+    }
+    
+    setShowVariedadeModal(false)
+    setTalhaoSemVariedade(null)
+    setItemIdPendente(null)
+  }
 
   // Verificar se está em modo de edição
   useEffect(() => {
@@ -711,12 +874,20 @@ export default function SalesScreen() {
             updatedItem[idField] = idValue
           }
 
-          // Se o campo atualizado for 'talhao', encontrar o direcionador correspondente e preencher a variedade
+          // Se o campo atualizado for 'talhao', verificar se tem variedade cadastrada
           if (field === "talhao") {
             const selectedDirecionador = direcionadores.find((d) => d.direcionador === value)
             if (selectedDirecionador) {
-              updatedItem.variedade = selectedDirecionador.variedade
-              // Não há variedadeId no Firebase, então não atualizamos
+              // Verificar se o talhão tem variedade cadastrada
+              if (selectedDirecionador.variedade && selectedDirecionador.variedade.trim() !== "") {
+                updatedItem.variedade = selectedDirecionador.variedade
+              } else {
+                // Talhão sem variedade - mostrar modal
+                setTalhaoSemVariedade(value)
+                setItemIdPendente(id)
+                setShowVariedadeModal(true)
+                updatedItem.variedade = "" // Limpa temporariamente
+              }
             } else {
               updatedItem.variedade = "" // Limpa a variedade se o talhão não for encontrado
             }
@@ -812,9 +983,9 @@ export default function SalesScreen() {
             updateItem(currentItemId, "variedade", selectedItem.name, "variedadeId", selectedItem.id)
             break
           case "talhao":
-            // Ao selecionar um talhão, atualiza o talhão e a variedade do item
+            // Ao selecionar um talhão, atualiza o talhão e verifica a variedade
             updateItem(currentItemId, "talhao", selectedItem.name, "talhaoId", selectedItem.id)
-            // A variedade será preenchida automaticamente dentro de updateItem
+            // A verificação de variedade será feita dentro de updateItem
             break
           case "classificacao":
             updateItem(currentItemId, "classificacao", selectedItem.name, "classificacaoId", selectedItem.id)
@@ -1369,9 +1540,13 @@ export default function SalesScreen() {
 
                     <View style={styles.inputColumn}>
                       <Text style={styles.itemLabel}>Variedade</Text>
-                      {/* Campo Variedade agora é preenchido automaticamente */}
+                      {/* Campo Variedade agora é preenchido automaticamente ou mostra "Variedade não registrada" */}
                       <View style={styles.itemSelectionInput}>
-                        <Text style={[styles.itemSelectionText, !item.variedade && styles.placeholderText]}>
+                        <Text style={[
+                          styles.itemSelectionText, 
+                          !item.variedade && styles.placeholderText,
+                          item.variedade === "Variedade não registrada" && { color: COLORS.warning }
+                        ]}>
                           {item.variedade || "Preenchido automaticamente"}
                         </Text>
                         {/* Remove o ícone de seleção manual */}
@@ -1484,6 +1659,19 @@ export default function SalesScreen() {
         onGenerateAndSharePDF={handleGenerateAndSharePDF} // Chama a função unificada
         isGeneratingPDF={isGeneratingPDF}
         isEditMode={isEditMode}
+      />
+
+      {/* Modal de Variedade Não Cadastrada */}
+      <VariedadeModal
+        visible={showVariedadeModal}
+        talhao={talhaoSemVariedade}
+        onCadastrar={cadastrarVariedadeTalhao}
+        onContinuar={continuarSemVariedade}
+        onClose={() => {
+          setShowVariedadeModal(false)
+          setTalhaoSemVariedade(null)
+          setItemIdPendente(null)
+        }}
       />
     </SafeAreaView>
   )
@@ -2028,6 +2216,93 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
   },
   successButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.white,
+    marginLeft: 8,
+  },
+
+  // Variety Modal Styles
+  varietyModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  varietyModalContainer: {
+    width: "90%",
+    maxWidth: 400,
+  },
+  varietyModalContent: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: "center",
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+  },
+  varietyIconContainer: {
+    marginBottom: 16,
+  },
+  varietyTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: COLORS.gray800,
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  varietyMessage: {
+    fontSize: 14,
+    color: COLORS.gray600,
+    textAlign: "center",
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  varietyInputContainer: {
+    width: "100%",
+    marginBottom: 20,
+  },
+  varietyInputLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: COLORS.gray700,
+    marginBottom: 8,
+  },
+  varietyInput: {
+    borderWidth: 1,
+    borderColor: COLORS.gray300,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: COLORS.white,
+    color: COLORS.gray800,
+  },
+  varietyActions: {
+    width: "100%",
+  },
+  varietyButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 14,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  varietyCadastrarButton: {
+    backgroundColor: COLORS.success,
+  },
+  varietyContinuarButton: {
+    backgroundColor: COLORS.warning,
+  },
+  varietyCancelarButton: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: COLORS.gray400,
+  },
+  varietyButtonText: {
     fontSize: 14,
     fontWeight: "600",
     color: COLORS.white,
