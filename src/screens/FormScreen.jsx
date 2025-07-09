@@ -17,7 +17,7 @@ import {
 import DateTimePickerModal from "react-native-modal-datetime-picker"
 import { database } from "../config/firebaseConfig"
 import { ref, push, set, onValue, query, orderByChild, equalTo, get, update } from "firebase/database"
-import { X, Trash2, ChevronDown } from "lucide-react-native"
+import { X, Trash2, ChevronDown, Check } from "lucide-react-native"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import NetInfo from "@react-native-community/netinfo"
 import { saveOfflineData, checkConnectivityAndSync } from "../utils/offlineManager"
@@ -81,12 +81,25 @@ export default function FormScreen({ navigation }) {
   const [selectedDirecionadores, setSelectedDirecionadores] = useState([])
   const [selectedImplementos, setSelectedImplementos] = useState([])
 
+  // NEW: Estado para seleção múltipla temporária no modal
+  const [tempSelectedDirecionadores, setTempSelectedDirecionadores] = useState([])
+  const [tempSelectedImplementos, setTempSelectedImplementos] = useState([])
+
   const isMounted = useRef(true)
 
+  // UPDATED: Enhanced form validation to include all required fields except "observacao"
   const isFormValid = useCallback(() => {
     const requiredFields = ["fichaControle", "data", "atividade"]
-    return requiredFields.every((field) => formData[field] && formData[field].trim() !== "")
-  }, [formData])
+    const basicFieldsValid = requiredFields.every((field) => formData[field] && formData[field].trim() !== "")
+    
+    // Check if at least one direcionador is selected
+    const direcionadorValid = Array.isArray(selectedDirecionadores) && selectedDirecionadores.length > 0
+    
+    // Check if at least one mechanized operation is added
+    const operacoesMecanizadasValid = Array.isArray(selectedOperacoesMecanizadas) && selectedOperacoesMecanizadas.length > 0
+    
+    return basicFieldsValid && direcionadorValid && operacoesMecanizadasValid
+  }, [formData, selectedDirecionadores, selectedOperacoesMecanizadas])
 
   const resetForm = useCallback(() => {
     const novoNumero = fichaControleNumero + 1
@@ -526,42 +539,12 @@ export default function FormScreen({ navigation }) {
     setDatePickerVisible(false)
   }, [])
 
-  // CORREÇÃO PRINCIPAL: Adicionar verificações de segurança para arrays
+  // UPDATED: Modified to handle single selections for non-direcionador fields
   const handleChange = useCallback(
     (name, value) => {
       if (name === "direcionador") {
-        // Verificar se direcionadores existe e é um array antes de usar find
-        if (!Array.isArray(direcionadores) || direcionadores.length === 0) {
-          console.warn("Direcionadores não carregados ainda")
-          return
-        }
-
-        const selectedDirecionador = direcionadores.find((d) => d.id === value)
-
-        // Verificar se selectedDirecionadores existe e é um array
-        if (!Array.isArray(selectedDirecionadores)) {
-          console.warn("selectedDirecionadores não é um array")
-          return
-        }
-
-        const isDirecionadorAlreadySelected = selectedDirecionadores.some((d) => d.id === value)
-
-        if (!isDirecionadorAlreadySelected && selectedDirecionador) {
-          setSelectedDirecionadores((prev) => [...prev, selectedDirecionador])
-
-          return setFormData((prev) => ({
-            ...prev,
-            direcionador: value, 
-            direcionadores: [...prev.direcionadores, value],
-            cultura:
-              prev.direcionadores.length === 0 && selectedDirecionador.culturaAssociada
-                ? CULTURA?.find((c) => c.name.toLowerCase() === selectedDirecionador.culturaAssociada.toLowerCase())
-                    ?.id || prev.cultura
-                : prev.cultura,
-          }))
-        }
-
-        return 
+        // This is now handled by the multiple selection modal
+        return
       }
 
       if (name === "fichaControle" && !isNaN(Number.parseInt(value, 10))) {
@@ -570,7 +553,7 @@ export default function FormScreen({ navigation }) {
 
       return setFormData((prev) => ({ ...prev, [name]: value }))
     },
-    [direcionadores, selectedDirecionadores],
+    [],
   )
 
   const handleOperacaoMecanizadaChange = useCallback(
@@ -772,7 +755,129 @@ export default function FormScreen({ navigation }) {
     setSelectedDirecionadores((prev) => prev.filter((d) => d.id !== direcionadorId))
   }, [])
 
+  // NEW: Functions for multiple selection handling
+  const toggleTempDirecionadorSelection = useCallback((direcionador) => {
+    setTempSelectedDirecionadores((prev) => {
+      const isSelected = prev.some((d) => d.id === direcionador.id)
+      if (isSelected) {
+        return prev.filter((d) => d.id !== direcionador.id)
+      } else {
+        return [...prev, direcionador]
+      }
+    })
+  }, [])
+
+  const toggleTempImplementoSelection = useCallback((implemento) => {
+    setTempSelectedImplementos((prev) => {
+      const isSelected = prev.some((i) => i.id === implemento.id)
+      if (isSelected) {
+        return prev.filter((i) => i.id !== implemento.id)
+      } else {
+        return [...prev, implemento]
+      }
+    })
+  }, [])
+
+  const confirmDirecionadorSelection = useCallback(() => {
+    if (tempSelectedDirecionadores.length === 0) {
+      Alert.alert("Atenção", "Selecione pelo menos um direcionador.")
+      return
+    }
+
+    // Filter out already selected direcionadores to avoid duplicates
+    const newDirecionadores = tempSelectedDirecionadores.filter(
+      (tempDir) => !selectedDirecionadores.some((selectedDir) => selectedDir.id === tempDir.id)
+    )
+
+    if (newDirecionadores.length === 0) {
+      Alert.alert("Atenção", "Todos os direcionadores selecionados já foram adicionados.")
+      setTempSelectedDirecionadores([])
+      setListModalVisible(false)
+      return
+    }
+
+    // Add new direcionadores to the selected list
+    setSelectedDirecionadores((prev) => [...prev, ...newDirecionadores])
+
+    // Update form data
+    setFormData((prev) => ({
+      ...prev,
+      direcionadores: [...prev.direcionadores, ...newDirecionadores.map(d => d.id)],
+      cultura: prev.direcionadores.length === 0 && newDirecionadores[0]?.culturaAssociada
+        ? CULTURA?.find((c) => c.name.toLowerCase() === newDirecionadores[0].culturaAssociada.toLowerCase())?.id || prev.cultura
+        : prev.cultura,
+    }))
+
+    // Clear temporary selection and close modal
+    setTempSelectedDirecionadores([])
+    setListModalVisible(false)
+  }, [tempSelectedDirecionadores, selectedDirecionadores])
+
+  const confirmImplementoSelection = useCallback(() => {
+    if (tempSelectedImplementos.length === 0) {
+      Alert.alert("Atenção", "Selecione pelo menos um implemento.")
+      return
+    }
+
+    // Filter out already selected implementos to avoid duplicates
+    const newImplementos = tempSelectedImplementos.filter(
+      (tempImpl) => !selectedImplementos.some((selectedImpl) => selectedImpl.id === tempImpl.id)
+    )
+
+    if (newImplementos.length === 0) {
+      Alert.alert("Atenção", "Todos os implementos selecionados já foram adicionados.")
+      setTempSelectedImplementos([])
+      setListModalVisible(false)
+      return
+    }
+
+    // Add new implementos to the selected list
+    setSelectedImplementos((prev) => [...prev, ...newImplementos])
+
+    // Update operacao mecanizada data
+    setOperacaoMecanizadaData((prev) => ({
+      ...prev,
+      implementos: [...prev.implementos, ...newImplementos.map(i => i.id)],
+    }))
+
+    // Clear temporary selection and close modal
+    setTempSelectedImplementos([])
+    setListModalVisible(false)
+  }, [tempSelectedImplementos, selectedImplementos])
+
+  // UPDATED: Enhanced form submission validation with detailed error messages
   const handleSubmit = useCallback(async () => {
+    // Check all required fields and provide specific error messages
+    const missingFields = []
+    
+    if (!formData.fichaControle || formData.fichaControle.trim() === "") {
+      missingFields.push("Ficha de Controle")
+    }
+    
+    if (!formData.data || formData.data.trim() === "") {
+      missingFields.push("Data")
+    }
+    
+    if (!Array.isArray(selectedDirecionadores) || selectedDirecionadores.length === 0) {
+      missingFields.push("Direcionadores")
+    }
+    
+    if (!formData.atividade || formData.atividade.trim() === "") {
+      missingFields.push("Atividade")
+    }
+    
+    if (!Array.isArray(selectedOperacoesMecanizadas) || selectedOperacoesMecanizadas.length === 0) {
+      missingFields.push("Operações Mecanizadas")
+    }
+    
+    if (missingFields.length > 0) {
+      Alert.alert(
+        "Campos Obrigatórios", 
+        `Os seguintes campos são obrigatórios e devem ser preenchidos:\n\n• ${missingFields.join('\n• ')}`
+      )
+      return
+    }
+
     if (isFormValid()) {
       try {
         const localId = Date.now().toString()
@@ -925,8 +1030,6 @@ export default function FormScreen({ navigation }) {
           console.error("Error saving offline data after submission error:", saveError)
         }
       }
-    } else {
-      Alert.alert("Atenção", "Preencha todos os campos obrigatórios!")
     }
   }, [
     formData,
@@ -943,55 +1046,107 @@ export default function FormScreen({ navigation }) {
     atividades, 
   ])
 
+  // UPDATED: Enhanced renderListItem to handle multiple selection
   const renderListItem = useCallback(
-    ({ item }) => (
-      <TouchableOpacity
-        style={styles.listItem}
-        onPress={() => {
-          if (listModalType === "atividade") {
-            handleChange(listModalType, item.id)
-          } else if (listModalType === "produto" || listModalType === "tanqueDiesel") {
-            handleOperacaoMecanizadaChange(listModalType, item.id)
-          } else if (listModalType === "bem") {
-            handleOperacaoMecanizadaChange(listModalType, item.id)
-            setSelectedImplementos([])
-            setOperacaoMecanizadaData((prev) => ({
-              ...prev,
-              implemento: "",
-              implementos: [],
-            }))
-          } else if (listModalType === "implemento") {
-            // Verificar se selectedImplementos é um array
-            if (!Array.isArray(selectedImplementos)) {
-              console.warn("selectedImplementos não é um array")
-              return
-            }
-            const isAlreadySelected = selectedImplementos.some((i) => i.id === item.id)
-            if (!isAlreadySelected) {
-              handleOperacaoMecanizadaChange(listModalType, item.id)
-            } else {
-              Alert.alert("Atenção", "Este implemento já foi selecionado.")
-            }
-          } else if (listModalType === "direcionador") {
-            // Verificar se selectedDirecionadores é um array
-            if (!Array.isArray(selectedDirecionadores)) {
-              console.warn("selectedDirecionadores não é um array")
-              return
-            }
-            const isAlreadySelected = selectedDirecionadores.some((d) => d.id === item.id)
-            if (!isAlreadySelected) {
+    ({ item }) => {
+      const isMultipleSelection = listModalType === "direcionador" || listModalType === "implemento"
+      
+      if (isMultipleSelection) {
+        const isSelected = listModalType === "direcionador" 
+          ? tempSelectedDirecionadores.some((d) => d.id === item.id)
+          : tempSelectedImplementos.some((i) => i.id === item.id)
+        
+        const isAlreadyAdded = listModalType === "direcionador"
+          ? selectedDirecionadores.some((d) => d.id === item.id)
+          : selectedImplementos.some((i) => i.id === item.id)
+
+        return (
+          <TouchableOpacity
+            style={[
+              styles.listItem,
+              isSelected && styles.selectedListItem,
+              isAlreadyAdded && styles.alreadyAddedListItem
+            ]}
+            onPress={() => {
+              if (isAlreadyAdded) {
+                Alert.alert("Atenção", `Este ${listModalType === "direcionador" ? "direcionador" : "implemento"} já foi adicionado.`)
+                return
+              }
+              
+              if (listModalType === "direcionador") {
+                toggleTempDirecionadorSelection(item)
+              } else {
+                toggleTempImplementoSelection(item)
+              }
+            }}
+            disabled={isAlreadyAdded}
+          >
+            <View style={styles.listItemContent}>
+              <View style={styles.listItemText}>
+                <Text style={[
+                  styles.listItemName,
+                  isAlreadyAdded && styles.alreadyAddedText
+                ]}>
+                  {item.name}
+                </Text>
+                {item.culturaAssociada && (
+                  <Text style={styles.listItemSubtitle}>Cultura: {item.culturaAssociada}</Text>
+                )}
+                {isAlreadyAdded && (
+                  <Text style={styles.alreadyAddedLabel}>Já adicionado</Text>
+                )}
+              </View>
+              <View style={styles.checkboxContainer}>
+                {isSelected && !isAlreadyAdded && (
+                  <View style={styles.checkbox}>
+                    <Check size={16} color="#FFFFFF" />
+                  </View>
+                )}
+                {!isSelected && !isAlreadyAdded && (
+                  <View style={styles.checkboxEmpty} />
+                )}
+              </View>
+            </View>
+          </TouchableOpacity>
+        )
+      }
+
+      // Single selection for other types
+      return (
+        <TouchableOpacity
+          style={styles.listItem}
+          onPress={() => {
+            if (listModalType === "atividade") {
               handleChange(listModalType, item.id)
-            } else {
-              Alert.alert("Atenção", "Este direcionador já foi selecionado.")
+            } else if (listModalType === "produto" || listModalType === "tanqueDiesel") {
+              handleOperacaoMecanizadaChange(listModalType, item.id)
+            } else if (listModalType === "bem") {
+              handleOperacaoMecanizadaChange(listModalType, item.id)
+              setSelectedImplementos([])
+              setOperacaoMecanizadaData((prev) => ({
+                ...prev,
+                implemento: "",
+                implementos: [],
+              }))
             }
-          }
-          setListModalVisible(false)
-        }}
-      >
-        <Text>{item.name}</Text>
-      </TouchableOpacity>
-    ),
-    [listModalType, handleChange, handleOperacaoMecanizadaChange, selectedDirecionadores, selectedImplementos],
+            setListModalVisible(false)
+          }}
+        >
+          <Text>{item.name}</Text>
+        </TouchableOpacity>
+      )
+    },
+    [
+      listModalType, 
+      handleChange, 
+      handleOperacaoMecanizadaChange, 
+      tempSelectedDirecionadores, 
+      tempSelectedImplementos,
+      selectedDirecionadores,
+      selectedImplementos,
+      toggleTempDirecionadorSelection,
+      toggleTempImplementoSelection
+    ],
   )
 
   const renderInputField = useCallback(
@@ -1077,16 +1232,19 @@ export default function FormScreen({ navigation }) {
 
   const Separator = useCallback(() => <View style={styles.separator} />, [])
 
+  // UPDATED: Modified to handle multiple selection initialization
   const openListModal = useCallback(
     (type) => {
       setListModalType(type)
 
       if (type === "direcionador") {
         setListModalData(Array.isArray(direcionadores) ? direcionadores : [])
+        setTempSelectedDirecionadores([]) // Reset temporary selection
       } else if (type === "bem") {
         setListModalData(Array.isArray(maquinarios) ? maquinarios : [])
       } else if (type === "implemento") {
         setListModalData(Array.isArray(implementos) ? implementos : [])
+        setTempSelectedImplementos([]) // Reset temporary selection
       } else if (type === "atividade") {
         setListModalData(Array.isArray(atividades) ? atividades : [])
       } else {
@@ -1104,7 +1262,15 @@ export default function FormScreen({ navigation }) {
     return listModalData.filter((item) => item.name && item.name.toLowerCase().includes(searchQuery.toLowerCase()))
   }, [listModalData, searchQuery])
 
+  // UPDATED: Enhanced renderListModal with multiple selection support
   const renderListModal = useCallback(() => {
+    const isMultipleSelection = listModalType === "direcionador" || listModalType === "implemento"
+    const selectedCount = listModalType === "direcionador" 
+      ? tempSelectedDirecionadores.length 
+      : listModalType === "implemento" 
+        ? tempSelectedImplementos.length 
+        : 0
+
     return (
       <Modal visible={isListModalVisible} transparent={true} animationType="slide">
         <SafeAreaView style={styles.modalContainer}>
@@ -1117,20 +1283,35 @@ export default function FormScreen({ navigation }) {
                   : listModalType === "tanqueDiesel"
                     ? "o Tanque de Diesel"
                     : listModalType === "direcionador"
-                      ? "o Direcionador"
+                      ? "os Direcionadores"
                       : listModalType === "bem"
                         ? "o Bem"
                         : listModalType === "implemento"
-                          ? "o Implemento"
+                          ? "os Implementos"
                           : "a Atividade"}
               </Text>
               <TouchableOpacity
-                onPress={() => setListModalVisible(false)}
+                onPress={() => {
+                  if (isMultipleSelection) {
+                    setTempSelectedDirecionadores([])
+                    setTempSelectedImplementos([])
+                  }
+                  setListModalVisible(false)
+                }}
                 style={[styles.closeButton, { position: "absolute", right: 0 }]}
               >
                 <X size={24} color="#000" />
               </TouchableOpacity>
             </View>
+            
+            {isMultipleSelection && selectedCount > 0 && (
+              <View style={styles.selectionCounter}>
+                <Text style={styles.selectionCounterText}>
+                  {selectedCount} {listModalType === "direcionador" ? "direcionador(es)" : "implemento(s)"} selecionado(s)
+                </Text>
+              </View>
+            )}
+            
             <TextInput
               style={styles.searchInput}
               placeholder="Pesquisar..."
@@ -1145,11 +1326,36 @@ export default function FormScreen({ navigation }) {
               ItemSeparatorComponent={Separator}
               showsVerticalScrollIndicator={false}
             />
+            
+            {isMultipleSelection && (
+              <View style={styles.modalFooter}>
+                <TouchableOpacity
+                  style={[styles.confirmButton, selectedCount === 0 && styles.disabledButton]}
+                  onPress={listModalType === "direcionador" ? confirmDirecionadorSelection : confirmImplementoSelection}
+                  disabled={selectedCount === 0}
+                >
+                  <Text style={styles.confirmButtonText}>
+                    Confirmar Seleção {selectedCount > 0 && `(${selectedCount})`}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </SafeAreaView>
       </Modal>
     )
-  }, [isListModalVisible, listModalType, filteredListData, renderListItem, searchQuery, Separator])
+  }, [
+    isListModalVisible, 
+    listModalType, 
+    filteredListData, 
+    renderListItem, 
+    searchQuery, 
+    Separator,
+    tempSelectedDirecionadores,
+    tempSelectedImplementos,
+    confirmDirecionadorSelection,
+    confirmImplementoSelection
+  ])
 
   if (!isAuthInitialized || isLoading) {
     return (
@@ -1179,15 +1385,15 @@ export default function FormScreen({ navigation }) {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
         {renderInputField(
-          "Ficha de Controle (número da máquina)",
+          "Ficha de Controle (número da máquina) *",
           "fichaControle",
           formData.fichaControle,
           handleChange,
         )}
         <Separator />
-        {renderDatePickerField("Data", "data")}
+        {renderDatePickerField("Data *", "data")}
         <Separator />
-        <Text style={styles.label}>Direcionadores</Text>
+        <Text style={styles.label}>Direcionadores *</Text>
         <TouchableOpacity
           style={styles.input}
           onPress={() => openListModal("direcionador")}
@@ -1237,7 +1443,7 @@ export default function FormScreen({ navigation }) {
           </Text>
         </View>
         <Separator />
-        <Text style={styles.label}>Atividade</Text>
+        <Text style={styles.label}>Atividade *</Text>
         <TouchableOpacity
           style={styles.input}
           onPress={() => openListModal("atividade")}
@@ -1251,14 +1457,18 @@ export default function FormScreen({ navigation }) {
           <ChevronDown size={20} color="#2a9d8f" />
         </TouchableOpacity>
         <Separator />
-        <Text style={styles.label}>Operações Mecanizadas</Text>
+        <Text style={styles.label}>Operações Mecanizadas *</Text>
         <TouchableOpacity
           style={styles.modalButton}
           onPress={() => setOperacaoMecanizadaModalVisible(true)}
           accessibilityLabel="Lançar Operações Mecanizadas"
           accessibilityHint="Toque para abrir o formulário de lançamento de operações mecanizadas"
         >
-          <Text style={styles.buttonText}>Lançar Operações Mecanizadas</Text>
+          <Text style={styles.buttonText}>
+            {Array.isArray(selectedOperacoesMecanizadas) && selectedOperacoesMecanizadas.length > 0
+              ? `${selectedOperacoesMecanizadas.length} operação(ões) adicionada(s)`
+              : "Lançar Operações Mecanizadas"}
+          </Text>
         </TouchableOpacity>
         <Separator />
         {renderInputField("Observação", "observacao", formData.observacao, handleChange)}
@@ -1573,6 +1783,89 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#E5E5E5",
     marginVertical: 4,
+  },
+  selectedListItem: {
+    backgroundColor: "#E8F5F3",
+    borderColor: "#2a9d8f",
+    borderWidth: 1,
+  },
+  alreadyAddedListItem: {
+    backgroundColor: "#F5F5F5",
+    opacity: 0.6,
+  },
+  listItemContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  listItemText: {
+    flex: 1,
+  },
+  listItemName: {
+    fontSize: 16,
+    color: "#333333",
+  },
+  listItemSubtitle: {
+    fontSize: 14,
+    color: "#666666",
+    marginTop: 4,
+  },
+  alreadyAddedText: {
+    color: "#999999",
+  },
+  alreadyAddedLabel: {
+    fontSize: 12,
+    color: "#999999",
+    fontStyle: "italic",
+    marginTop: 2,
+  },
+  checkboxContainer: {
+    marginLeft: 12,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 4,
+    backgroundColor: "#2a9d8f",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  checkboxEmpty: {
+    width: 24,
+    height: 24,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: "#2a9d8f",
+    backgroundColor: "transparent",
+  },
+  selectionCounter: {
+    backgroundColor: "#E8F5F3",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    alignItems: "center",
+  },
+  selectionCounterText: {
+    color: "#2a9d8f",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  modalFooter: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E5E5",
+  },
+  confirmButton: {
+    backgroundColor: "#2a9d8f",
+    padding: 16,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  confirmButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
   },
   searchInput: {
     height: 40,
