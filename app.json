@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Agro Coleta",
-    "slug": "agro-coleta",
+    "slug": "AgroColeta",
     "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -22,7 +22,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.victormatos1.agrocoleta2",
-      "versionCode": 85
+      "versionCode": 87
     },
     "web": {
       "favicon": "./assets/icon.png"
