@@ -40,7 +40,7 @@ const initialFormData = {
   fichaControle: "",
   data: "",
   direcionador: "",
-  direcionadores: [], 
+  direcionadores: [],
   cultura: "",
   atividade: "",
   observacao: "",
@@ -51,8 +51,8 @@ export default function FormScreen({ navigation }) {
   const [operacaoMecanizadaModalVisible, setOperacaoMecanizadaModalVisible] = useState(false)
   const [operacaoMecanizadaData, setOperacaoMecanizadaData] = useState({
     bem: "",
-    implemento: "", 
-    implementos: [], 
+    implemento: "",
+    implementos: [],
     horaFinal: "",
   })
   const [previousHorimetros, setPreviousHorimetros] = useState({})
@@ -91,13 +91,14 @@ export default function FormScreen({ navigation }) {
   const isFormValid = useCallback(() => {
     const requiredFields = ["fichaControle", "data", "atividade"]
     const basicFieldsValid = requiredFields.every((field) => formData[field] && formData[field].trim() !== "")
-    
+
     // Check if at least one direcionador is selected
     const direcionadorValid = Array.isArray(selectedDirecionadores) && selectedDirecionadores.length > 0
-    
+
     // Check if at least one mechanized operation is added
-    const operacoesMecanizadasValid = Array.isArray(selectedOperacoesMecanizadas) && selectedOperacoesMecanizadas.length > 0
-    
+    const operacoesMecanizadasValid =
+      Array.isArray(selectedOperacoesMecanizadas) && selectedOperacoesMecanizadas.length > 0
+
     return basicFieldsValid && direcionadorValid && operacoesMecanizadasValid
   }, [formData, selectedDirecionadores, selectedOperacoesMecanizadas])
 
@@ -110,7 +111,7 @@ export default function FormScreen({ navigation }) {
     )
 
     setFormData(initialFormData)
-    setSelectedDirecionadores([]) 
+    setSelectedDirecionadores([])
 
     setOperacaoMecanizadaData({
       bem: "",
@@ -277,7 +278,7 @@ export default function FormScreen({ navigation }) {
               const maquinariosArray = Object.entries(data).map(([key, value]) => ({
                 id: value.id || key,
                 name: `${value.id} - ${value.nome}`,
-                rawName: value.nome || "Máquina sem nome", 
+                rawName: value.nome || "Máquina sem nome",
               }))
 
               setMaquinarios(maquinariosArray)
@@ -334,8 +335,8 @@ export default function FormScreen({ navigation }) {
               const data = snapshot.val() || {}
               const implementosArray = Object.entries(data).map(([key, value]) => ({
                 id: value.id || key,
-                name: `${value.id} - ${value.nome}`, 
-                rawName: value.nome || "Implemento sem nome", 
+                name: `${value.id} - ${value.nome}`,
+                rawName: value.nome || "Implemento sem nome",
               }))
 
               setImplementos(implementosArray)
@@ -526,7 +527,7 @@ export default function FormScreen({ navigation }) {
           setIsSyncing(false)
         }
       }
-    }, 300000) 
+    }, 300000)
 
     return () => clearInterval(syncInterval)
   }, [isSyncing])
@@ -540,21 +541,18 @@ export default function FormScreen({ navigation }) {
   }, [])
 
   // UPDATED: Modified to handle single selections for non-direcionador fields
-  const handleChange = useCallback(
-    (name, value) => {
-      if (name === "direcionador") {
-        // This is now handled by the multiple selection modal
-        return
-      }
+  const handleChange = useCallback((name, value) => {
+    if (name === "direcionador") {
+      // This is now handled by the multiple selection modal
+      return
+    }
 
-      if (name === "fichaControle" && !isNaN(Number.parseInt(value, 10))) {
-        setFichaControleNumero(Number.parseInt(value, 10))
-      }
+    if (name === "fichaControle" && !isNaN(Number.parseInt(value, 10))) {
+      setFichaControleNumero(Number.parseInt(value, 10))
+    }
 
-      return setFormData((prev) => ({ ...prev, [name]: value }))
-    },
-    [],
-  )
+    return setFormData((prev) => ({ ...prev, [name]: value }))
+  }, [])
 
   const handleOperacaoMecanizadaChange = useCallback(
     (name, value) => {
@@ -634,8 +632,22 @@ export default function FormScreen({ navigation }) {
     }
   }
 
+  const calculateTotalHours = useCallback(() => {
+    if (!Array.isArray(selectedOperacoesMecanizadas)) return 0
+
+    return selectedOperacoesMecanizadas.reduce((total, operacao) => {
+      const horas = Number.parseFloat(operacao.totalHoras) || 0
+      return total + horas
+    }, 0)
+  }, [selectedOperacoesMecanizadas])
+
   const addSelectedOperacaoMecanizada = useCallback(
     async (operacao) => {
+      if (!operacao.bem || !operacao.horaFinal) {
+        Alert.alert("Atenção", "Preencha todos os campos obrigatórios.")
+        return
+      }
+
       if (!Array.isArray(selectedImplementos) || selectedImplementos.length === 0) {
         Alert.alert("Atenção", "Selecione pelo menos um implemento.")
         return
@@ -681,7 +693,7 @@ export default function FormScreen({ navigation }) {
       })
       setSelectedImplementos([])
     },
-    [previousHorimetros, userPropriedade, selectedImplementos],
+    [previousHorimetros, userPropriedade, selectedImplementos, calculateTotalHours],
   )
 
   const removeSelectedOperacaoMecanizada = useCallback(
@@ -786,7 +798,7 @@ export default function FormScreen({ navigation }) {
 
     // Filter out already selected direcionadores to avoid duplicates
     const newDirecionadores = tempSelectedDirecionadores.filter(
-      (tempDir) => !selectedDirecionadores.some((selectedDir) => selectedDir.id === tempDir.id)
+      (tempDir) => !selectedDirecionadores.some((selectedDir) => selectedDir.id === tempDir.id),
     )
 
     if (newDirecionadores.length === 0) {
@@ -802,10 +814,12 @@ export default function FormScreen({ navigation }) {
     // Update form data
     setFormData((prev) => ({
       ...prev,
-      direcionadores: [...prev.direcionadores, ...newDirecionadores.map(d => d.id)],
-      cultura: prev.direcionadores.length === 0 && newDirecionadores[0]?.culturaAssociada
-        ? CULTURA?.find((c) => c.name.toLowerCase() === newDirecionadores[0].culturaAssociada.toLowerCase())?.id || prev.cultura
-        : prev.cultura,
+      direcionadores: [...prev.direcionadores, ...newDirecionadores.map((d) => d.id)],
+      cultura:
+        prev.direcionadores.length === 0 && newDirecionadores[0]?.culturaAssociada
+          ? CULTURA?.find((c) => c.name.toLowerCase() === newDirecionadores[0].culturaAssociada.toLowerCase())?.id ||
+            prev.cultura
+          : prev.cultura,
     }))
 
     // Clear temporary selection and close modal
@@ -821,7 +835,7 @@ export default function FormScreen({ navigation }) {
 
     // Filter out already selected implementos to avoid duplicates
     const newImplementos = tempSelectedImplementos.filter(
-      (tempImpl) => !selectedImplementos.some((selectedImpl) => selectedImpl.id === tempImpl.id)
+      (tempImpl) => !selectedImplementos.some((selectedImpl) => selectedImpl.id === tempImpl.id),
     )
 
     if (newImplementos.length === 0) {
@@ -837,7 +851,7 @@ export default function FormScreen({ navigation }) {
     // Update operacao mecanizada data
     setOperacaoMecanizadaData((prev) => ({
       ...prev,
-      implementos: [...prev.implementos, ...newImplementos.map(i => i.id)],
+      implementos: [...prev.implementos, ...newImplementos.map((i) => i.id)],
     }))
 
     // Clear temporary selection and close modal
@@ -849,31 +863,31 @@ export default function FormScreen({ navigation }) {
   const handleSubmit = useCallback(async () => {
     // Check all required fields and provide specific error messages
     const missingFields = []
-    
+
     if (!formData.fichaControle || formData.fichaControle.trim() === "") {
       missingFields.push("Ficha de Controle")
     }
-    
+
     if (!formData.data || formData.data.trim() === "") {
       missingFields.push("Data")
     }
-    
+
     if (!Array.isArray(selectedDirecionadores) || selectedDirecionadores.length === 0) {
       missingFields.push("Direcionadores")
     }
-    
+
     if (!formData.atividade || formData.atividade.trim() === "") {
       missingFields.push("Atividade")
     }
-    
+
     if (!Array.isArray(selectedOperacoesMecanizadas) || selectedOperacoesMecanizadas.length === 0) {
       missingFields.push("Operações Mecanizadas")
     }
-    
+
     if (missingFields.length > 0) {
       Alert.alert(
-        "Campos Obrigatórios", 
-        `Os seguintes campos são obrigatórios e devem ser preenchidos:\n\n• ${missingFields.join('\n• ')}`
+        "Campos Obrigatórios",
+        `Os seguintes campos são obrigatórios e devem ser preenchidos:\n\n• ${missingFields.join("\n• ")}`,
       )
       return
     }
@@ -883,7 +897,7 @@ export default function FormScreen({ navigation }) {
         const localId = Date.now().toString()
 
         // Verificar se selectedDirecionadores é um array
-        const direcionadoresSelecionados = Array.isArray(selectedDirecionadores) 
+        const direcionadoresSelecionados = Array.isArray(selectedDirecionadores)
           ? selectedDirecionadores.map((d) => ({
               id: d.id,
               name: d.name,
@@ -901,9 +915,7 @@ export default function FormScreen({ navigation }) {
         }
 
         // Verificar se atividades é um array antes de usar find
-        const selectedAtividade = Array.isArray(atividades) 
-          ? atividades.find((a) => a.id === formData.atividade)
-          : null
+        const selectedAtividade = Array.isArray(atividades) ? atividades.find((a) => a.id === formData.atividade) : null
 
         const apontamentoData = {
           ...formData,
@@ -915,12 +927,10 @@ export default function FormScreen({ navigation }) {
             (Array.isArray(CULTURA) ? CULTURA.find((c) => c.id === formData.cultura)?.name : null) ||
             formData.cultura,
           timestamp: timestamp,
-          operacoesMecanizadas: Array.isArray(selectedOperacoesMecanizadas) 
+          operacoesMecanizadas: Array.isArray(selectedOperacoesMecanizadas)
             ? selectedOperacoesMecanizadas.map((op) => ({
                 ...op,
-                bem: Array.isArray(maquinarios) 
-                  ? maquinarios.find((b) => b.id === op.bem)?.name || op.bem
-                  : op.bem,
+                bem: Array.isArray(maquinarios) ? maquinarios.find((b) => b.id === op.bem)?.name || op.bem : op.bem,
               }))
             : [],
           userId: userId,
@@ -980,7 +990,7 @@ export default function FormScreen({ navigation }) {
           const isDuplicate = offlineData.some((item) => item.localId === localId)
 
           if (!isDuplicate) {
-            const direcionadoresSelecionados = Array.isArray(selectedDirecionadores) 
+            const direcionadoresSelecionados = Array.isArray(selectedDirecionadores)
               ? selectedDirecionadores.map((d) => ({
                   id: d.id,
                   name: d.name,
@@ -997,7 +1007,7 @@ export default function FormScreen({ navigation }) {
               timestamp = dateObj.getTime()
             }
 
-            const selectedAtividade = Array.isArray(atividades) 
+            const selectedAtividade = Array.isArray(atividades)
               ? atividades.find((a) => a.id === formData.atividade)
               : null
 
@@ -1011,12 +1021,10 @@ export default function FormScreen({ navigation }) {
                 (Array.isArray(CULTURA) ? CULTURA.find((c) => c.id === formData.cultura)?.name : null) ||
                 formData.cultura,
               timestamp: timestamp,
-              operacoesMecanizadas: Array.isArray(selectedOperacoesMecanizadas) 
+              operacoesMecanizadas: Array.isArray(selectedOperacoesMecanizadas)
                 ? selectedOperacoesMecanizadas.map((op) => ({
                     ...op,
-                    bem: Array.isArray(maquinarios) 
-                      ? maquinarios.find((b) => b.id === op.bem)?.name || op.bem
-                      : op.bem,
+                    bem: Array.isArray(maquinarios) ? maquinarios.find((b) => b.id === op.bem)?.name || op.bem : op.bem,
                   }))
                 : [],
               userId: userId,
@@ -1043,36 +1051,41 @@ export default function FormScreen({ navigation }) {
     maquinarios,
     selectedDirecionadores,
     navigation,
-    atividades, 
+    atividades,
   ])
 
   // UPDATED: Enhanced renderListItem to handle multiple selection
   const renderListItem = useCallback(
     ({ item }) => {
       const isMultipleSelection = listModalType === "direcionador" || listModalType === "implemento"
-      
+
       if (isMultipleSelection) {
-        const isSelected = listModalType === "direcionador" 
-          ? tempSelectedDirecionadores.some((d) => d.id === item.id)
-          : tempSelectedImplementos.some((i) => i.id === item.id)
-        
-        const isAlreadyAdded = listModalType === "direcionador"
-          ? selectedDirecionadores.some((d) => d.id === item.id)
-          : selectedImplementos.some((i) => i.id === item.id)
+        const isSelected =
+          listModalType === "direcionador"
+            ? tempSelectedDirecionadores.some((d) => d.id === item.id)
+            : tempSelectedImplementos.some((i) => i.id === item.id)
+
+        const isAlreadyAdded =
+          listModalType === "direcionador"
+            ? selectedDirecionadores.some((d) => d.id === item.id)
+            : selectedImplementos.some((i) => i.id === item.id)
 
         return (
           <TouchableOpacity
             style={[
               styles.listItem,
               isSelected && styles.selectedListItem,
-              isAlreadyAdded && styles.alreadyAddedListItem
+              isAlreadyAdded && styles.alreadyAddedListItem,
             ]}
             onPress={() => {
               if (isAlreadyAdded) {
-                Alert.alert("Atenção", `Este ${listModalType === "direcionador" ? "direcionador" : "implemento"} já foi adicionado.`)
+                Alert.alert(
+                  "Atenção",
+                  `Este ${listModalType === "direcionador" ? "direcionador" : "implemento"} já foi adicionado.`,
+                )
                 return
               }
-              
+
               if (listModalType === "direcionador") {
                 toggleTempDirecionadorSelection(item)
               } else {
@@ -1083,18 +1096,9 @@ export default function FormScreen({ navigation }) {
           >
             <View style={styles.listItemContent}>
               <View style={styles.listItemText}>
-                <Text style={[
-                  styles.listItemName,
-                  isAlreadyAdded && styles.alreadyAddedText
-                ]}>
-                  {item.name}
-                </Text>
-                {item.culturaAssociada && (
-                  <Text style={styles.listItemSubtitle}>Cultura: {item.culturaAssociada}</Text>
-                )}
-                {isAlreadyAdded && (
-                  <Text style={styles.alreadyAddedLabel}>Já adicionado</Text>
-                )}
+                <Text style={[styles.listItemName, isAlreadyAdded && styles.alreadyAddedText]}>{item.name}</Text>
+                {item.culturaAssociada && <Text style={styles.listItemSubtitle}>Cultura: {item.culturaAssociada}</Text>}
+                {isAlreadyAdded && <Text style={styles.alreadyAddedLabel}>Já adicionado</Text>}
               </View>
               <View style={styles.checkboxContainer}>
                 {isSelected && !isAlreadyAdded && (
@@ -1102,9 +1106,7 @@ export default function FormScreen({ navigation }) {
                     <Check size={16} color="#FFFFFF" />
                   </View>
                 )}
-                {!isSelected && !isAlreadyAdded && (
-                  <View style={styles.checkboxEmpty} />
-                )}
+                {!isSelected && !isAlreadyAdded && <View style={styles.checkboxEmpty} />}
               </View>
             </View>
           </TouchableOpacity>
@@ -1137,15 +1139,15 @@ export default function FormScreen({ navigation }) {
       )
     },
     [
-      listModalType, 
-      handleChange, 
-      handleOperacaoMecanizadaChange, 
-      tempSelectedDirecionadores, 
+      listModalType,
+      handleChange,
+      handleOperacaoMecanizadaChange,
+      tempSelectedDirecionadores,
       tempSelectedImplementos,
       selectedDirecionadores,
       selectedImplementos,
       toggleTempDirecionadorSelection,
-      toggleTempImplementoSelection
+      toggleTempImplementoSelection,
     ],
   )
 
@@ -1213,18 +1215,21 @@ export default function FormScreen({ navigation }) {
   const renderSelectedItems = useCallback(
     (items, removeFunction, type) => (
       <View>
-        {Array.isArray(items) && items.map((item) => (
-          <View key={item.id} style={styles.selectedItem}>
-            <Text>
-              {type === "produto"
-                ? `${Array.isArray(PRODUTOS) ? PRODUTOS.find((p) => p.id === item.produto)?.name : ""} - ${Array.isArray(TANQUEDIESEL) ? TANQUEDIESEL.find((t) => t.id === item.tanqueDiesel)?.name || "" : ""}`
-                : Array.isArray(PRODUTOS) ? PRODUTOS.find((p) => p.id === item.produto)?.name : ""}
-            </Text>
-            <TouchableOpacity onPress={() => removeFunction(item.id)}>
-              <Trash2 size={20} color="#FF0000" />
-            </TouchableOpacity>
-          </View>
-        ))}
+        {Array.isArray(items) &&
+          items.map((item) => (
+            <View key={item.id} style={styles.selectedItem}>
+              <Text>
+                {type === "produto"
+                  ? `${Array.isArray(PRODUTOS) ? PRODUTOS.find((p) => p.id === item.produto)?.name : ""} - ${Array.isArray(TANQUEDIESEL) ? TANQUEDIESEL.find((t) => t.id === item.tanqueDiesel)?.name || "" : ""}`
+                  : Array.isArray(PRODUTOS)
+                    ? PRODUTOS.find((p) => p.id === item.produto)?.name
+                    : ""}
+              </Text>
+              <TouchableOpacity onPress={() => removeFunction(item.id)}>
+                <Trash2 size={20} color="#FF0000" />
+              </TouchableOpacity>
+            </View>
+          ))}
       </View>
     ),
     [],
@@ -1248,7 +1253,15 @@ export default function FormScreen({ navigation }) {
       } else if (type === "atividade") {
         setListModalData(Array.isArray(atividades) ? atividades : [])
       } else {
-        setListModalData(type === "produto" ? (Array.isArray(PRODUTOS) ? PRODUTOS : []) : (Array.isArray(TANQUEDIESEL) ? TANQUEDIESEL : []))
+        setListModalData(
+          type === "produto"
+            ? Array.isArray(PRODUTOS)
+              ? PRODUTOS
+              : []
+            : Array.isArray(TANQUEDIESEL)
+              ? TANQUEDIESEL
+              : [],
+        )
       }
 
       setSearchQuery("")
@@ -1265,11 +1278,12 @@ export default function FormScreen({ navigation }) {
   // UPDATED: Enhanced renderListModal with multiple selection support
   const renderListModal = useCallback(() => {
     const isMultipleSelection = listModalType === "direcionador" || listModalType === "implemento"
-    const selectedCount = listModalType === "direcionador" 
-      ? tempSelectedDirecionadores.length 
-      : listModalType === "implemento" 
-        ? tempSelectedImplementos.length 
-        : 0
+    const selectedCount =
+      listModalType === "direcionador"
+        ? tempSelectedDirecionadores.length
+        : listModalType === "implemento"
+          ? tempSelectedImplementos.length
+          : 0
 
     return (
       <Modal visible={isListModalVisible} transparent={true} animationType="slide">
@@ -1303,15 +1317,16 @@ export default function FormScreen({ navigation }) {
                 <X size={24} color="#000" />
               </TouchableOpacity>
             </View>
-            
+
             {isMultipleSelection && selectedCount > 0 && (
               <View style={styles.selectionCounter}>
                 <Text style={styles.selectionCounterText}>
-                  {selectedCount} {listModalType === "direcionador" ? "direcionador(es)" : "implemento(s)"} selecionado(s)
+                  {selectedCount} {listModalType === "direcionador" ? "direcionador(es)" : "implemento(s)"}{" "}
+                  selecionado(s)
                 </Text>
               </View>
             )}
-            
+
             <TextInput
               style={styles.searchInput}
               placeholder="Pesquisar..."
@@ -1326,7 +1341,7 @@ export default function FormScreen({ navigation }) {
               ItemSeparatorComponent={Separator}
               showsVerticalScrollIndicator={false}
             />
-            
+
             {isMultipleSelection && (
               <View style={styles.modalFooter}>
                 <TouchableOpacity
@@ -1345,16 +1360,16 @@ export default function FormScreen({ navigation }) {
       </Modal>
     )
   }, [
-    isListModalVisible, 
-    listModalType, 
-    filteredListData, 
-    renderListItem, 
-    searchQuery, 
+    isListModalVisible,
+    listModalType,
+    filteredListData,
+    renderListItem,
+    searchQuery,
     Separator,
     tempSelectedDirecionadores,
     tempSelectedImplementos,
     confirmDirecionadorSelection,
-    confirmImplementoSelection
+    confirmImplementoSelection,
   ])
 
   if (!isAuthInitialized || isLoading) {
@@ -1450,14 +1465,13 @@ export default function FormScreen({ navigation }) {
           accessibilityLabel="Selecionar Atividade"
         >
           <Text>
-            {Array.isArray(atividades) 
+            {Array.isArray(atividades)
               ? atividades.find((a) => a.id === formData.atividade)?.name || "Selecione a Atividade"
               : "Selecione a Atividade"}
           </Text>
           <ChevronDown size={20} color="#2a9d8f" />
         </TouchableOpacity>
         <Separator />
-        <Text style={styles.label}>Operações Mecanizadas *</Text>
         <TouchableOpacity
           style={styles.modalButton}
           onPress={() => setOperacaoMecanizadaModalVisible(true)}
@@ -1470,6 +1484,22 @@ export default function FormScreen({ navigation }) {
               : "Lançar Operações Mecanizadas"}
           </Text>
         </TouchableOpacity>
+
+        {Array.isArray(selectedOperacoesMecanizadas) && selectedOperacoesMecanizadas.length > 0 && (
+          <View style={styles.totalHoursIndicator}>
+            <Text
+              style={[
+                styles.totalHoursText,
+                calculateTotalHours() > 10 ? styles.totalHoursExceeded : styles.totalHoursNormal,
+              ]}
+            >
+              {calculateTotalHours() > 10
+                ? "Limite excedido"
+                : `Total de Horas: ${calculateTotalHours().toFixed(2)}/10.00h`}
+            </Text>
+          </View>
+        )}
+
         <Separator />
         {renderInputField("Observação", "observacao", formData.observacao, handleChange)}
         <Separator />
@@ -1502,7 +1532,7 @@ export default function FormScreen({ navigation }) {
             accessibilityLabel="Selecionar Bem"
           >
             <Text>
-              {Array.isArray(maquinarios) 
+              {Array.isArray(maquinarios)
                 ? maquinarios.find((b) => b.id === operacaoMecanizadaData.bem)?.name || "Selecione o Bem"
                 : "Selecione o Bem"}
             </Text>
@@ -1573,7 +1603,7 @@ export default function FormScreen({ navigation }) {
                 <View key={item.id} style={styles.selectedItem}>
                   <View>
                     <Text style={styles.selectedItemTitle}>
-                      {Array.isArray(maquinarios) 
+                      {Array.isArray(maquinarios)
                         ? maquinarios.find((b) => b.id === item.bem)?.name || item.bem
                         : item.bem}
                     </Text>
@@ -1581,7 +1611,7 @@ export default function FormScreen({ navigation }) {
                       Implementos:{" "}
                       {item.implementos && Array.isArray(item.implementos)
                         ? item.implementos.map((imp) => imp.name).join(", ")
-                        : Array.isArray(implementos) 
+                        : Array.isArray(implementos)
                           ? implementos.find((i) => i.id === item.implemento)?.name || ""
                           : ""}
                     </Text>
@@ -1605,11 +1635,24 @@ export default function FormScreen({ navigation }) {
                 selectedImplementos.length === 0 ||
                 !operacaoMecanizadaData.horaFinal ||
                 Number.parseFloat(operacaoMecanizadaData.horaFinal) <=
-                  Number.parseFloat(previousHorimetros[operacaoMecanizadaData.bem] || "0.00")) &&
+                  Number.parseFloat(previousHorimetros[operacaoMecanizadaData.bem] || "0.00") ||
+                (() => {
+                  const horaAnterior = Number.parseFloat(previousHorimetros[operacaoMecanizadaData.bem] || "0.00")
+                  const horaAtual = Number.parseFloat(operacaoMecanizadaData.horaFinal || "0")
+                  const horasOperacao = horaAtual > horaAnterior ? horaAtual - horaAnterior : 0
+                  const totalAtual = calculateTotalHours()
+                  const novoTotal = totalAtual + horasOperacao
+                  return novoTotal > 10
+                })()) &&
                 styles.disabledButton,
             ]}
             onPress={() => {
-              if (operacaoMecanizadaData.bem && Array.isArray(selectedImplementos) && selectedImplementos.length > 0 && operacaoMecanizadaData.horaFinal) {
+              if (
+                operacaoMecanizadaData.bem &&
+                Array.isArray(selectedImplementos) &&
+                selectedImplementos.length > 0 &&
+                operacaoMecanizadaData.horaFinal
+              ) {
                 const horaAnterior = Number.parseFloat(previousHorimetros[operacaoMecanizadaData.bem] || "0.00")
                 const horaAtual = Number.parseFloat(operacaoMecanizadaData.horaFinal)
 
@@ -1633,7 +1676,15 @@ export default function FormScreen({ navigation }) {
               selectedImplementos.length === 0 ||
               !operacaoMecanizadaData.horaFinal ||
               Number.parseFloat(operacaoMecanizadaData.horaFinal) <=
-                Number.parseFloat(previousHorimetros[operacaoMecanizadaData.bem] || "0.00")
+                Number.parseFloat(previousHorimetros[operacaoMecanizadaData.bem] || "0.00") ||
+              (() => {
+                const horaAnterior = Number.parseFloat(previousHorimetros[operacaoMecanizadaData.bem] || "0.00")
+                const horaAtual = Number.parseFloat(operacaoMecanizadaData.horaFinal || "0")
+                const horasOperacao = horaAtual > horaAnterior ? horaAtual - horaAnterior : 0
+                const totalAtual = calculateTotalHours()
+                const novoTotal = totalAtual + horasOperacao
+                return novoTotal > 10
+              })()
             }
             accessibilityLabel="Adicionar operação mecanizada"
             accessibilityHint="Toque para adicionar a operação mecanizada e fechar o modal"
@@ -1931,5 +1982,48 @@ const styles = StyleSheet.create({
   },
   selectedImplementosContainer: {
     marginBottom: 16,
+  },
+  totalHoursIndicator: {
+    backgroundColor: "#f8f9fa",
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: "#2a9d8f",
+  },
+  totalHoursText: {
+    fontSize: 14,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  totalHoursNormal: {
+    color: "#2a9d8f",
+  },
+  totalHoursExceeded: {
+    color: "#e74c3c",
+  },
+  limitWarning: {
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 6,
+    backgroundColor: "#f8f9fa",
+  },
+  warningTextNormal: {
+    color: "#27ae60",
+    fontSize: 13,
+    fontWeight: "500",
+    textAlign: "center",
+  },
+  warningTextAlert: {
+    color: "#f39c12",
+    fontSize: 13,
+    fontWeight: "500",
+    textAlign: "center",
+  },
+  warningTextError: {
+    color: "#e74c3c",
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
   },
 })

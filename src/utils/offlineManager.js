@@ -3,7 +3,6 @@ import NetInfo from "@react-native-community/netinfo"
 import { database } from "../config/firebaseConfig"
 import { ref, set, push, query, orderByChild, equalTo, get, update } from "firebase/database"
 
-
 const OFFLINE_APONTAMENTOS_KEY = "@offline_apontamentos"
 const OFFLINE_ABASTECIMENTOS_KEY = "@offline_abastecimentos"
 const OFFLINE_PERCURSOS_KEY = "@offline_percursos"
@@ -14,12 +13,10 @@ const CACHED_DIRECIONADORES_KEY = "@cached_direcionadores"
 const CACHED_USERS_KEY = "@cached_users"
 const CACHED_HORIMETROS_KEY = "@cached_horimetros"
 
-
 export const saveOfflineData = async (data, storageKey = OFFLINE_APONTAMENTOS_KEY) => {
   try {
     const existingData = await AsyncStorage.getItem(storageKey)
     const offlineData = existingData ? JSON.parse(existingData) : []
-
 
     const isDuplicate = offlineData.some((item) => item.localId === data.localId)
 
@@ -52,27 +49,24 @@ export const syncOfflineApontamentos = async () => {
 
           if (!existingEntrySnapshot.exists()) {
             const newEntryRef = push(apontamentosRef)
-         
+
             await set(newEntryRef, {
               ...apontamentoData,
               localId,
               status: "synced",
-              
+
               operacoesMecanizadas: apontamentoData.operacoesMecanizadas || [],
             })
             console.log("Apontamento sincronizado com sucesso:", localId)
 
-          
             if (apontamentoData.operacoesMecanizadas && apontamentoData.operacoesMecanizadas.length > 0) {
               const horimetrosRef = ref(database, `propriedades/${propriedade}/horimetros`)
               const horimetrosSnapshot = await get(horimetrosRef)
               const horimetrosData = horimetrosSnapshot.val() || {}
 
-            
               const updatedHorimetros = { ...horimetrosData }
 
               apontamentoData.operacoesMecanizadas.forEach((op) => {
-            
                 const bemId = op.bem.split(" - ")[0]
                 if (op.horaFinal) {
                   updatedHorimetros[bemId] = op.horaFinal
@@ -111,7 +105,6 @@ export const syncOfflineApontamentos = async () => {
   }
 }
 
-
 export const syncOfflineAbastecimentos = async () => {
   try {
     const offlineData = await AsyncStorage.getItem(OFFLINE_ABASTECIMENTOS_KEY)
@@ -123,7 +116,6 @@ export const syncOfflineAbastecimentos = async () => {
         try {
           const { propriedade, localId, ...abastecimentoData } = data
 
-        
           const nodePath =
             data.tipoEquipamento === "veiculo"
               ? `propriedades/${propriedade}/abastecimentoVeiculos`
@@ -165,7 +157,6 @@ export const syncOfflineAbastecimentos = async () => {
     console.error("Erro ao sincronizar abastecimentos offline:", error)
   }
 }
-
 
 export const syncOfflinePercursos = async () => {
   try {
@@ -215,7 +206,6 @@ export const syncOfflinePercursos = async () => {
   }
 }
 
-
 export const cacheFirebaseData = async (data, cacheKey) => {
   try {
     await AsyncStorage.setItem(cacheKey, JSON.stringify(data))
@@ -224,7 +214,6 @@ export const cacheFirebaseData = async (data, cacheKey) => {
     console.error(`Erro ao salvar dados em cache em ${cacheKey}:`, error)
   }
 }
-
 
 export const getCachedData = async (cacheKey) => {
   try {
@@ -236,13 +225,11 @@ export const getCachedData = async (cacheKey) => {
   }
 }
 
-
 export const syncAllOfflineData = async () => {
   await syncOfflineApontamentos()
   await syncOfflineAbastecimentos()
   await syncOfflinePercursos()
 }
-
 
 let isSyncingInProgress = false
 
@@ -262,7 +249,6 @@ export const checkConnectivityAndSync = async () => {
     isSyncingInProgress = false
   }
 }
-
 
 export const CACHE_KEYS = {
   MAQUINARIOS: CACHED_MAQUINARIOS_KEY,
