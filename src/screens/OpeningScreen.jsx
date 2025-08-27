@@ -93,6 +93,19 @@ export default function OpeningScreen() {
               </TouchableOpacity>
             )}
 
+            {(userRole === "user" || userRole === "manager") && (
+              <TouchableOpacity style={styles.optionCard} onPress={() => navigation.navigate("OrdemServico")}>
+                <View style={[styles.iconContainer, { backgroundColor: "#f39c12" }]}>
+                  <MaterialCommunityIcons name="clipboard-text" size={40} color="white" />
+                </View>
+                <Text style={styles.optionTitle}>Abrir OS</Text>
+                <Text style={styles.optionDescription}>Gerenciar ordens de serviço</Text>
+                <View style={styles.arrowContainer}>
+                  <Icon name="chevron-forward" size={24} color="#f39c12" />
+                </View>
+              </TouchableOpacity>
+            )}
+
             {/* Vendas - Mostrar para admin e seller - ALTERADO PARA VendasHome */}
             {(userRole === "admin" || userRole === "seller") && (
               <TouchableOpacity style={styles.optionCard} onPress={() => navigation.navigate("VendasHome")}>

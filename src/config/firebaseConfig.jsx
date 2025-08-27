@@ -22,4 +22,3 @@ const auth = initializeAuth(app, {
 const database = getDatabase(app)
 
 export { app, auth, database }
-

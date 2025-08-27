@@ -17,6 +17,7 @@ import FormVeiculosScreen from "./src/screens/FormVeiculosScreen"
 import RegisterScreen from "./src/screens/RegisterScreen"
 import SalesScreen from "./src/screens/SalesScreen"
 import VendasHome from "./src/screens/VendasHome"
+import OrdemServico from "./src/screens/OrdemServico"
 
 const Stack = createNativeStackNavigator()
 
@@ -73,6 +74,7 @@ export default function App() {
         <Stack.Screen name="RegisterScreen" component={RegisterScreen} />
         <Stack.Screen name="SalesScreen" component={SalesScreen} />
         <Stack.Screen name="VendasHome" component={VendasHome} />
+        <Stack.Screen name="OrdemServico" component={OrdemServico} />
       </Stack.Navigator>
     </NavigationContainer>
   )

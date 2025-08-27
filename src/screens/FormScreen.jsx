@@ -10,7 +10,6 @@ import {
   Modal,
   ScrollView,
   ActivityIndicator,
-  StyleSheet,
   SafeAreaView,
   FlatList,
 } from "react-native"
@@ -24,6 +23,8 @@ import { saveOfflineData, checkConnectivityAndSync } from "../utils/offlineManag
 import { PRODUTOS, TANQUEDIESEL, CULTURA } from "./assets"
 import { auth } from "../config/firebaseConfig"
 import { onAuthStateChanged } from "firebase/auth"
+
+import { styles } from "../styles/StyleForm"
 
 const USER_TOKEN_KEY = "@user_token"
 const USER_PROPRIEDADE_KEY = "@user_propriedade"
@@ -753,6 +754,37 @@ export default function FormScreen({ navigation }) {
     },
     [userPropriedade],
   )
+
+  const handleAddOperacaoWithConfirmation = useCallback(() => {
+    const horaAnterior = Number.parseFloat(previousHorimetros[operacaoMecanizadaData.bem] || "0.00")
+    const horaAtual = Number.parseFloat(operacaoMecanizadaData.horaFinal || "0")
+    const horasOperacao = horaAtual > horaAnterior ? horaAtual - horaAnterior : 0
+    const totalAtual = calculateTotalHours()
+    const novoTotal = totalAtual + horasOperacao
+
+    if (novoTotal > 10) {
+      Alert.alert(
+        "Atenção - Fora do Padrão",
+        `O total de horas será ${novoTotal.toFixed(2)}h, excedendo o padrão de 10 horas.\n\nDeseja continuar mesmo assim?`,
+        [
+          {
+            text: "Cancelar",
+            style: "cancel",
+          },
+          {
+            text: "Confirmar",
+            onPress: () => {
+              addSelectedOperacaoMecanizada(operacaoMecanizadaData)
+              setOperacaoMecanizadaModalVisible(false)
+            },
+          },
+        ],
+      )
+    } else {
+      addSelectedOperacaoMecanizada(operacaoMecanizadaData)
+      setOperacaoMecanizadaModalVisible(false)
+    }
+  }, [operacaoMecanizadaData, previousHorimetros, calculateTotalHours, addSelectedOperacaoMecanizada])
 
   const removeDirecionador = useCallback((direcionadorId) => {
     setFormData((prev) => ({
@@ -1628,46 +1660,12 @@ export default function FormScreen({ navigation }) {
           )}
 
           <TouchableOpacity
-            style={[
-              styles.button,
-              (!operacaoMecanizadaData.bem ||
-                !Array.isArray(selectedImplementos) ||
-                selectedImplementos.length === 0 ||
-                !operacaoMecanizadaData.horaFinal ||
-                Number.parseFloat(operacaoMecanizadaData.horaFinal) <=
-                  Number.parseFloat(previousHorimetros[operacaoMecanizadaData.bem] || "0.00") ||
-                (() => {
-                  const horaAnterior = Number.parseFloat(previousHorimetros[operacaoMecanizadaData.bem] || "0.00")
-                  const horaAtual = Number.parseFloat(operacaoMecanizadaData.horaFinal || "0")
-                  const horasOperacao = horaAtual > horaAnterior ? horaAtual - horaAnterior : 0
-                  const totalAtual = calculateTotalHours()
-                  const novoTotal = totalAtual + horasOperacao
-                  return novoTotal > 10
-                })()) &&
-                styles.disabledButton,
-            ]}
+            style={styles.modalButton}
             onPress={() => {
-              if (
-                operacaoMecanizadaData.bem &&
-                Array.isArray(selectedImplementos) &&
-                selectedImplementos.length > 0 &&
-                operacaoMecanizadaData.horaFinal
-              ) {
-                const horaAnterior = Number.parseFloat(previousHorimetros[operacaoMecanizadaData.bem] || "0.00")
-                const horaAtual = Number.parseFloat(operacaoMecanizadaData.horaFinal)
-
-                if (horaAtual <= horaAnterior) {
-                  Alert.alert(
-                    "Valor inválido",
-                    "O horímetro atual não pode ser menor ou igual ao horímetro anterior. Por favor, insira um valor maior.",
-                    [{ text: "OK" }],
-                  )
-                } else {
-                  addSelectedOperacaoMecanizada(operacaoMecanizadaData)
-                  setOperacaoMecanizadaModalVisible(false)
-                }
-              } else if (!Array.isArray(selectedImplementos) || selectedImplementos.length === 0) {
+              if (!Array.isArray(selectedImplementos) || selectedImplementos.length === 0) {
                 Alert.alert("Atenção", "Selecione pelo menos um implemento.")
+              } else {
+                handleAddOperacaoWithConfirmation()
               }
             }}
             disabled={
@@ -1676,15 +1674,7 @@ export default function FormScreen({ navigation }) {
               selectedImplementos.length === 0 ||
               !operacaoMecanizadaData.horaFinal ||
               Number.parseFloat(operacaoMecanizadaData.horaFinal) <=
-                Number.parseFloat(previousHorimetros[operacaoMecanizadaData.bem] || "0.00") ||
-              (() => {
-                const horaAnterior = Number.parseFloat(previousHorimetros[operacaoMecanizadaData.bem] || "0.00")
-                const horaAtual = Number.parseFloat(operacaoMecanizadaData.horaFinal || "0")
-                const horasOperacao = horaAtual > horaAnterior ? horaAtual - horaAnterior : 0
-                const totalAtual = calculateTotalHours()
-                const novoTotal = totalAtual + horasOperacao
-                return novoTotal > 10
-              })()
+                Number.parseFloat(previousHorimetros[operacaoMecanizadaData.bem] || "0.00")
             }
             accessibilityLabel="Adicionar operação mecanizada"
             accessibilityHint="Toque para adicionar a operação mecanizada e fechar o modal"
@@ -1696,334 +1686,3 @@ export default function FormScreen({ navigation }) {
     </SafeAreaView>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    backgroundColor: "#f5f5f5",
-  },
-  header: {
-    backgroundColor: "#f5f5f5",
-    padding: 12,
-    paddingTop: 25,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 10,
-  },
-  headerTitle: {
-    color: "#2a9d8f",
-    fontSize: 20,
-    fontWeight: "bold",
-  },
-  backButton: {
-    padding: 8,
-  },
-  label: {
-    fontSize: 14,
-    marginBottom: 8,
-    color: "#2a9d8f",
-    textTransform: "uppercase",
-    fontWeight: "bold",
-  },
-  input: {
-    height: 50,
-    borderColor: "#2a9d8f",
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    marginBottom: 16,
-    backgroundColor: "#FFFFFF",
-    fontSize: 16,
-    color: "#333333",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  disabledInput: {
-    backgroundColor: "#F0F8F7",
-    color: "#2a9d8f",
-    borderStyle: "dashed",
-  },
-  datePickerText: {
-    fontSize: 16,
-    color: "#333333",
-    paddingVertical: 12,
-  },
-  modalButton: {
-    backgroundColor: "#FFFFFF",
-    padding: 16,
-    borderRadius: 8,
-    alignItems: "center",
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: "#2a9d8f",
-  },
-  buttonEnviar: {
-    backgroundColor: "#2a9d8f",
-    padding: 16,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 16,
-    marginBottom: 24,
-  },
-  buttonText: {
-    color: "#333333",
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  buttonTextEnviar: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-  },
-  modalContent: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 8,
-    padding: 20,
-    margin: 20,
-    maxHeight: "80%",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#333333",
-  },
-  closeButton: {
-    padding: 8,
-  },
-  button: {
-    backgroundColor: "#2a9d8f",
-    padding: 16,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 16,
-  },
-  disabledButton: {
-    backgroundColor: "#E5E5E5",
-  },
-  selectedItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: "#E5E5E5",
-    marginVertical: 8,
-    marginHorizontal: 20,
-  },
-  listItem: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E5E5",
-    marginVertical: 4,
-  },
-  selectedListItem: {
-    backgroundColor: "#E8F5F3",
-    borderColor: "#2a9d8f",
-    borderWidth: 1,
-  },
-  alreadyAddedListItem: {
-    backgroundColor: "#F5F5F5",
-    opacity: 0.6,
-  },
-  listItemContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  listItemText: {
-    flex: 1,
-  },
-  listItemName: {
-    fontSize: 16,
-    color: "#333333",
-  },
-  listItemSubtitle: {
-    fontSize: 14,
-    color: "#666666",
-    marginTop: 4,
-  },
-  alreadyAddedText: {
-    color: "#999999",
-  },
-  alreadyAddedLabel: {
-    fontSize: 12,
-    color: "#999999",
-    fontStyle: "italic",
-    marginTop: 2,
-  },
-  checkboxContainer: {
-    marginLeft: 12,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 4,
-    backgroundColor: "#2a9d8f",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  checkboxEmpty: {
-    width: 24,
-    height: 24,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: "#2a9d8f",
-    backgroundColor: "transparent",
-  },
-  selectionCounter: {
-    backgroundColor: "#E8F5F3",
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    alignItems: "center",
-  },
-  selectionCounterText: {
-    color: "#2a9d8f",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  modalFooter: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: "#E5E5E5",
-  },
-  confirmButton: {
-    backgroundColor: "#2a9d8f",
-    padding: 16,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  confirmButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  searchInput: {
-    height: 40,
-    borderColor: "#2a9d8f",
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    marginBottom: 16,
-    backgroundColor: "#FFFFFF",
-    fontSize: 16,
-    color: "#333333",
-  },
-  flatList: {
-    marginTop: 10,
-    marginBottom: 10,
-  },
-  calculatedHours: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#F0F8F7",
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#2a9d8f",
-  },
-  hoursValue: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#2a9d8f",
-  },
-  selectedItemsContainer: {
-    marginBottom: 16,
-  },
-  selectedItemTitle: {
-    fontWeight: "bold",
-  },
-  selectedItemSubtitle: {
-    color: "#666",
-    marginBottom: 4,
-  },
-  horimetroAnteriorContainer: {
-    marginBottom: 16,
-  },
-  horimetroAnteriorValue: {
-    backgroundColor: "#F0F8F7",
-    borderWidth: 1,
-    borderColor: "#2a9d8f",
-    borderStyle: "dashed",
-    borderRadius: 8,
-    padding: 12,
-    height: 50,
-    justifyContent: "center",
-  },
-  horimetroText: {
-    fontSize: 16,
-    color: "#2a9d8f",
-    fontWeight: "bold",
-  },
-  selectedDirecionadoresContainer: {
-    marginBottom: 16,
-  },
-  selectedImplementosContainer: {
-    marginBottom: 16,
-  },
-  totalHoursIndicator: {
-    backgroundColor: "#f8f9fa",
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: "#2a9d8f",
-  },
-  totalHoursText: {
-    fontSize: 14,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  totalHoursNormal: {
-    color: "#2a9d8f",
-  },
-  totalHoursExceeded: {
-    color: "#e74c3c",
-  },
-  limitWarning: {
-    marginTop: 12,
-    padding: 10,
-    borderRadius: 6,
-    backgroundColor: "#f8f9fa",
-  },
-  warningTextNormal: {
-    color: "#27ae60",
-    fontSize: 13,
-    fontWeight: "500",
-    textAlign: "center",
-  },
-  warningTextAlert: {
-    color: "#f39c12",
-    fontSize: 13,
-    fontWeight: "500",
-    textAlign: "center",
-  },
-  warningTextError: {
-    color: "#e74c3c",
-    fontSize: 13,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-})
