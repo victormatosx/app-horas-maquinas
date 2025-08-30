@@ -29,6 +29,8 @@ export default function ServiceOrdersDashboard({ route }) {
   const [orderToComplete, setOrderToComplete] = useState(null)
   const [savingCompletion, setSavingCompletion] = useState(false)
   const [loggedUserId, setLoggedUserId] = useState(null)
+  const [usersMap, setUsersMap] = useState({})
+  const [userPropriedade, setUserPropriedade] = useState(null)
 
   const orderStatus = route?.params?.status || "aberto"
 
@@ -36,14 +38,44 @@ export default function ServiceOrdersDashboard({ route }) {
     const loadUserData = async () => {
       try {
         const userId = await AsyncStorage.getItem("@user_token")
+        const propriedade = await AsyncStorage.getItem("@user_propriedade")
         setLoggedUserId(userId || "unknown")
+        setUserPropriedade(propriedade)
       } catch (error) {
-        console.log("[v0] Erro ao carregar ID do usuário:", error)
+        console.log("[v0] Erro ao carregar dados do usuário:", error)
         setLoggedUserId("unknown")
       }
     }
     loadUserData()
   }, [])
+
+  useEffect(() => {
+    if (!userPropriedade) return
+
+    const loadUsersMap = async () => {
+      try {
+        const usersRef = ref(database, `propriedades/${userPropriedade}/users`)
+        const unsubscribe = onValue(usersRef, (snapshot) => {
+          const data = snapshot.val()
+          if (data) {
+            const usersMapping = {}
+            Object.entries(data).forEach(([key, value]) => {
+              usersMapping[key] = value.nome || value.name || "Usuário não identificado"
+            })
+            setUsersMap(usersMapping)
+          }
+        })
+
+        return () => {
+          off(usersRef, "value", unsubscribe)
+        }
+      } catch (error) {
+        console.log("[v0] Erro ao carregar mapa de usuários:", error)
+      }
+    }
+
+    loadUsersMap()
+  }, [userPropriedade])
 
   useEffect(() => {
     const propertiesRef = ref(database, "propriedades")
@@ -365,7 +397,7 @@ export default function ServiceOrdersDashboard({ route }) {
                       {order.userId && (
                         <View style={styles.detailItem}>
                           <Text style={styles.detailLabel}>ID do Usuário</Text>
-                          <Text style={styles.detailValue}>{order.userId}</Text>
+                          <Text style={styles.detailValue}>{usersMap[order.userId] || order.userId}</Text>
                         </View>
                       )}
 
@@ -400,7 +432,9 @@ export default function ServiceOrdersDashboard({ route }) {
                           {order.conclusao.fechadoPor && (
                             <View style={styles.detailItem}>
                               <Text style={styles.detailLabel}>Fechado por</Text>
-                              <Text style={styles.detailValue}>{order.conclusao.fechadoPor}</Text>
+                              <Text style={styles.detailValue}>
+                                {usersMap[order.conclusao.fechadoPor] || order.conclusao.fechadoPor}
+                              </Text>
                             </View>
                           )}
 
