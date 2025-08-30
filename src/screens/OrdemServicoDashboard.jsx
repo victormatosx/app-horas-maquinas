@@ -11,13 +11,17 @@ import {
   Alert,
   Modal,
   TextInput,
+  SafeAreaView,
 } from "react-native"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import { database } from "../config/firebaseConfig"
 import { ref, onValue, off, update } from "firebase/database"
 import Header from "../components/Header"
+import Sidebar from "../components/Sidebar"
+import { Factory, Calendar, MapPin, FileText, ChevronDown, ChevronRight, BadgeCheck } from "lucide-react-native"
 
 export default function ServiceOrdersDashboard({ route }) {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [serviceOrders, setServiceOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedOrder, setSelectedOrder] = useState(null)
@@ -256,41 +260,43 @@ export default function ServiceOrdersDashboard({ route }) {
     return orderStatus === "aberto" ? "Abertas" : "Fechadas"
   }
 
-  const getStatusBadgeStyle = () => {
-    if (orderStatus === "fechado") {
+  const getStatusBadgeStyle = (isOpen) => {
+    if (isOpen) {
       return {
-        backgroundColor: "#dcfce7",
+        backgroundColor: "rgba(34, 197, 94, 0.12)", // Green for 'Aberto'
         borderColor: "#22c55e",
       }
-    }
-    return {
-      backgroundColor: "#fef3c7",
-      borderColor: "#fbbf24",
+    } else {
+      return {
+        backgroundColor: "rgba(239, 68, 68, 0.12)", // Red for 'Fechado'
+        borderColor: "#ef4444",
+      }
     }
   }
 
-  const getStatusTextStyle = () => {
-    if (orderStatus === "fechado") {
-      return { color: "#166534" }
+  const getStatusTextStyle = (isOpen) => {
+    return { 
+      color: isOpen ? "#22c55e" : "#ef4444" 
     }
-    return { color: "#92400e" }
   }
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <Header title={`Ordens de Serviço ${getStatusLabel()}`} />
+      <SafeAreaView style={styles.container}>
+        <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+        <Header title={`Ordens de Serviço ${getStatusLabel()}`} onMenuPress={() => setIsSidebarOpen(true)} />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#2563eb" />
+          <ActivityIndicator size="large" color="#0f505b" />
           <Text style={styles.loadingText}>Carregando ordens de serviço...</Text>
         </View>
-      </View>
+      </SafeAreaView>
     )
   }
 
   return (
-    <View style={styles.container}>
-      <Header title={`Ordens de Serviço ${getStatusLabel()}`} />
+    <SafeAreaView style={styles.container}>
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <Header title={`Ordens de Serviço ${getStatusLabel()}`} onMenuPress={() => setIsSidebarOpen(true)} />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
@@ -325,37 +331,42 @@ export default function ServiceOrdersDashboard({ route }) {
                 >
                   <View style={styles.orderHeaderContent}>
                     <View style={styles.orderTitleRow}>
+                      <Factory size={18} color="#0f505b" style={{ marginRight: 8 }} />
                       <Text style={styles.orderTitle}>{order.equipamento || "Equipamento não informado"}</Text>
-                      <View style={[styles.statusBadge, getStatusBadgeStyle()]}>
-                        <Text style={[styles.statusText, getStatusTextStyle()]}>
+                      <View style={[styles.statusBadge, getStatusBadgeStyle(orderStatus === "aberto")]}>
+                        <BadgeCheck size={14} color={orderStatus === "aberto" ? "#22c55e" : "#ef4444"} style={{ marginRight: 6 }} />
+                        <Text style={[styles.statusText, getStatusTextStyle(orderStatus === "aberto")]}>
                           {orderStatus === "aberto" ? "Aberto" : "Fechado"}
                         </Text>
                       </View>
                     </View>
 
-                    <Text style={styles.propertyText}>
-                      <Text style={styles.boldText}>Propriedade:</Text> {order.propertyName}
-                    </Text>
+                    <View style={styles.propertyRow}>
+                      <MapPin size={14} color="#0f505b" style={{ marginRight: 6 }} />
+                      <Text style={styles.propertyText}>{order.propertyName}</Text>
+                    </View>
 
                     {order.descricaoProblema && (
-                      <Text style={styles.descriptionText} numberOfLines={2}>
-                        {order.descricaoProblema}
-                      </Text>
+                      <View style={styles.descriptionRow}>
+                        <FileText size={14} color="#0f505b" style={{ marginRight: 6 }} />
+                        <Text style={styles.descriptionText} numberOfLines={2}>
+                          <Text style={styles.boldText}>Descrição: </Text>
+                          {order.descricaoProblema}
+                        </Text>
+                      </View>
                     )}
 
-                    <View style={styles.orderInfoRow}>
-                      <Text style={styles.infoText}>
-                        <Text style={styles.boldText}>Data:</Text> {formatDate(order.data)}
-                      </Text>
-                      {order.operador && (
-                        <Text style={styles.infoText}>
-                          <Text style={styles.boldText}>Operador:</Text> {order.operador}
-                        </Text>
-                      )}
+                    <View style={styles.dateRow}>
+                      <Calendar size={12} color="#6b7280" style={{ marginRight: 6 }} />
+                      <Text style={styles.dateText}>{formatDate(order.data)}</Text>
                     </View>
                   </View>
 
-                  <Text style={styles.chevron}>{selectedOrder?.id === order.id ? "▼" : "▶"}</Text>
+                  {selectedOrder?.id === order.id ? (
+                    <ChevronDown size={18} color="#94a3b8" />
+                  ) : (
+                    <ChevronRight size={18} color="#94a3b8" />
+                  )}
                 </TouchableOpacity>
 
                 {selectedOrder?.id === order.id && (
@@ -543,7 +554,7 @@ export default function ServiceOrdersDashboard({ route }) {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   )
 }
 
@@ -622,76 +633,86 @@ const styles = StyleSheet.create({
   },
   orderCard: {
     backgroundColor: "#ffffff",
-    borderRadius: 12,
-    shadowColor: "#000",
+    borderRadius: 16,
+    marginBottom: 16,
+    shadowColor: "#0f505b",
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4,
     },
     shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+    shadowRadius: 12,
+    elevation: 5,
     borderWidth: 1,
     borderColor: "#e2e8f0",
   },
   orderHeader: {
-    padding: 20,
+    padding: 16,
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
   },
   orderHeaderContent: {
     flex: 1,
+    paddingRight: 12,
   },
   orderTitleRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
-    gap: 12,
+    marginBottom: 10,
   },
   orderTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1e293b",
+    fontSize: 17,
+    fontWeight: "bold",
+    color: "#0f505b",
     flex: 1,
   },
   statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 16,
-    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 20,
+    borderWidth: 1.5,
   },
   statusText: {
     fontSize: 12,
-    fontWeight: "600",
+    fontWeight: "bold",
+  },
+  propertyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
   },
   propertyText: {
-    color: "#64748b",
-    marginBottom: 8,
     fontSize: 14,
+    color: "#0f505b",
+    fontWeight: "500",
   },
-  boldText: {
-    fontWeight: "600",
-    color: "#374151",
+  descriptionRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 12,
   },
   descriptionText: {
-    color: "#475569",
-    marginBottom: 12,
+    fontSize: 14,
+    color: "#334155",
+    flex: 1,
     lineHeight: 20,
-    fontSize: 14,
   },
-  orderInfoRow: {
-    gap: 16,
+  dateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
   },
-  infoText: {
-    fontSize: 14,
-    color: "#64748b",
+  dateText: {
+    fontSize: 12,
+    color: "#6b7280",
+    fontStyle: "italic",
   },
-  chevron: {
-    fontSize: 18,
-    color: "#94a3b8",
-    marginLeft: 16,
+  boldText: {
     fontWeight: "bold",
+    color: "#0f505b",
   },
   orderDetails: {
     borderTopWidth: 1,
@@ -746,7 +767,7 @@ const styles = StyleSheet.create({
     borderTopColor: "#e2e8f0",
   },
   completeButton: {
-    backgroundColor: "#22c55e",
+    backgroundColor: "#0f505b",
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 8,

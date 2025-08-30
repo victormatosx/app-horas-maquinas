@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native"
-import Icon from "react-native-vector-icons/Ionicons"
+import { Menu, ArrowLeft } from "lucide-react-native"
 import { useNavigation } from "@react-navigation/native"
 import Sidebar from "./Sidebar"
 
@@ -20,12 +20,12 @@ export default function Header({ title, showBack = false, showMenu = true }) {
         <View style={styles.leftContainer}>
           {showMenu && !showBack && (
             <TouchableOpacity onPress={() => setIsSidebarOpen(true)} style={styles.menuButton}>
-              <Icon name="menu" size={24} color="#333" />
+              <Menu size={28} color="#0f505b" />
             </TouchableOpacity>
           )}
           {showBack && (
             <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-              <Icon name="arrow-back" size={24} color="#333" />
+              <ArrowLeft size={24} color="#0f505b" />
             </TouchableOpacity>
           )}
           <Text style={styles.title} numberOfLines={1}>
@@ -41,10 +41,9 @@ export default function Header({ title, showBack = false, showMenu = true }) {
 
 const styles = StyleSheet.create({
   header: {
-    padding: 16,
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    backgroundColor: "transparent",
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -57,18 +56,15 @@ const styles = StyleSheet.create({
   },
   menuButton: {
     padding: 4,
-    marginRight: 8,
-  },
-  backButton: {
     marginRight: 12,
   },
-  title: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#333",
-    flexShrink: 1,
+  backButton: {
+    marginRight: 16,
   },
-  logoutButton: {
-    padding: 4,
+  title: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#0f505b",
+    flexShrink: 1,
   },
 })

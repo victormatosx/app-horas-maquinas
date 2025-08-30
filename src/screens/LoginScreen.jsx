@@ -14,6 +14,7 @@ import styles from "../styles/StyleLogin"
 const USER_TOKEN_KEY = "@user_token"
 const USER_ROLE_KEY = "@user_role"
 const USER_PROPRIEDADE_KEY = "@user_propriedade"
+const USER_NAME_KEY = "@user_name"
 
 export default function LoginScreen() {
   const navigation = useNavigation()
@@ -94,9 +95,11 @@ export default function LoginScreen() {
 
             // Salvar dados no AsyncStorage
             const userRole = propriedadeUserData.role || "user"
+            const userName = propriedadeUserData.nome || user.email.split("@")[0]
             await AsyncStorage.setItem(USER_TOKEN_KEY, user.uid)
             await AsyncStorage.setItem(USER_ROLE_KEY, userRole)
             await AsyncStorage.setItem(USER_PROPRIEDADE_KEY, propriedadeEscolhida)
+            await AsyncStorage.setItem(USER_NAME_KEY, userName)
 
             console.log("Login realizado com sucesso")
             
@@ -116,9 +119,11 @@ export default function LoginScreen() {
                 const propriedadeUserData = await createUserInPropriedade(user, propriedadeEscolhida)
 
                 const userRole = propriedadeUserData.role || "user"
+                const userName = propriedadeUserData.nome || user.email.split("@")[0]
                 await AsyncStorage.setItem(USER_TOKEN_KEY, user.uid)
                 await AsyncStorage.setItem(USER_ROLE_KEY, userRole)
                 await AsyncStorage.setItem(USER_PROPRIEDADE_KEY, propriedadeEscolhida)
+                await AsyncStorage.setItem(USER_NAME_KEY, userName)
 
                 console.log("Usuário criado com sucesso após erro de permissão")
                 
