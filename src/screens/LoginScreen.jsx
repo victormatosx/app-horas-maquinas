@@ -93,12 +93,19 @@ export default function LoginScreen() {
             }
 
             // Salvar dados no AsyncStorage
+            const userRole = propriedadeUserData.role || "user"
             await AsyncStorage.setItem(USER_TOKEN_KEY, user.uid)
-            await AsyncStorage.setItem(USER_ROLE_KEY, propriedadeUserData.role || "user")
+            await AsyncStorage.setItem(USER_ROLE_KEY, userRole)
             await AsyncStorage.setItem(USER_PROPRIEDADE_KEY, propriedadeEscolhida)
 
             console.log("Login realizado com sucesso")
-            navigation.replace("Opening")
+            
+            // Redirecionar com base no papel do usuário
+            if (userRole === "mecanico") {
+              navigation.replace("OrdemServicoDashboard")
+            } else {
+              navigation.replace("Opening")
+            }
           } catch (dbError) {
             console.error("Erro ao acessar banco de dados:", dbError)
 
@@ -108,12 +115,19 @@ export default function LoginScreen() {
               try {
                 const propriedadeUserData = await createUserInPropriedade(user, propriedadeEscolhida)
 
+                const userRole = propriedadeUserData.role || "user"
                 await AsyncStorage.setItem(USER_TOKEN_KEY, user.uid)
-                await AsyncStorage.setItem(USER_ROLE_KEY, propriedadeUserData.role || "user")
+                await AsyncStorage.setItem(USER_ROLE_KEY, userRole)
                 await AsyncStorage.setItem(USER_PROPRIEDADE_KEY, propriedadeEscolhida)
 
                 console.log("Usuário criado com sucesso após erro de permissão")
-                navigation.replace("Opening")
+                
+                // Redirecionar com base no papel do usuário
+                if (userRole === "mecanico") {
+                  navigation.replace("OrdemServicoDashboard")
+                } else {
+                  navigation.replace("Opening")
+                }
               } catch (createError) {
                 console.error("Erro ao criar usuário após erro de permissão:", createError)
                 Alert.alert(

@@ -19,7 +19,7 @@ import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityI
 import { useState, useEffect, useRef } from "react"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import { database } from "../config/firebaseConfig"
-import { ref, onValue } from "firebase/database"
+import { ref, onValue, push, set } from "firebase/database"
 
 const USER_ROLE_KEY = "@user_role"
 const USER_PROPRIEDADE_KEY = "@user_propriedade"
@@ -255,13 +255,39 @@ export default function OrdemServico() {
     return data.filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
   }
 
-  const handleSalvarEvento = () => {
+  const handleSalvarEvento = async () => {
     if (!selectedEquipment || !horimetroEntrada || !data || !operador || !descricaoProblema) {
       Alert.alert("Campos Obrigatórios", "Por favor, preencha todos os campos obrigatórios.")
       return
     }
 
-    Alert.alert("Sucesso", "Evento salvo com sucesso!", [{ text: "OK", onPress: () => navigation.goBack() }])
+    try {
+      // Get user ID from AsyncStorage
+      const userId = await AsyncStorage.getItem("@user_token")
+      
+      // Prepare the ordem de serviço data
+      const ordemServicoData = {
+        equipamento: selectedEquipment,
+        tipoEquipamento: selectedEquipmentType,
+        horimetroEntrada: horimetroEntrada,
+        data: data,
+        operador: operador,
+        descricaoProblema: descricaoProblema,
+        criadoEm: new Date().toISOString(),
+        status: "aberto",
+        userId: userId || "unknown"
+      }
+
+      // Save to Firebase Realtime Database
+      const ordemServicoRef = ref(database, `propriedades/${userPropriedade}/ordemServico`)
+      const newOrdemServicoRef = push(ordemServicoRef)
+      await set(newOrdemServicoRef, ordemServicoData)
+
+      Alert.alert("Sucesso", "Evento salvo com sucesso!", [{ text: "OK", onPress: () => navigation.goBack() }])
+    } catch (error) {
+      console.error("Erro ao salvar evento:", error)
+      Alert.alert("Erro", "Não foi possível salvar o evento. Tente novamente.")
+    }
   }
 
   const handleNovoEvento = () => {
@@ -689,7 +715,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   typeButtonActive: {
-    backgroundColor: "#3498db",
+    backgroundColor: "#f39c12",
   },
   typeButtonText: {
     fontSize: 14,

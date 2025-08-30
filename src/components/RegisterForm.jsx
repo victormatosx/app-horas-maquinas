@@ -80,6 +80,7 @@ export default function RegisterForm({ onRegister }) {
         <Picker.Item label="Gestor" value="manager" />
         <Picker.Item label="Administrador" value="admin" />
         <Picker.Item label="Vendedor" value="seller" />
+        <Picker.Item label="Mecânico" value="mecanico" />
       </Picker>
       <Picker selectedValue={property} style={styles.picker} onValueChange={(itemValue) => setProperty(itemValue)}>
         <Picker.Item label="Selecione uma propriedade" value="" />
