@@ -1,15 +1,14 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { View, Alert, SafeAreaView, ActivityIndicator } from "react-native"
+import { View, Alert, SafeAreaView, ActivityIndicator, StatusBar } from "react-native"
 import { useNavigation } from "@react-navigation/native"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import LoginForm from "../components/LoginForm"
 import { auth, database } from "../config/firebaseConfig"
 import { signInWithEmailAndPassword, onAuthStateChanged } from "firebase/auth"
 import { ref, get, set } from "firebase/database"
-import { LinearGradient } from "expo-linear-gradient"
-import styles from "../styles/StyleLogin"
+import styles, { colors } from "../styles/StyleLogin"
 
 const USER_TOKEN_KEY = "@user_token"
 const USER_ROLE_KEY = "@user_role"
@@ -19,6 +18,7 @@ const USER_NAME_KEY = "@user_name"
 export default function LoginScreen() {
   const navigation = useNavigation()
   const [initializing, setInitializing] = useState(true)
+  const [loading, setLoading] = useState(false)
 
   // Função para criar usuário na propriedade se não existir
   const createUserInPropriedade = async (user, propriedadeId) => {
@@ -84,7 +84,7 @@ export default function LoginScreen() {
           try {
             const propriedadeSnapshot = await get(propriedadeRef)
             let propriedadeUserData
-
+ 
             if (!propriedadeSnapshot.exists()) {
               console.log("Usuário não encontrado na propriedade, criando...")
               propriedadeUserData = await createUserInPropriedade(user, propriedadeEscolhida)
@@ -178,9 +178,11 @@ export default function LoginScreen() {
     }
 
     try {
+      setLoading(true)
       console.log("Tentando fazer login com:", email)
       await signInWithEmailAndPassword(auth, email, password)
     } catch (error) {
+      setLoading(false)
       console.error("Erro de login:", error)
       switch (error.code) {
         case "auth/user-not-found":
@@ -207,25 +209,16 @@ export default function LoginScreen() {
 
   if (initializing) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <LinearGradient colors={["#4c669f", "#3b5998", "#192f6a"]} style={styles.gradientBackground}>
-          <View style={styles.overlay}>
-            <ActivityIndicator size="large" color="#ffffff" />
-          </View>
-        </LinearGradient>
-      </SafeAreaView>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.white }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
     )
   }
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <LinearGradient colors={["#4c669f", "#3b5998", "#192f6a"]} style={styles.gradientBackground}>
-        <View style={styles.overlay}>
-          <View style={styles.container}>
-            <LoginForm onLogin={handleLogin} />
-          </View>
-        </View>
-      </LinearGradient>
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+      <LoginForm onLogin={handleLogin} loading={loading} />
     </SafeAreaView>
   )
 }
