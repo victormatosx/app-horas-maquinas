@@ -5,7 +5,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Animated, SafeAreaView, Alert
 import { auth } from "../config/firebaseConfig"
 import { signOut } from "firebase/auth"
 import AsyncStorage from "@react-native-async-storage/async-storage"
-import { useNavigation } from "@react-navigation/native"
+import { useNavigation, useRoute } from "@react-navigation/native"
 import { FileText, FileCheck2, LogOut, X, UserCircle } from "lucide-react-native"
 
 const menuItems = [
@@ -15,6 +15,7 @@ const menuItems = [
 
 export default function Sidebar({ isOpen, onClose }) {
   const navigation = useNavigation()
+  const route = useRoute()
   const translateX = useRef(new Animated.Value(-300)).current
   const [userName, setUserName] = useState("Usuário")
   const [userPropriedade, setUserPropriedade] = useState("")
@@ -65,9 +66,18 @@ export default function Sidebar({ isOpen, onClose }) {
 
   if (!isOpen) return null
 
+  const handleOverlayPress = () => {
+    // Close the sidebar when overlay is pressed
+    onClose()
+  }
+
   return (
     <>
-      <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose}>
+      <TouchableOpacity 
+        style={[StyleSheet.absoluteFill, { zIndex: 99 }]} 
+        activeOpacity={1} 
+        onPress={handleOverlayPress}
+      >
         <Animated.View
           style={[
             styles.overlay,
@@ -101,14 +111,28 @@ export default function Sidebar({ isOpen, onClose }) {
             <View style={styles.menuItems}>
               {menuItems.map((item, index) => {
                 const Icon = item.icon
+                // Check if it's the default route (no params) and this is the 'aberto' item
+                const isDefaultRoute = !route.params && item.id === 'OrdemServicoDashboard' && item.params?.status === 'aberto'
+                // Or check if the current route matches this item
+                const isMatchingRoute = route.name === item.id && 
+                  JSON.stringify(route.params || {}) === JSON.stringify(item.params || {})
+                
+                const isActive = isDefaultRoute || isMatchingRoute
+                
                 return (
                   <TouchableOpacity
                     key={`${item.id}-${index}`}
-                    style={styles.menuItem}
+                    style={[styles.menuItem, isActive && styles.menuItemActive]}
                     onPress={() => handleNavigation(item.id, item.params)}
                   >
-                    <Icon size={22} color="#fff" style={styles.menuIcon} />
-                    <Text style={styles.menuText}>{item.label}</Text>
+                    <Icon 
+                      size={22} 
+                      color={isActive ? "#0f505b" : "#fff"} 
+                      style={styles.menuIcon} 
+                    />
+                    <Text style={[styles.menuText, isActive && styles.menuTextActive]}>
+                      {item.label}
+                    </Text>
                   </TouchableOpacity>
                 )
               })}
@@ -132,6 +156,9 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "#000",
     zIndex: 99,
+    // Make sure the overlay is clickable
+    width: '100%',
+    height: '100%',
   },
   sidebarContainer: {
     position: "absolute",
@@ -198,6 +225,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     borderRadius: 8,
     marginHorizontal: 16,
+    marginVertical: 4,
     marginBottom: 8,
   },
   menuIcon: {
@@ -207,5 +235,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "500",
     color: "#fff",
+    marginLeft: 16,
+  },
+  menuItemActive: {
+    backgroundColor: "#fff",
+  },
+  menuTextActive: {
+    color: "#0f505b",
+    fontWeight: '600',
   },
 })

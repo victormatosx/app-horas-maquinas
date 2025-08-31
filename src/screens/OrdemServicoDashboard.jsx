@@ -14,8 +14,9 @@ import {
   SafeAreaView,
 } from "react-native"
 import AsyncStorage from "@react-native-async-storage/async-storage"
-import { database } from "../config/firebaseConfig"
+import { auth, database } from "../config/firebaseConfig"
 import { ref, onValue, off, update } from "firebase/database"
+import { onAuthStateChanged } from "firebase/auth"
 import Header from "../components/Header"
 import Sidebar from "../components/Sidebar"
 import { Factory, Calendar, MapPin, FileText, ChevronDown, ChevronRight, BadgeCheck } from "lucide-react-native"
@@ -35,10 +36,32 @@ export default function ServiceOrdersDashboard({ route }) {
   const [loggedUserId, setLoggedUserId] = useState(null)
   const [usersMap, setUsersMap] = useState({})
   const [userPropriedade, setUserPropriedade] = useState(null)
+  const [isUserAuthenticated, setIsUserAuthenticated] = useState(true)
 
   const orderStatus = route?.params?.status || "aberto"
 
+  // Authentication state listener to cleanup resources on logout
   useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        // User logged out - cleanup all state
+        setIsUserAuthenticated(false)
+        setServiceOrders([])
+        setUsersMap({})
+        setLoggedUserId(null)
+        setUserPropriedade(null)
+        setLoading(false)
+      } else {
+        setIsUserAuthenticated(true)
+      }
+    })
+
+    return () => unsubscribeAuth()
+  }, [])
+
+  useEffect(() => {
+    if (!isUserAuthenticated) return
+
     const loadUserData = async () => {
       try {
         const userId = await AsyncStorage.getItem("@user_token")
@@ -51,57 +74,67 @@ export default function ServiceOrdersDashboard({ route }) {
       }
     }
     loadUserData()
-  }, [])
+  }, [isUserAuthenticated])
 
   useEffect(() => {
-    if (!userPropriedade) return
+    if (!userPropriedade || !loggedUserId || !isUserAuthenticated) return
 
-    const loadUsersMap = async () => {
-      try {
-        const usersRef = ref(database, `propriedades/${userPropriedade}/users`)
-        const unsubscribe = onValue(usersRef, (snapshot) => {
-          const data = snapshot.val()
-          if (data) {
-            const usersMapping = {}
-            Object.entries(data).forEach(([key, value]) => {
+    let isMounted = true
+    const usersRef = ref(database, `propriedades/${userPropriedade}/users`)
+    
+    const unsubscribe = onValue(
+      usersRef, 
+      (snapshot) => {
+        if (!isMounted || !auth.currentUser || !isUserAuthenticated) return
+        
+        const data = snapshot.val()
+        if (data) {
+          const usersMapping = {}
+          Object.entries(data).forEach(([key, value]) => {
+            if (value && (value.nome || value.name)) {
               usersMapping[key] = value.nome || value.name || "Usuário não identificado"
-            })
-            setUsersMap(usersMapping)
-          }
-        })
-
-        return () => {
-          off(usersRef, "value", unsubscribe)
+            }
+          })
+          setUsersMap(usersMapping)
         }
-      } catch (error) {
-        console.log("[v0] Erro ao carregar mapa de usuários:", error)
+      },
+      (error) => {
+        if (isUserAuthenticated && auth.currentUser) {
+          console.log("[v0] Erro ao carregar mapa de usuários:", error)
+        }
+      }
+    )
+
+    return () => {
+      isMounted = false
+      if (unsubscribe) {
+        off(usersRef, "value", unsubscribe)
       }
     }
-
-    loadUsersMap()
-  }, [userPropriedade])
+  }, [userPropriedade, loggedUserId, isUserAuthenticated])
 
   useEffect(() => {
-    const propertiesRef = ref(database, "propriedades")
+    if (!userPropriedade || !loggedUserId || !isUserAuthenticated) return
+
+    let isMounted = true
+    const propertyOrdersRef = ref(database, `propriedades/${userPropriedade}/ordemServico`)
 
     const unsubscribe = onValue(
-      propertiesRef,
+      propertyOrdersRef,
       (snapshot) => {
+        if (!isMounted || !auth.currentUser || !isUserAuthenticated) return
+        
         try {
           const data = snapshot.val()
           if (data) {
             const allOrders = []
 
-            Object.entries(data).forEach(([propertyName, propertyData]) => {
-              if (propertyData.ordemServico) {
-                Object.entries(propertyData.ordemServico).forEach(([orderId, orderData]) => {
-                  if (orderData.status === orderStatus) {
-                    allOrders.push({
-                      id: orderId,
-                      propertyName: propertyName,
-                      ...orderData,
-                    })
-                  }
+            Object.entries(data).forEach(([orderId, orderData]) => {
+              if (orderData && orderData.status === orderStatus) {
+                allOrders.push({
+                  id: orderId,
+                  propertyName: userPropriedade,
+                  ...orderData,
                 })
               }
             })
@@ -113,22 +146,32 @@ export default function ServiceOrdersDashboard({ route }) {
           }
           setLoading(false)
         } catch (error) {
-          console.log("[v0] Erro ao processar dados:", error)
-          Alert.alert("Erro", "Erro ao carregar dados do Firebase")
+          if (isUserAuthenticated && auth.currentUser) {
+            console.log("[v0] Erro ao processar dados:", error)
+            Alert.alert("Erro", "Erro ao carregar dados do Firebase")
+          }
           setLoading(false)
         }
       },
       (error) => {
-        console.log("[v0] Erro ao acessar banco de dados:", error)
-        Alert.alert("Erro", "Erro ao acessar banco de dados: " + error.message)
-        setLoading(false)
+        // Only log error if user is still authenticated
+        if (isUserAuthenticated && auth.currentUser) {
+          console.log("[v0] Erro ao acessar banco de dados:", error)
+          Alert.alert("Erro", "Erro ao acessar banco de dados: " + error.message)
+        }
+        if (isMounted) {
+          setLoading(false)
+        }
       },
     )
 
     return () => {
-      off(propertiesRef, "value", unsubscribe)
+      isMounted = false
+      if (unsubscribe) {
+        off(propertyOrdersRef, "value", unsubscribe)
+      }
     }
-  }, [orderStatus])
+  }, [orderStatus, userPropriedade, loggedUserId, isUserAuthenticated])
 
   const handleCompleteOrder = (order) => {
     setOrderToComplete(order)
@@ -183,8 +226,6 @@ export default function ServiceOrdersDashboard({ route }) {
 
   const formatDate = (dateString) => {
     if (!dateString) return "Data não informada"
-
-    console.log("[v0] Formatando data:", dateString)
 
     try {
       let date
@@ -300,7 +341,9 @@ export default function ServiceOrdersDashboard({ route }) {
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{serviceOrders.length}</Text>
+            <Text style={[styles.statNumber, { color: orderStatus === "aberto" ? "#22c55e" : "#ef4444" }]}>
+              {serviceOrders.length}
+            </Text>
             <Text style={styles.statLabel}>
               {serviceOrders.length === 1
                 ? `Ordem ${orderStatus === "aberto" ? "em Aberto" : "Fechada"}`
@@ -503,6 +546,20 @@ export default function ServiceOrdersDashboard({ route }) {
             </View>
 
             <ScrollView style={styles.modalContent}>
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Maquinário</Text>
+                <View style={styles.readOnlyField}>
+                  <Text style={styles.readOnlyText}>{orderToComplete?.equipamento || "Não informado"}</Text>
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Descrição do Problema</Text>
+                <View style={styles.readOnlyField}>
+                  <Text style={styles.readOnlyText}>{orderToComplete?.descricaoProblema || "Não informado"}</Text>
+                </View>
+              </View>
+
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Descrição do Serviço Realizado *</Text>
                 <TextInput
@@ -869,6 +926,19 @@ const styles = StyleSheet.create({
     color: "#1e293b",
     backgroundColor: "#ffffff",
     minHeight: 120,
+  },
+  readOnlyField: {
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: "#f8fafc",
+    minHeight: 48,
+  },
+  readOnlyText: {
+    fontSize: 16,
+    color: "#374151",
+    lineHeight: 20,
   },
   photoButton: {
     borderWidth: 2,
