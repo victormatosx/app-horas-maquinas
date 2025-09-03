@@ -16,7 +16,7 @@ export const styles = StyleSheet.create({
     marginBottom: 10,
   },
   headerTitle: {
-    color: "#2a9d8f",
+    color: "#0F505B",
     fontSize: 20,
     fontWeight: "bold",
   },
@@ -26,13 +26,13 @@ export const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     marginBottom: 8,
-    color: "#2a9d8f",
+    color: "#0F505B",
     textTransform: "uppercase",
     fontWeight: "bold",
   },
   input: {
     height: 50,
-    borderColor: "#2a9d8f",
+    borderColor: "#0F505B",
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 16,
@@ -46,7 +46,7 @@ export const styles = StyleSheet.create({
   },
   disabledInput: {
     backgroundColor: "#F0F8F7",
-    color: "#2a9d8f",
+    color: "#0F505B",
     borderStyle: "dashed",
   },
   datePickerText: {
@@ -61,10 +61,10 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: "#2a9d8f",
+    borderColor: "#0F505B",
   },
   buttonEnviar: {
-    backgroundColor: "#2a9d8f",
+    backgroundColor: "#0F505B",
     padding: 16,
     borderRadius: 8,
     alignItems: "center",
@@ -108,7 +108,7 @@ export const styles = StyleSheet.create({
     padding: 8,
   },
   button: {
-    backgroundColor: "#2a9d8f",
+    backgroundColor: "#0F505B",
     padding: 16,
     borderRadius: 8,
     alignItems: "center",
@@ -140,7 +140,7 @@ export const styles = StyleSheet.create({
   },
   selectedListItem: {
     backgroundColor: "#E8F5F3",
-    borderColor: "#2a9d8f",
+    borderColor: "#0F505B",
     borderWidth: 1,
   },
   alreadyAddedListItem: {
@@ -180,7 +180,7 @@ export const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 4,
-    backgroundColor: "#2a9d8f",
+    backgroundColor: "#0F505B",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -189,7 +189,7 @@ export const styles = StyleSheet.create({
     height: 24,
     borderRadius: 4,
     borderWidth: 2,
-    borderColor: "#2a9d8f",
+    borderColor: "#0F505B",
     backgroundColor: "transparent",
   },
   selectionCounter: {
@@ -200,7 +200,7 @@ export const styles = StyleSheet.create({
     alignItems: "center",
   },
   selectionCounterText: {
-    color: "#2a9d8f",
+    color: "#0F505B",
     fontSize: 14,
     fontWeight: "600",
   },
@@ -211,7 +211,7 @@ export const styles = StyleSheet.create({
     borderTopColor: "#E5E5E5",
   },
   confirmButton: {
-    backgroundColor: "#2a9d8f",
+    backgroundColor: "#0F505B",
     padding: 16,
     borderRadius: 8,
     alignItems: "center",
@@ -223,7 +223,7 @@ export const styles = StyleSheet.create({
   },
   searchInput: {
     height: 40,
-    borderColor: "#2a9d8f",
+    borderColor: "#0F505B",
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 16,
@@ -245,12 +245,12 @@ export const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#2a9d8f",
+    borderColor: "#0F505B",
   },
   hoursValue: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#2a9d8f",
+    color: "#0F505B",
   },
   selectedItemsContainer: {
     marginBottom: 16,
@@ -268,7 +268,7 @@ export const styles = StyleSheet.create({
   horimetroAnteriorValue: {
     backgroundColor: "#F0F8F7",
     borderWidth: 1,
-    borderColor: "#2a9d8f",
+    borderColor: "#0F505B",
     borderStyle: "dashed",
     borderRadius: 8,
     padding: 12,
@@ -277,7 +277,7 @@ export const styles = StyleSheet.create({
   },
   horimetroText: {
     fontSize: 16,
-    color: "#2a9d8f",
+    color: "#0F505B",
     fontWeight: "bold",
   },
   selectedDirecionadoresContainer: {
@@ -292,7 +292,7 @@ export const styles = StyleSheet.create({
     borderRadius: 8,
     marginTop: 8,
     borderLeftWidth: 4,
-    borderLeftColor: "#2a9d8f",
+    borderLeftColor: "#0F505B",
   },
   totalHoursText: {
     fontSize: 14,
@@ -300,7 +300,7 @@ export const styles = StyleSheet.create({
     textAlign: "center",
   },
   totalHoursNormal: {
-    color: "#2a9d8f",
+    color: "#0F505B",
   },
   totalHoursExceeded: {
     color: "#e74c3c",

@@ -38,7 +38,7 @@ const COLORS = {
   text: "#333333",
   textLight: "#777777",
   vehicle: {
-    primary: "#2a9d8f",
+    primary: "#0F505B",
   },
 }
 

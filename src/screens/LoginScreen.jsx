@@ -184,26 +184,14 @@ export default function LoginScreen() {
     } catch (error) {
       setLoading(false)
       console.error("Erro de login:", error)
-      switch (error.code) {
-        case "auth/user-not-found":
-          Alert.alert("Usuário não encontrado", "Este email não está cadastrado no Firebase Authentication.")
-          break
-        case "auth/wrong-password":
-        case "auth/invalid-credential":
-          Alert.alert("Credenciais inválidas", "Email ou senha incorretos.")
-          break
-        case "auth/invalid-email":
-          Alert.alert("Email inválido", "Por favor, insira um email válido.")
-          break
-        case "auth/user-disabled":
-          Alert.alert("Conta desabilitada", "Esta conta foi desabilitada. Entre em contato com o suporte.")
-          break
-        case "auth/too-many-requests":
-          Alert.alert("Muitas tentativas", "Muitas tentativas de login. Tente novamente mais tarde.")
-          break
-        default:
-          Alert.alert("Erro de Login", `Ocorreu um erro: ${error.message}`)
-      }
+      
+      // Custom error messages - generic message for all errors
+      Alert.alert(
+        "Erro no login",
+        "Email ou senha incorretos. Verifique suas credenciais e tente novamente.",
+        [{ text: "Entendi", style: "default" }],
+        { cancelable: true }
+      )
     }
   }
 

@@ -791,7 +791,7 @@ export default function HomeScreen() {
                   <Text style={styles.datePickerText}>
                     {dateFilter ? dateFilter.toLocaleDateString("pt-BR") : "Selecionar data"}
                   </Text>
-                  <Icon name="calendar" size={18} color="#2a9d8f" />
+                  <Icon name="calendar" size={18} color="#0F505B" />
                 </TouchableOpacity>
                 {dateFilter && (
                   <TouchableOpacity
@@ -883,11 +883,11 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#2a9d8f" />
+      <StatusBar barStyle="light-content" backgroundColor="#0F505B" />
 
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.navigate("Opening")} style={styles.backButton}>
-          <Icon name="arrow-back" size={24} color="#2a9d8f" />
+          <Icon name="arrow-back" size={24} color="#0F505B" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Meus Apontamentos</Text>
         <TouchableOpacity
@@ -895,7 +895,7 @@ export default function HomeScreen() {
           onPress={() => setFilterModalVisible(true)}
           activeOpacity={0.7}
         >
-          <Icon name="funnel-outline" size={20} color="#2a9d8f" />
+          <Icon name="funnel-outline" size={20} color="#0F505B" />
           {(dateFilter || typeFilter || filtroUsuario) && <View style={styles.filterBadge} />}
         </TouchableOpacity>
       </View>
@@ -919,7 +919,7 @@ export default function HomeScreen() {
 
             {isLoading ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#2a9d8f" />
+                <ActivityIndicator size="large" color="#0F505B" />
               </View>
             ) : (
               <FlatList
@@ -954,7 +954,7 @@ export default function HomeScreen() {
 
             {isLoading ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#2a9d8f" />
+                <ActivityIndicator size="large" color="#0F505B" />
               </View>
             ) : (
               <FlatList
@@ -991,7 +991,7 @@ export default function HomeScreen() {
               <Text
                 style={[
                   styles.modalTitle,
-                  { color: selectedApontamento?.tipo === "abastecimento" ? "#FF8C00" : "#2a9d8f" },
+                  { color: selectedApontamento?.tipo === "abastecimento" ? "#FF8C00" : "#0F505B" },
                 ]}
               >
                 Detalhes do {selectedApontamento?.tipo === "abastecimento" ? "Abastecimento" : "Apontamento"}
@@ -1032,7 +1032,7 @@ export default function HomeScreen() {
             <TouchableOpacity
               style={[
                 styles.closeButton,
-                { backgroundColor: selectedApontamento?.tipo === "abastecimento" ? "#FF8C00" : "#2a9d8f" },
+                { backgroundColor: selectedApontamento?.tipo === "abastecimento" ? "#FF8C00" : "#0F505B" },
               ]}
               onPress={() => setModalVisible(false)}
             >
@@ -1145,7 +1145,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   headerTitle: {
-    color: "#2a9d8f",
+    color: "#0F505B",
     fontSize: 20,
     fontWeight: "bold",
   },
@@ -1160,7 +1160,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#2a9d8f",
+    backgroundColor: "#0F505B",
     padding: 16,
     borderRadius: 25,
     marginBottom: 20,
@@ -1196,7 +1196,7 @@ const styles = StyleSheet.create({
     borderColor: "#ddd",
   },
   sortButtonText: {
-    color: "#2a9d8f",
+    color: "#0F505B",
     fontSize: 16,
     fontWeight: "600",
   },
@@ -1253,7 +1253,7 @@ const styles = StyleSheet.create({
   },
   fichaControle: {
     fontSize: 16,
-    color: "#2a9d8f",
+    color: "#0F505B",
     fontWeight: "bold",
   },
   direcionador: {
@@ -1290,7 +1290,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#2a9d8f",
+    backgroundColor: "#0F505B",
     padding: 16,
     borderRadius: 25,
     marginBottom: 20,
@@ -1336,7 +1336,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#2a9d8f",
+    color: "#0F505B",
   },
   detailsContainer: {
     maxHeight: 400,
@@ -1359,7 +1359,7 @@ const styles = StyleSheet.create({
     color: "#333",
   },
   closeButton: {
-    backgroundColor: "#2a9d8f",
+    backgroundColor: "#0F505B",
     padding: 12,
     borderRadius: 25,
     alignItems: "center",
@@ -1373,13 +1373,13 @@ const styles = StyleSheet.create({
   operacoesContainer: {
     marginTop: 15,
     borderTopWidth: 2,
-    borderTopColor: "#2a9d8f",
+    borderTopColor: "#0F505B",
     paddingTop: 15,
   },
   operacoesTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#2a9d8f",
+    color: "#0F505B",
     marginBottom: 10,
   },
   operacaoItem: {
@@ -1388,7 +1388,7 @@ const styles = StyleSheet.create({
     padding: 10,
     marginBottom: 10,
     borderLeftWidth: 3,
-    borderLeftColor: "#2a9d8f",
+    borderLeftColor: "#0F505B",
   },
   input: {
     height: 50,
@@ -1476,7 +1476,7 @@ const styles = StyleSheet.create({
   },
   horamaquinaItem: {
     borderLeftWidth: 3,
-    borderLeftColor: "#2a9d8f",
+    borderLeftColor: "#0F505B",
   },
   abastecimentoDetails: {
     marginTop: 8,
@@ -1548,7 +1548,7 @@ const styles = StyleSheet.create({
   filterModalTitle: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#2a9d8f",
+    color: "#0F505B",
   },
   filterScrollView: {
     padding: 20,
@@ -1626,7 +1626,7 @@ const styles = StyleSheet.create({
   },
   applyFilterButton: {
     flex: 1,
-    backgroundColor: "#2a9d8f",
+    backgroundColor: "#0F505B",
     padding: 15,
     flexDirection: "row",
     justifyContent: "center",

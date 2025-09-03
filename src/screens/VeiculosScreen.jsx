@@ -512,7 +512,7 @@ export default function VeiculosScreen() {
           key={item.id}
         >
           <View style={styles.apontamentoHeader}>
-            <Text style={[styles.placa, { color: "#2a9d8f" }]}>Percurso</Text>
+            <Text style={[styles.placa, { color: "#0F505B" }]}>Percurso</Text>
             <Text style={styles.data}>{new Date(item.timestamp).toLocaleDateString("pt-BR")}</Text>
           </View>
           <Text style={styles.modelo}>{usersMap[item.userId] || "Não especificado"}</Text>
@@ -966,7 +966,7 @@ export default function VeiculosScreen() {
               <Text
                 style={[
                   styles.modalTitle,
-                  { color: selectedApontamento?.tipo === "abastecimento" ? "#FF8C00" : "#2a9d8f" },
+                  { color: selectedApontamento?.tipo === "abastecimento" ? "#FF8C00" : "#0F505B" },
                 ]}
               >
                 Detalhes do {selectedApontamento?.tipo === "abastecimento" ? "Abastecimento" : "Percurso"}
@@ -987,7 +987,7 @@ export default function VeiculosScreen() {
             <TouchableOpacity
               style={[
                 styles.closeButton,
-                { backgroundColor: selectedApontamento?.tipo === "abastecimento" ? "#FF8C00" : "#2a9d8f" },
+                { backgroundColor: selectedApontamento?.tipo === "abastecimento" ? "#FF8C00" : "#0F505B" },
               ]}
               onPress={() => setModalVisible(false)}
             >
@@ -1127,7 +1127,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#2a9d8f",
+    backgroundColor: "#0F505B",
     padding: 16,
     borderRadius: 25,
     marginBottom: 10,
@@ -1232,7 +1232,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#2a9d8f",
+    color: "#0F505B",
   },
   detailsContainer: {
     maxHeight: 300,
@@ -1255,7 +1255,7 @@ const styles = StyleSheet.create({
     color: "#333",
   },
   closeButton: {
-    backgroundColor: "#2a9d8f",
+    backgroundColor: "#0F505B",
     padding: 12,
     borderRadius: 25,
     alignItems: "center",
@@ -1339,7 +1339,7 @@ const styles = StyleSheet.create({
   },
   percursoItem: {
     borderLeftWidth: 3,
-    borderLeftColor: "#2a9d8f",
+    borderLeftColor: "#0F505B",
   },
   data: {
     fontSize: 14,
@@ -1361,13 +1361,13 @@ const styles = StyleSheet.create({
   percursoContainer: {
     marginTop: 15,
     borderTopWidth: 2,
-    borderTopColor: "#2a9d8f",
+    borderTopColor: "#0F505B",
     paddingTop: 15,
   },
   percursoTitle: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#2a9d8f",
+    color: "#0F505B",
     marginBottom: 10,
   },
   emptyContainer: {

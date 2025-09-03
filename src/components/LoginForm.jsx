@@ -16,6 +16,7 @@ export default function LoginForm({ onLogin, loading }) {
     email: false,
     password: false
   })
+  const [showPassword, setShowPassword] = useState(false)
   const navigation = useNavigation()
 
   const handleLogin = () => {
@@ -67,21 +68,29 @@ export default function LoginForm({ onLogin, loading }) {
               />
             </View>
 
-            <View style={styles.inputContainer}>
+            <View style={[styles.inputContainer, isFocused.password && styles.inputFocused]}>
               <TextInput 
-                style={[
-                  styles.input,
-                  isFocused.password && styles.inputFocused
-                ]}
+                style={styles.input}
                 placeholder="Senha"
                 placeholderTextColor={colors.darkGray}
                 value={password}
                 onChangeText={setPassword}
                 onFocus={() => handleFocus('password')}
                 onBlur={() => handleBlur('password')}
-                secureTextEntry
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
                 selectionColor={colors.primary}
               />
+              <TouchableOpacity 
+                style={styles.eyeIcon}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Ionicons 
+                  name={showPassword ? 'eye-off' : 'eye'} 
+                  size={24} 
+                  color={colors.darkGray} 
+                />
+              </TouchableOpacity>
             </View>
 
             <TouchableOpacity 

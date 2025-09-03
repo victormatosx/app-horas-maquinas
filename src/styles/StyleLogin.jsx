@@ -60,8 +60,12 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
   },
   input: {
+    flex: 1,
     height: 56,
     backgroundColor: colors.gray,
     borderRadius: 14,
@@ -70,6 +74,13 @@ const styles = StyleSheet.create({
     color: colors.black,
     borderWidth: 1,
     borderColor: 'transparent',
+    paddingRight: 50, // Make space for the eye icon
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: 20,
+    padding: 10,
+    marginLeft: -10,
   },
   inputFocused: {
     borderColor: colors.primaryLight,

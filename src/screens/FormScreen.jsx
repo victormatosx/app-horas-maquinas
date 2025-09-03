@@ -25,6 +25,7 @@ import { auth } from "../config/firebaseConfig"
 import { onAuthStateChanged } from "firebase/auth"
 
 import { styles } from "../styles/StyleForm"
+import Icon from "react-native-vector-icons/Ionicons"
 
 const USER_TOKEN_KEY = "@user_token"
 const USER_PROPRIEDADE_KEY = "@user_propriedade"
@@ -1407,7 +1408,7 @@ export default function FormScreen({ navigation }) {
   if (!isAuthInitialized || isLoading) {
     return (
       <SafeAreaView style={styles.container}>
-        <ActivityIndicator size="large" color="#2a9d8f" />
+        <ActivityIndicator size="large" color="#0F505B" />
         <Text>Carregando...</Text>
       </SafeAreaView>
     )
@@ -1430,6 +1431,13 @@ export default function FormScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Icon name="arrow-back" size={24} color="#0F505B" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Registrar Apontamento</Text>
+        <View style={{ width: 24 }} />
+      </View>
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
         {renderInputField(
           "Ficha de Controle (número da máquina) *",
@@ -1451,7 +1459,7 @@ export default function FormScreen({ navigation }) {
               ? `${selectedDirecionadores.length} direcionador(es) selecionado(s)`
               : "Selecione um ou mais direcionadores"}
           </Text>
-          <ChevronDown size={20} color="#2a9d8f" />
+          <ChevronDown size={20} color="#0F505B" />
         </TouchableOpacity>
 
         {Array.isArray(selectedDirecionadores) && selectedDirecionadores.length > 0 && (
@@ -1501,7 +1509,7 @@ export default function FormScreen({ navigation }) {
               ? atividades.find((a) => a.id === formData.atividade)?.name || "Selecione a Atividade"
               : "Selecione a Atividade"}
           </Text>
-          <ChevronDown size={20} color="#2a9d8f" />
+          <ChevronDown size={20} color="#0F505B" />
         </TouchableOpacity>
         <Separator />
         <TouchableOpacity
@@ -1568,7 +1576,7 @@ export default function FormScreen({ navigation }) {
                 ? maquinarios.find((b) => b.id === operacaoMecanizadaData.bem)?.name || "Selecione o Bem"
                 : "Selecione o Bem"}
             </Text>
-            <ChevronDown size={20} color="#2a9d8f" />
+            <ChevronDown size={20} color="#0F505B" />
           </TouchableOpacity>
 
           {operacaoMecanizadaData.bem && (
@@ -1591,7 +1599,7 @@ export default function FormScreen({ navigation }) {
                 ? `${selectedImplementos.length} implemento(s) selecionado(s)`
                 : "Selecione um ou mais implementos"}
             </Text>
-            <ChevronDown size={20} color="#2a9d8f" />
+            <ChevronDown size={20} color="#0F505B" />
           </TouchableOpacity>
 
           {Array.isArray(selectedImplementos) && selectedImplementos.length > 0 && (
