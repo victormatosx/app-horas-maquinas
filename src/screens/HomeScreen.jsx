@@ -914,6 +914,13 @@ export default function HomeScreen() {
               <Icon name="water-outline" size={24} color="white" />
               <Text style={styles.novoButtonText}>ABASTECIMENTO</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.novoButton, { backgroundColor: "#f1c40f", marginTop: 10 }]}
+              onPress={() => navigation.navigate("OrdemServico")}
+            >
+              <Icon name="clipboard-outline" size={24} color="white" />
+              <Text style={styles.novoButtonText}>ABRIR OS</Text>
+            </TouchableOpacity>
 
             {renderFilterModal()}
 
@@ -948,6 +955,13 @@ export default function HomeScreen() {
             >
               <Icon name="water-outline" size={24} color="white" />
               <Text style={styles.novoButtonText}>ABASTECIMENTO</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.novoButton, { backgroundColor: "#f1c40f", marginTop: 10 }]}
+              onPress={() => navigation.navigate("OrdemServico")}
+            >
+              <Icon name="clipboard-outline" size={24} color="white" />
+              <Text style={styles.novoButtonText}>ABRIR OS</Text>
             </TouchableOpacity>
 
             {renderFilterModal()}
