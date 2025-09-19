@@ -37,7 +37,6 @@ export default function OrdemServico() {
   const [horimetroEntrada, setHorimetroEntrada] = useState("")
   const [data, setData] = useState("")
   const [datePickerVisible, setDatePickerVisible] = useState(false)
-  const [operador, setOperador] = useState("")
   const [descricaoProblema, setDescricaoProblema] = useState("")
 
   const [maquinarios, setMaquinarios] = useState([])
@@ -256,22 +255,19 @@ export default function OrdemServico() {
   }
 
   const handleSalvarEvento = async () => {
-    if (!selectedEquipment || !horimetroEntrada || !data || !operador || !descricaoProblema) {
+    if (!selectedEquipment || !horimetroEntrada || !data || !descricaoProblema) {
       Alert.alert("Campos Obrigatórios", "Por favor, preencha todos os campos obrigatórios.")
       return
     }
 
     try {
-      // Get user ID from AsyncStorage
       const userId = await AsyncStorage.getItem("@user_token")
       
-      // Prepare the ordem de serviço data
       const ordemServicoData = {
         equipamento: selectedEquipment,
         tipoEquipamento: selectedEquipmentType,
         horimetroEntrada: horimetroEntrada,
         data: data,
-        operador: operador,
         descricaoProblema: descricaoProblema,
         criadoEm: new Date().toISOString(),
         status: "aberto",
@@ -295,7 +291,6 @@ export default function OrdemServico() {
     setSelectedEquipmentType("")
     setHorimetroEntrada("")
     setData(getCurrentDate())
-    setOperador("")
     setDescricaoProblema("")
   }
 
@@ -348,18 +343,6 @@ export default function OrdemServico() {
                 <Text style={styles.selectButtonText}>{data}</Text>
                 <Icon name="calendar-outline" size={20} color="#666" />
               </TouchableOpacity>
-            </View>
-
-            {/* Operador */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Operador *</Text>
-              <TextInput
-                style={styles.textInput}
-                value={operador}
-                onChangeText={setOperador}
-                placeholder="Nome do operador"
-                placeholderTextColor="#999"
-              />
             </View>
 
             {/* Descrição do Problema */}
